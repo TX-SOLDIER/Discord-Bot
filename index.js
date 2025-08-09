@@ -1,5 +1,6 @@
 require('dotenv').config();
 const { Client, GatewayIntentBits } = require('discord.js');
+const fetch = require('node-fetch'); // Make sure this is included for AI calls
 const express = require('express');
 
 const app = express();
@@ -37,6 +38,22 @@ const spicyTruths = [
   "Have you ever hooked up with someone and regretted it?",
   "Have you ever flirted with someone just to get something?",
   "Have you ever been caught watching something... spicy?",
+
+  "What’s the most embarrassing thing you’ve done while flirting?",
+  "Have you ever flirted with someone to make another jealous?",
+  "What’s your go-to move to attract someone?",
+  "Have you ever kissed someone you just met?",
+  "What’s the weirdest place you've had a crush on someone?",
+  "Have you ever had a secret relationship no one knew about?",
+  "What’s the most scandalous thing you’ve done on a dare?",
+  "Have you ever sent a flirty message to the wrong person?",
+  "What’s your biggest turn-off in a partner?",
+  "Have you ever been caught in a lie to impress someone?",
+  "What’s the wildest fantasy you’ve never told anyone?",
+  "Have you ever cheated or been cheated on?",
+  "What’s the naughtiest thing you’d do for a dare?",
+  "Who here would you most want to go on a secret date with?",
+  "What’s something you’d never want your parents to find out about your love life?"
 ];
 
 const spicyDares = [
@@ -55,6 +72,43 @@ const spicyDares = [
   "Say ‘Who wants to play 7 Minutes in Heaven?’ in any channel",
   "Type a flirty message using only emojis 👅🔥🍑💦",
   "Voice message a moan and send it in voice chat (or fake it lol)",
+
+  "Send a voice note saying ‘You’ve got me blushing’ to a random friend",
+  "Post a flirty selfie with a silly caption in chat",
+  "Write ‘I can’t stop thinking about you’ in the chat",
+  "Send ‘Are you free for a date?’ to someone you like",
+  "Change your Discord status to ‘Looking for love’ for 20 mins",
+  "Send a DM with your best pickup line",
+  "Compliment the last person who messaged you in a flirty way",
+  "Send ‘I bet you can’t guess what I’m thinking about’ to someone",
+  "Act like a cat and send ‘Meow, looking for a cuddle’ in chat",
+  "Send a message saying ‘Your smile is my favorite thing’",
+  "Tell someone ‘You’re the reason I smile today’",
+  "Post ‘Who wants to be my Valentine?’ in a public channel",
+  "Send a DM saying ‘I dreamt of you last night’",
+  "Say ‘I’m way too hot to handle’ in general chat",
+  "Send a GIF that says ‘You’re irresistible’ to a random user"
+];
+
+const compliments = [
+  'You have amazing energy!',
+  'Your smile lights up the room.',
+  'You’re incredibly smart.',
+
+  'You have a magnetic charm that’s impossible to resist.',
+  'Your laugh is absolutely contagious.',
+  'You’re the kind of person people can’t help but notice.',
+  'You make even the simplest things feel special.',
+  'Your confidence is seriously attractive.',
+  'You light up every room you enter.',
+  'You have the kind of smile that makes hearts skip a beat.',
+  'Your eyes sparkle with mischief and warmth.',
+  'You have a great sense of humor—I love it!',
+  'You’re effortlessly captivating.',
+  'Your vibe is totally unforgettable.',
+  'You bring out the best in everyone around you.',
+  'You’re a total heartbreaker—in the best way possible.',
+  'Talking to you is the best part of my day.'
 ];
 
 client.once('ready', () => {
@@ -143,12 +197,27 @@ client.on('messageCreate', async (message) => {
   } else if (command === '$roast') {
     const user = message.mentions.users.first();
     if (!user) return message.reply('🔥 Tag someone to roast.');
-    const roasts = ['You bring everyone so much joy… when you leave the room.', 'If I had a face like yours, I’d sue my parents.'];
+    const roasts = [
+      'You bring everyone so much joy… when you leave the room.',
+      'If I had a face like yours, I’d sue my parents.',
+      'You’re as useless as the “ueue” in “queue.”',
+      'You have something on your chin... no, the third one down.',
+      'Your secrets are safe with me. I never even listen when you tell me them.',
+      'You have the charm and personality of a damp rag.',
+      'You’re the human version of a participation trophy.',
+      'Your brain’s like the Bermuda Triangle—information goes in and then it’s never found again.',
+      'You’re proof that evolution can go in reverse.',
+      'You have the charisma of a wet mop.',
+      'You bring everyone so much joy… when you leave the room.',
+      'You’re as sharp as a marble.',
+      'You’re the reason why some people have trust issues.',
+      'If ugly was a crime, you’d be serving a life sentence.',
+      'You have something on your chin... no, the third one down.'
+    ];
     message.channel.send(`🔥 ${user.username}, ${roasts[Math.floor(Math.random() * roasts.length)]}`);
   } else if (command === '$compliment') {
     const user = message.mentions.users.first();
     if (!user) return message.reply('💖 Tag someone to compliment.');
-    const compliments = ['You have amazing energy!', 'Your smile lights up the room.', 'You’re incredibly smart.'];
     message.channel.send(`💖 ${user.username}, ${compliments[Math.floor(Math.random() * compliments.length)]}`);
   }
 
