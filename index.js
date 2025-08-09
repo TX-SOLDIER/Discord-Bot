@@ -1,5 +1,6 @@
 require('dotenv').config();
 const { Client, GatewayIntentBits } = require('discord.js');
+const fetch = require('node-fetch'); // <== added this line
 const express = require('express');
 
 const app = express();
