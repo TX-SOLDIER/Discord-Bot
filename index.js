@@ -1,5 +1,5 @@
 require('dotenv').config();
-const { Client, GatewayIntentBits } = require('discord.js');
+const { Client, GatewayIntentBits, PermissionsBitField } = require('discord.js');
 const fetch = require('node-fetch');
 const express = require('express');
 
@@ -72,7 +72,7 @@ client.on('messageCreate', async (message) => {
   const args = message.content.trim().split(/ +/);
   const command = args.shift().toLowerCase();
 
-  // Help
+  // ---- Help ----
   if (command === '$help') {
     const helpText = 
     `📖 **Bot Commands — Utility**\n\n` +
@@ -94,6 +94,8 @@ client.on('messageCreate', async (message) => {
     `💖 \`$compliment @user\` — Compliment\n` +
     `👻 \`$haunt\` / \`$unhaunt\` — Haunting\n` +
     `🃏 \`$blackjack\`, \`$hit\`, \`$stand\` — Play Blackjack\n\n` +
+    `🧹 \`$clear [amount]\` — Clear last messages (Admin/Mod only)\n` +
+    `🧹 \`$clearuser @user [amount]\` — Clear a user’s messages (Admin/Mod only)\n\n` +
     `📖 **Info & Tools**\n\n` +
     `🧑‍💼 \`$userinfo\` — User info\n` +
     `🖼️ \`$avatar @user\` — Avatar\n` +
@@ -162,7 +164,7 @@ client.on('messageCreate', async (message) => {
     message.channel.send(`💖 ${user.username}, ${compliments[Math.floor(Math.random() * compliments.length)]}`);
   }
 
-  // Blackjack
+  // ---- Blackjack ----
   else if (command === '$blackjack') {
     if (blackjackGames.has(message.author.id)) {
       return message.reply('⚠️ You already have a game! Use `$hit` or `$stand`.');
@@ -214,6 +216,29 @@ client.on('messageCreate', async (message) => {
 
     blackjackGames.delete(message.author.id);
     message.channel.send(result);
+  }
+
+  // ---- Moderation ----
+  else if (command === '$clear') {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.ManageMessages)) {
+      return message.reply('❌ You need Manage Messages permission to use this.');
+    }
+    const amount = parseInt(args[0]);
+    if (!amount || amount < 1 || amount > 100) return message.reply('⚠️ Specify a number between 1 and 100.');
+    const deleted = await message.channel.bulkDelete(amount + 1, true);
+    message.channel.send(`🧹 Deleted ${deleted.size - 1} messages.`).then(msg => setTimeout(() => msg.delete(), 3000));
+  } else if (command === '$clearuser') {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.ManageMessages)) {
+      return message.reply('❌ You need Manage Messages permission to use this.');
+    }
+    const user = message.mentions.users.first();
+    const amount = parseInt(args[1]);
+    if (!user) return message.reply('⚠️ Mention a user to clear messages.');
+    if (!amount || amount < 1 || amount > 100) return message.reply('⚠️ Specify a number between 1 and 100.');
+    const messages = await message.channel.messages.fetch({ limit: 100 });
+    const toDelete = messages.filter(m => m.author.id === user.id).first(amount);
+    await message.channel.bulkDelete(toDelete, true);
+    message.channel.send(`🧹 Deleted ${toDelete.length} messages from ${user.username}.`).then(msg => setTimeout(() => msg.delete(), 3000));
   }
 
   // ---- Info & Tools ----
@@ -296,4 +321,4 @@ client.on('messageCreate', async (message) => {
   }
 });
 
-client.login(process.env.BOT_TOKEN); 
+client.login(process.env.BOT_TOKEN);
