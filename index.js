@@ -102,8 +102,7 @@ client.on('messageCreate', async (message) => {
       `📣 \`$say [msg]\` — Echo\n` +
       `✉️ \`$send <channelID> <message>\` — Send to another server/channel`;
     message.channel.send(helpText);
-  }
-🔨 `$kick @user [reason]` — Kick a user\n` +
+  }🔨 `$kick @user [reason]` — Kick a user\n` +
 ⛔ `$ban @user [reason]` — Ban a user\n` +
   
   // ---- Utility ----
