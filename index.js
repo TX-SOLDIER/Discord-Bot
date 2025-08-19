@@ -162,6 +162,28 @@ client.on('messageCreate', async (message) => {
     message.channel.send(`💖 ${user.username}, ${compliments[Math.floor(Math.random() * compliments.length)]}`);
   }
 
+ // ---- Kick ----
+else if (command === '$kick') {
+    const member = message.mentions.members.first();
+    if (!member) return message.reply('⚠️ Please mention a user to kick.');
+    if (!member.kickable) return message.reply('❌ I cannot kick this user.');
+    const reason = args.slice(1).join(' ') || 'No reason provided';
+    member.kick(reason)
+      .then(() => message.channel.send(`✅ Kicked ${member.user.tag} | Reason: ${reason}`))
+      .catch(err => message.reply(`❌ Failed to kick: ${err}`));
+}
+
+// ---- Ban ----
+else if (command === '$ban') {
+    const member = message.mentions.members.first();
+    if (!member) return message.reply('⚠️ Please mention a user to ban.');
+    if (!member.bannable) return message.reply('❌ I cannot ban this user.');
+    const reason = args.slice(1).join(' ') || 'No reason provided';
+    member.ban({ reason })
+      .then(() => message.channel.send(`✅ Banned ${member.user.tag} | Reason: ${reason}`))
+      .catch(err => message.reply(`❌ Failed to ban: ${err}`));
+}
+  
   // ---- Blackjack ----
   else if (command === '$blackjack') {
     if (blackjackGames.has(message.author.id)) return message.reply('⚠️ You already have a game! Use `$hit` or `$stand`.');
