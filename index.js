@@ -74,34 +74,33 @@ client.on('messageCreate', async (message) => {
 
   // ---- Help ----
   if (command === '$help') {
-    const helpText = 
-    `📖 **Bot Commands — Utility**\n\n` +
-    `🏓 \`$ping\` — Check bot response time\n` +
-    `📊 \`$stats\` — Server member stats\n` +
-    `⏱️ \`$uptime\` — Bot active time\n` +
-    `🤖 \`$botinfo\` — Info about the bot\n` +
-    `🔗 \`$invite\` — Get bot invite link\n\n` +
-    `📖 **Fun & Games**\n\n` +
-    `🪙 \`$flip\` — Flip a coin\n` +
-    `🎱 \`$8ball [question]\` — Magic 8-ball\n` +
-    `🎲 \`$dice\` — Roll a die\n` +
-    `🎯 \`$rate @user\` — Rate someone\n` +
-    `🌈 \`$howgay @user\` — Gay meter\n` +
-    `🕵️ \`$sus @user\` — Sus meter\n` +
-    `💬 \`$truth\` — Truth question\n` +
-    `😈 \`$dare\` — Dare\n` +
-    `🔥 \`$roast @user\` — Roast\n` +
-    `💖 \`$compliment @user\` — Compliment\n` +
-    `👻 \`$haunt\` / \`$unhaunt\` — Haunting\n` +
-    `🃏 \`$blackjack\`, \`$hit\`, \`$stand\` — Play Blackjack\n\n` +
-    `📖 **Info & Tools**\n\n` +
-    `🧑‍💼 \`$userinfo\` — User info\n` +
-    `🖼️ \`$avatar @user\` — Avatar\n` +
-    `🏠 \`$serverinfo\` — Server info\n` +
-    `📢 \`$shout [msg]\` — Shout\n` +
-    `🤐 \`$spoiler [msg]\` — Spoiler\n` +
-    `📣 \`$say [msg]\` — Echo\n` +
-    `📤 \`$send serverID:channelName [msg]\` — Send to another server`;
+    const helpText = `📖 **Bot Commands — Utility**\n\n` +
+      `🏓 \`$ping\` — Check bot response time\n` +
+      `📊 \`$stats\` — Server member stats\n` +
+      `⏱️ \`$uptime\` — Bot active time\n` +
+      `🤖 \`$botinfo\` — Info about the bot\n` +
+      `🔗 \`$invite\` — Get bot invite link\n\n` +
+      `📖 **Fun & Games**\n\n` +
+      `🪙 \`$flip\` — Flip a coin\n` +
+      `🎱 \`$8ball [question]\` — Magic 8-ball\n` +
+      `🎲 \`$dice\` — Roll a die\n` +
+      `🎯 \`$rate @user\` — Rate someone\n` +
+      `🌈 \`$howgay @user\` — Gay meter\n` +
+      `🕵️ \`$sus @user\` — Sus meter\n` +
+      `💬 \`$truth\` — Truth question\n` +
+      `😈 \`$dare\` — Dare\n` +
+      `🔥 \`$roast @user\` — Roast\n` +
+      `💖 \`$compliment @user\` — Compliment\n` +
+      `👻 \`$haunt\` / \`$unhaunt\` — Haunting\n` +
+      `🃏 \`$blackjack\`, \`$hit\`, \`$stand\` — Play Blackjack\n\n` +
+      `📖 **Info & Tools**\n\n` +
+      `🧑‍💼 \`$userinfo\` — User info\n` +
+      `🖼️ \`$avatar @user\` — Avatar\n` +
+      `🏠 \`$serverinfo\` — Server info\n` +
+      `📢 \`$shout [msg]\` — Shout\n` +
+      `🤐 \`$spoiler [msg]\` — Spoiler\n` +
+      `📣 \`$say [msg]\` — Echo\n` +
+      `✉️ \`$send <channelID> <message>\` — Send to another server/channel`;
     message.channel.send(helpText);
   }
 
@@ -118,27 +117,6 @@ client.on('messageCreate', async (message) => {
     message.channel.send(`🤖 I am ${client.user.tag}, your friendly bot helper!`);
   } else if (command === '$invite') {
     message.channel.send('🔗 Invite me: https://discord.com/api/oauth2/authorize?client_id=YOUR_CLIENT_ID&permissions=8&scope=bot%20applications.commands');
-  }
-
-  // ---- Send to another server ----
-  else if (command === '$send') {
-    const target = args.shift();
-    if (!target) return message.reply('⚠️ Provide serverID:channelName');
-    const [serverID, channelName] = target.split(':');
-    const text = args.join(' ');
-    if (!text) return message.reply('⚠️ What should I send?');
-
-    const guild = client.guilds.cache.get(serverID);
-    if (!guild) return message.reply('⚠️ I am not in that server.');
-
-    const channel = guild.channels.cache.find(
-      c => c.type === 0 && c.name === channelName
-    );
-    if (!channel) return message.reply('⚠️ Channel not found or not text-based.');
-
-    channel.send(text)
-      .then(() => message.reply(`✅ Message sent to ${guild.name}#${channelName}`))
-      .catch(err => message.reply('❌ Failed to send message. Check bot permissions.'));
   }
 
   // ---- Fun & Games ----
@@ -186,9 +164,7 @@ client.on('messageCreate', async (message) => {
 
   // ---- Blackjack ----
   else if (command === '$blackjack') {
-    if (blackjackGames.has(message.author.id)) {
-      return message.reply('⚠️ You already have a game! Use `$hit` or `$stand`.');
-    }
+    if (blackjackGames.has(message.author.id)) return message.reply('⚠️ You already have a game! Use `$hit` or `$stand`.');
     const playerHand = [drawCard(), drawCard()];
     const dealerHand = [drawCard(), drawCard()];
     blackjackGames.set(message.author.id, { playerHand, dealerHand });
@@ -261,33 +237,24 @@ client.on('messageCreate', async (message) => {
     message.channel.send(text);
   }
 
-  // ---- Kick ----
-else if (command === '$kick') {
-    const member = message.mentions.members.first();
-    if (!member) return message.reply('⚠️ Please mention a user to kick.');
-    if (!member.kickable) return message.reply('❌ I cannot kick this user.');
-    const reason = args.slice(1).join(' ') || 'No reason provided';
-    member.kick(reason)
-      .then(() => message.channel.send(`✅ Kicked ${member.user.tag} | Reason: ${reason}`))
-      .catch(err => message.reply(`❌ Failed to kick: ${err}`));
-}
+  // ---- Send to another server/channel ----
+  else if (command === '$send') {
+    const channelId = args.shift();
+    if (!channelId) return message.reply('⚠️ Provide the channel ID.');
+    const text = args.join(' ');
+    if (!text) return message.reply('⚠️ Provide a message to send.');
 
-// ---- Ban ----
-else if (command === '$ban') {
-    const member = message.mentions.members.first();
-    if (!member) return message.reply('⚠️ Please mention a user to ban.');
-    if (!member.bannable) return message.reply('❌ I cannot ban this user.');
-    const reason = args.slice(1).join(' ') || 'No reason provided';
-    member.ban({ reason })
-      .then(() => message.channel.send(`✅ Banned ${member.user.tag} | Reason: ${reason}`))
-      .catch(err => message.reply(`❌ Failed to ban: ${err}`));
-}
-  
+    const channel = client.channels.cache.get(channelId);
+    if (!channel || channel.type !== 0) return message.reply('⚠️ Channel not found or not text-based.');
+
+    channel.send(text)
+      .then(() => message.reply(`✅ Message sent to <#${channelId}>`))
+      .catch(err => message.reply('❌ Failed to send message. Check bot permissions.'));
+  }
+
   // ---- Haunt ----
   else if (command === '$haunt') {
-    if (hauntedChannels.has(message.channel.id)) {
-      return message.channel.send('👻 Already haunting this channel!');
-    }
+    if (hauntedChannels.has(message.channel.id)) return message.channel.send('👻 Already haunting this channel!');
     hauntedChannels.add(message.channel.id);
     message.channel.send('💀 The haunting has begun...');
     const interval = setInterval(() => {
