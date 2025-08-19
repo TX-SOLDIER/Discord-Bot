@@ -103,7 +103,9 @@ client.on('messageCreate', async (message) => {
       `✉️ \`$send <channelID> <message>\` — Send to another server/channel`;
     message.channel.send(helpText);
   }
-
+🔨 `$kick @user [reason]` — Kick a user\n` +
+⛔ `$ban @user [reason]` — Ban a user\n` +
+  
   // ---- Utility ----
   else if (command === '$ping') {
     const sent = await message.channel.send('Pinging...');
