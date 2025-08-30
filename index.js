@@ -104,6 +104,7 @@ client.on('messageCreate', async (message) => {
   // ---- Help ----
   if (command === '$help') {
     const helpText = `📖 **Bot Commands — Utility**\n\n` +
+      `📌 \`$prefix\` — Show the bot prefix\n` +
       `🏓 \`$ping\` — Check bot response time\n` +
       `📊 \`$stats\` — Server member stats\n` +
       `⏱️ \`$uptime\` — Bot active time\n` +
