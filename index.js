@@ -19,6 +19,7 @@ const client = new Client({
 // ---- Data ----
 const hauntedChannels = new Set();
 const hauntIntervals = new Map();
+const welcomeSettings = new Map();
 
 const spookyMessages = [
   '👻 Boo...', '💀 I see you...', '🩸 The shadows are watching...',
@@ -164,6 +165,35 @@ if (command === '$help') {
   } else if (command === '$invite') {
     message.channel.send('🔗 Invite me: https://discord.com/api/oauth2/authorize?client_id=YOUR_CLIENT_ID&permissions=8&scope=bot%20applications.commands');
   }
+    // ---- Set Welcome Channel ----
+else if (command === '$setwelcomechannel') {
+  if (!message.member.permissions.has('Administrator')) 
+    return message.reply('⚠️ Only admins can set the welcome channel.');
+
+  const channel = message.mentions.channels.first();
+  if (!channel) return message.reply('⚠️ Mention a channel to set as welcome channel.');
+
+  const settings = welcomeSettings.get(message.guild.id) || {};
+  settings.channelId = channel.id;
+  welcomeSettings.set(message.guild.id, settings);
+
+  message.channel.send(`✅ Welcome channel set to ${channel}`);
+}
+
+// ---- Set Welcome Message ----
+else if (command === '$setwelcomemsg') {
+  if (!message.member.permissions.has('Administrator')) 
+    return message.reply('⚠️ Only admins can set the welcome message.');
+
+  const msg = args.join(' ');
+  if (!msg) return message.reply('⚠️ Provide a message to set as the welcome message.');
+
+  const settings = welcomeSettings.get(message.guild.id) || {};
+  settings.message = msg;
+  welcomeSettings.set(message.guild.id, settings);
+
+  message.channel.send(`✅ Welcome message set!`);
+}
 
   // ---- Fun & Games ----
   else if (command === '$flip') {
@@ -420,6 +450,17 @@ else if (command === '$kick') {
 } else if (command === '$unauthorized') {
   message.channel.send('❌ You are not authorized to do that!');
 }
+  client.on('guildMemberAdd', member => {
+  const settings = welcomeSettings.get(member.guild.id);
+  if (!settings || !settings.channelId || !settings.message) return;
+
+  const channel = member.guild.channels.cache.get(settings.channelId);
+  if (!channel) return;
+
+  // Replace {user} with mention
+  const welcomeMsg = settings.message.replace('{user}', `<@${member.id}>`);
+  channel.send(welcomeMsg);
+});
 
   // ---- AI Chat ----
   else if (message.mentions.has(client.user)) {
