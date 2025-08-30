@@ -19,6 +19,8 @@ const client = new Client({
 // ---- Data ----
 const hauntedChannels = new Set();
 const hauntIntervals = new Map();
+const blackjackGames = new Map();
+const warnings = new Map();
 
 const spookyMessages = [
   '👻 Boo...', '💀 I see you...', '🩸 The shadows are watching...',
@@ -26,52 +28,46 @@ const spookyMessages = [
 ];
 
 const spicyTruths = [
-  "What’s your most embarrassing moment?",
-  "Who was your first crush?",
-  "Have you ever lied to get out of trouble?",
-  "What’s the most childish thing you still do?",
-  "What’s a secret you’ve never told anyone here?",
-  "If you could switch lives with someone for a day, who would it be?",
-  "What’s your biggest fear?",
-  "What’s the worst thing you’ve ever eaten?",
+  'What is your biggest fear?', 
+  'Have you ever lied to your best friend?', 
+  'What is your guilty pleasure?', 
+  'What is the most embarrassing thing you’ve done?', 
+  'Have you ever cheated on a test?'
 ];
 
 const spicyDares = [
-  "Change your nickname to something silly for 10 minutes.",
-  "Type your next 3 messages in ALL CAPS.",
-  "Send a random emoji in the chat every 10 seconds for 1 minute.",
-  "Say something nice about the last person who spoke.",
-  "Do 10 pushups (or pretend to and tell us how it went).",
-  "Put your status to 'I love pineapples on pizza' for 1 hour.",
-  "Send a gif that describes your current mood.",
-  "Use only memes to communicate for the next 5 minutes.",
+  'Do 20 push-ups.', 
+  'Sing a song loudly.', 
+  'Do an impression of someone in the room.', 
+  'Dance for 1 minute without music.', 
+  'Post a funny selfie in chat.'
 ];
 
 const compliments = [
-  "You have great taste in music.",
-  "Your energy makes the chat better.",
-  "You’re really funny!",
-  "You’re smarter than you give yourself credit for.",
-  "You have an amazing vibe.",
-  "You’re one of the kindest people I’ve seen here.",
-  "I admire how confident you are.",
-  "You always make people feel welcome.",
+  'You have a great sense of humor!', 
+  'You light up the room!', 
+  'Your positivity is infectious.', 
+  'You are really talented.', 
+  'You make everyone smile!'
 ];
 
-// ---- Blackjack Game ----
-const blackjackGames = new Map();
+// ---- Static GIFs for roleplay commands ----
+const hugGifs = ['https://i.imgur.com/1M1M1M1.gif','https://i.imgur.com/2M2M2M2.gif','https://i.imgur.com/3M3M3M3.gif'];
+const kissGifs = ['https://i.imgur.com/4K4K4K4.gif','https://i.imgur.com/5K5K5K5.gif','https://i.imgur.com/6K6K6K6.gif'];
+const slapGifs = ['https://i.imgur.com/7S7S7S7.gif','https://i.imgur.com/8S8S8S8.gif','https://i.imgur.com/9S9S9S9.gif'];
+const patGifs = ['https://i.imgur.com/pat1.gif','https://i.imgur.com/pat2.gif','https://i.imgur.com/pat3.gif'];
+const cuddleGifs = ['https://i.imgur.com/cuddle1.gif','https://i.imgur.com/cuddle2.gif','https://i.imgur.com/cuddle3.gif'];
+const pokeGifs = ['https://i.imgur.com/poke1.gif','https://i.imgur.com/poke2.gif','https://i.imgur.com/poke3.gif'];
 
+// ---- Blackjack Functions ----
 function drawCard() {
   const suits = ['♠️', '♥️', '♦️', '♣️'];
   const values = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
-  return {
-    suit: suits[Math.floor(Math.random() * suits.length)],
-    value: values[Math.floor(Math.random() * values.length)],
-  };
+  return { suit: suits[Math.floor(Math.random() * suits.length)], value: values[Math.floor(Math.random() * values.length)] };
 }
 
 function cardValue(card) {
-  if (['J', 'Q', 'K'].includes(card.value)) return 10;
+  if (['J','Q','K'].includes(card.value)) return 10;
   if (card.value === 'A') return 11;
   return parseInt(card.value);
 }
@@ -79,23 +75,16 @@ function cardValue(card) {
 function handValue(hand) {
   let total = hand.reduce((sum, c) => sum + cardValue(c), 0);
   let aces = hand.filter(c => c.value === 'A').length;
-  while (total > 21 && aces > 0) {
-    total -= 10;
-    aces--;
-  }
+  while (total > 21 && aces > 0) { total -= 10; aces--; }
   return total;
 }
 
-function formatHand(hand) {
-  return hand.map(c => `${c.value}${c.suit}`).join(' ');
-}
+function formatHand(hand) { return hand.map(c => `${c.value}${c.suit}`).join(' '); }
 
 // ---- Ready ----
-client.once('ready', () => {
-  console.log(`✅ Logged in as ${client.user.tag}`);
-});
+client.once('ready', () => { console.log(`✅ Logged in as ${client.user.tag}`); });
 
-// ---- Commands ----
+// ---- Message Commands ----
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
   const args = message.content.trim().split(/ +/);
@@ -104,93 +93,92 @@ client.on('messageCreate', async (message) => {
   // ---- Help ----
   if (command === '$help') {
     const helpText = `📖 **Bot Commands — Utility**\n\n` +
-      `🏓 \`$ping\` — Check bot response time\n` +
-      `📊 \`$stats\` — Server member stats\n` +
-      `⏱️ \`$uptime\` — Bot active time\n` +
-      `🤖 \`$botinfo\` — Info about the bot\n` +
-      `🔗 \`$invite\` — Get bot invite link\n\n` +
-      `📖 **Fun & Games**\n\n` +
-      `🪙 \`$flip\` — Flip a coin\n` +
-      `🎱 \`$8ball [question]\` — Magic 8-ball\n` +
-      `🎲 \`$dice\` — Roll a die\n` +
-      `🎯 \`$rate @user\` — Rate someone\n` +
-      `🌈 \`$howgay @user\` — Gay meter\n` +
-      `🕵️ \`$sus @user\` — Sus meter\n` +
-      `💬 \`$truth\` — Truth question\n` +
-      `😈 \`$dare\` — Dare\n` +
-      `🔥 \`$roast @user\` — Roast\n` +
-      `💖 \`$compliment @user\` — Compliment\n` +
-      `👻 \`$haunt\` / \`$unhaunt\` — Haunting\n` +
-      `🃏 \`$blackjack\`, \`$hit\`, \`$stand\` — Play Blackjack\n\n` +
-      `📖 **Info & Tools**\n\n` +
-      `🧑‍💼 \`$userinfo\` — User info\n` +
-      `🖼️ \`$avatar @user\` — Avatar\n` +
-      `🏠 \`$serverinfo\` — Server info\n` +
-      `📢 \`$shout [msg]\` — Shout\n` +
-      `🤐 \`$spoiler [msg]\` — Spoiler\n` +
-      `📣 \`$say [msg]\` — Echo\n` +
-      `✉️ \`$send <channelID> <message>\` — Send to another server/channel`;
+    `🏓 $ping — Check bot response time\n` +
+    `📊 $stats — Server member stats\n` +
+    `⏱️ $uptime — Bot active time\n` +
+    `🤖 $botinfo — Info about the bot\n` +
+    `🔗 $invite — Get bot invite link\n` +
+    `📝 $roles @user — Show roles\n` +
+    `🏰 $servericon — Server icon\n` +
+    `🏳️ $serverbanner — Server banner\n` +
+    `✨ $boosters — List boosters\n` +
+    `ℹ️ $prefix — Show bot prefix\n` +
+    `😃 $emojis — List server emojis\n\n` +
+    `📖 **Fun & Games**\n\n` +
+    `🪙 $flip — Flip a coin\n` +
+    `🎱 $8ball [question] — Magic 8-ball\n` +
+    `🎲 $dice — Roll a die\n` +
+    `🎯 $rate @user — Rate someone\n` +
+    `🌈 $howgay @user — Gay meter\n` +
+    `🕵️ $sus @user — Sus meter\n` +
+    `💬 $truth — Truth question\n` +
+    `😈 $dare — Dare\n` +
+    `🔥 $roast @user — Roast\n` +
+    `💖 $compliment @user — Compliment\n` +
+    `💞 $ship @user1 @user2 — Ship users\n` +
+    `📝 $mock [text] — Mock text\n` +
+    `🔁 $reverse [text] — Reverse text\n` +
+    `👻 $haunt / $unhaunt — Haunting\n` +
+    `🃏 $blackjack, $hit, $stand — Play Blackjack\n\n` +
+    `⚙️ **Moderation / Role**\n\n` +
+    `🔇 $mute @user — Mute user\n` +
+    `🔊 $unmute @user — Unmute user\n` +
+    `⚠️ $warn @user [reason] — Warn user\n` +
+    `⚠️ $warnings @user — Show warnings\n` +
+    `🧹 $clear [number] — Delete messages\n` +
+    `🔒 $lock — Lock channel\n` +
+    `🔓 $unlock — Unlock channel\n` +
+    `⏱️ $slowmode [seconds] — Set slowmode\n` +
+    `✅ $roleadd @user <role> — Add role\n` +
+    `✅ $roleremove @user <role> — Remove role\n\n` +
+    `❤️ **Roleplay Commands**\n\n` +
+    `$hug @user — Hug someone\n` +
+    `$kiss @user — Kiss someone\n` +
+    `$slap @user — Slap someone\n` +
+    `$pat @user — Pat someone\n` +
+    `$cuddle @user — Cuddle someone\n` +
+    `$poke @user — Poke someone`;
     message.channel.send(helpText);
   }
-  // ---- Utility ----
-  else if (command === '$ping') {
-    const sent = await message.channel.send('Pinging...');
-    sent.edit(`🏓 Pong! Latency is ${sent.createdTimestamp - message.createdTimestamp}ms`);
-  } else if (command === '$stats') {
-    message.channel.send(`📊 Server has ${message.guild.memberCount} members.`);
-  } else if (command === '$uptime') {
-    const uptime = Math.floor(process.uptime());
-    message.channel.send(`⏱️ Bot uptime: ${uptime} seconds.`);
-  } else if (command === '$botinfo') {
-    message.channel.send(`🤖 I am ${client.user.tag}, your friendly bot helper!`);
-  } else if (command === '$invite') {
-    message.channel.send('🔗 Invite me: https://discord.com/api/oauth2/authorize?client_id=YOUR_CLIENT_ID&permissions=8&scope=bot%20applications.commands');
+  // ---- Roleplay Commands ----
+  else if (command === '$hug') {
+    const user = message.mentions.users.first();
+    if (!user) return message.reply('🤗 Mention someone to hug!');
+    const gif = hugGifs[Math.floor(Math.random() * hugGifs.length)];
+    message.channel.send({ content: `${message.author} hugs ${user}!`, files: [gif] });
+  } 
+  else if (command === '$kiss') {
+    const user = message.mentions.users.first();
+    if (!user) return message.reply('💋 Mention someone to kiss!');
+    const gif = kissGifs[Math.floor(Math.random() * kissGifs.length)];
+    message.channel.send({ content: `${message.author} kisses ${user}!`, files: [gif] });
+  } 
+  else if (command === '$slap') {
+    const user = message.mentions.users.first();
+    if (!user) return message.reply('👋 Mention someone to slap!');
+    const gif = slapGifs[Math.floor(Math.random() * slapGifs.length)];
+    message.channel.send({ content: `${message.author} slaps ${user}!`, files: [gif] });
+  }
+  else if (command === '$pat') {
+    const user = message.mentions.users.first();
+    if (!user) return message.reply('🤲 Mention someone to pat!');
+    const gif = patGifs[Math.floor(Math.random() * patGifs.length)];
+    message.channel.send({ content: `${message.author} pats ${user}!`, files: [gif] });
+  }
+  else if (command === '$cuddle') {
+    const user = message.mentions.users.first();
+    if (!user) return message.reply('🤗 Mention someone to cuddle!');
+    const gif = cuddleGifs[Math.floor(Math.random() * cuddleGifs.length)];
+    message.channel.send({ content: `${message.author} cuddles ${user}!`, files: [gif] });
+  }
+  else if (command === '$poke') {
+    const user = message.mentions.users.first();
+    if (!user) return message.reply('👉 Mention someone to poke!');
+    const gif = pokeGifs[Math.floor(Math.random() * pokeGifs.length)];
+    message.channel.send({ content: `${message.author} pokes ${user}!`, files: [gif] });
   }
 
-  // ---- Fun & Games ----
-  else if (command === '$flip') {
-    const result = Math.random() < 0.5 ? 'Heads' : 'Tails';
-    message.channel.send(`🪙 You flipped **${result}**!`);
-  } else if (command === '$8ball') {
-    const responses = ['Yes.', 'No.', 'Maybe.', 'Ask again later.', 'Definitely!', 'I don’t think so.'];
-    if (!args.length) return message.reply('🎱 Ask me a question.');
-    message.channel.send(`🎱 ${responses[Math.floor(Math.random() * responses.length)]}`);
-  } else if (command === '$dice') {
-    const roll = Math.floor(Math.random() * 6) + 1;
-    message.channel.send(`🎲 You rolled a **${roll}**!`);
-  } else if (command === '$rate') {
-    const user = message.mentions.users.first() || message.author;
-    const rating = Math.floor(Math.random() * 11);
-    message.channel.send(`🎯 I rate ${user.username} a **${rating}/10**!`);
-  } else if (command === '$howgay') {
-    const user = message.mentions.users.first() || message.author;
-    const gayness = Math.floor(Math.random() * 101);
-    message.channel.send(`🌈 ${user.username} is **${gayness}%** gay!`);
-  } else if (command === '$sus') {
-    const user = message.mentions.users.first() || message.author;
-    const sus = Math.floor(Math.random() * 101);
-    message.channel.send(`🕵️ ${user.username} is **${sus}%** sus!`);
-  } else if (command === '$truth') {
-    message.channel.send(`💬 Truth: ${spicyTruths[Math.floor(Math.random() * spicyTruths.length)]}`);
-  } else if (command === '$dare') {
-    message.channel.send(`😈 Dare: ${spicyDares[Math.floor(Math.random() * spicyDares.length)]}`);
-  } else if (command === '$roast') {
-    const user = message.mentions.users.first();
-    if (!user) return message.reply('🔥 Tag someone to roast.');
-    const roasts = [
-      'You bring everyone so much joy… when you leave the room.',
-      'If I had a face like yours, I’d sue my parents.',
-      'You’re as useless as the “ueue” in “queue.”',
-      'You have something on your chin... no, the third one down.',
-    ];
-    message.channel.send(`🔥 ${user.username}, ${roasts[Math.floor(Math.random() * roasts.length)]}`);
-  } else if (command === '$compliment') {
-    const user = message.mentions.users.first();
-    if (!user) return message.reply('💖 Tag someone to compliment.');
-    message.channel.send(`💖 ${user.username}, ${compliments[Math.floor(Math.random() * compliments.length)]}`);
-  }
-
-  // ---- Kick ----
+  // ---- Kick / Ban ----
   else if (command === '$kick') {
     const member = message.mentions.members.first();
     if (!member) return message.reply('⚠️ Please mention a user to kick.');
@@ -199,9 +187,7 @@ client.on('messageCreate', async (message) => {
     member.kick(reason)
       .then(() => message.channel.send(`✅ Kicked ${member.user.tag} | Reason: ${reason}`))
       .catch(err => message.reply(`❌ Failed to kick: ${err}`));
-  }
-
-  // ---- Ban ----
+  } 
   else if (command === '$ban') {
     const member = message.mentions.members.first();
     if (!member) return message.reply('⚠️ Please mention a user to ban.');
@@ -212,97 +198,43 @@ client.on('messageCreate', async (message) => {
       .catch(err => message.reply(`❌ Failed to ban: ${err}`));
   }
 
-  // ---- Blackjack ----
+  // ---- Blackjack Commands ----
   else if (command === '$blackjack') {
     if (blackjackGames.has(message.author.id)) return message.reply('⚠️ You already have a game! Use `$hit` or `$stand`.');
     const playerHand = [drawCard(), drawCard()];
     const dealerHand = [drawCard(), drawCard()];
     blackjackGames.set(message.author.id, { playerHand, dealerHand });
-
     const playerTotal = handValue(playerHand);
-    let msg = `🃏 **Blackjack Started!** 🃏\n\n` +
-      `**Your hand:** ${formatHand(playerHand)} (Total: ${playerTotal})\n` +
-      `**Dealer’s hand:** ${dealerHand[0].value}${dealerHand[0].suit} ??\n\n` +
-      `👉 Type \`$hit\` or \`$stand\``;
-    message.channel.send(msg);
-  } else if (command === '$hit') {
+    message.channel.send(`🃏 **Blackjack Started!** 🃏\n\n**Your hand:** ${formatHand(playerHand)} (Total: ${playerTotal})\n**Dealer’s hand:** ${dealerHand[0].value}${dealerHand[0].suit} ??\n\n👉 Type \`$hit\` or \`$stand\``);
+  } 
+  else if (command === '$hit') {
     const game = blackjackGames.get(message.author.id);
     if (!game) return message.reply('⚠️ No active game. Start one with `$blackjack`.');
     game.playerHand.push(drawCard());
     const playerTotal = handValue(game.playerHand);
-
     let msg = `**Your hand:** ${formatHand(game.playerHand)} (Total: ${playerTotal})`;
-    if (playerTotal > 21) {
-      msg += `\n💥 You busted! Dealer wins.`;
-      blackjackGames.delete(message.author.id);
-    } else {
-      msg += `\n👉 Type \`$hit\` or \`$stand\``;
-    }
+    if (playerTotal > 21) { msg += `\n💥 You busted! Dealer wins.`; blackjackGames.delete(message.author.id); }
+    else msg += `\n👉 Type \`$hit\` or \`$stand\``;
     message.channel.send(msg);
-  } else if (command === '$stand') {
+  } 
+  else if (command === '$stand') {
     const game = blackjackGames.get(message.author.id);
     if (!game) return message.reply('⚠️ No active game. Start one with `$blackjack`.');
-
     const dealerHand = game.dealerHand;
     let dealerTotal = handValue(dealerHand);
-    while (dealerTotal < 17) {
-      dealerHand.push(drawCard());
-      dealerTotal = handValue(dealerHand);
-    }
-
+    while (dealerTotal < 17) { dealerHand.push(drawCard()); dealerTotal = handValue(dealerHand); }
     const playerTotal = handValue(game.playerHand);
-    let result = `**Your hand:** ${formatHand(game.playerHand)} (Total: ${playerTotal})\n` +
-      `**Dealer’s hand:** ${formatHand(dealerHand)} (Total: ${dealerTotal})\n\n`;
-
+    let result = `**Your hand:** ${formatHand(game.playerHand)} (Total: ${playerTotal})\n**Dealer’s hand:** ${formatHand(dealerHand)} (Total: ${dealerTotal})\n\n`;
     if (playerTotal > 21) result += `💥 You busted! Dealer wins.`;
     else if (dealerTotal > 21) result += `🎉 Dealer busted! You win!`;
     else if (playerTotal > dealerTotal) result += `🎉 You win!`;
     else if (playerTotal < dealerTotal) result += `😢 Dealer wins.`;
     else result += `🤝 It’s a tie!`;
-
     blackjackGames.delete(message.author.id);
     message.channel.send(result);
   }
 
-  // ---- Info & Tools ----
-  else if (command === '$userinfo') {
-    const user = message.mentions.users.first() || message.author;
-    message.channel.send(`🧑‍💼 Username: ${user.username}\nID: ${user.id}`);
-  } else if (command === '$avatar') {
-    const user = message.mentions.users.first() || message.author;
-    message.channel.send(`🖼️ Avatar for ${user.username}: ${user.displayAvatarURL({ dynamic: true })}`);
-  } else if (command === '$serverinfo') {
-    message.channel.send(`🏠 Server: ${message.guild.name}\nMembers: ${message.guild.memberCount}`);
-  } else if (command === '$shout') {
-    const text = args.join(' ');
-    if (!text) return message.reply('📢 What should I shout?');
-    message.channel.send(`📢 **${text.toUpperCase()}**`);
-  } else if (command === '$spoiler') {
-    const text = args.join(' ');
-    if (!text) return message.reply('🤐 What should I hide?');
-    message.channel.send(`||${text}||`);
-  } else if (command === '$say') {
-    const text = args.join(' ');
-    if (!text) return message.reply('📣 What should I say?');
-    message.channel.send(text);
-  }
-
-  // ---- Send to another server/channel ----
-  else if (command === '$send') {
-    const channelId = args.shift();
-    if (!channelId) return message.reply('⚠️ Provide the channel ID.');
-    const text = args.join(' ');
-    if (!text) return message.reply('⚠️ Provide a message to send.');
-
-    const channel = client.channels.cache.get(channelId);
-    if (!channel || channel.type !== 0) return message.reply('⚠️ Channel not found or not text-based.');
-
-    channel.send(text)
-      .then(() => message.reply(`✅ Message sent to <#${channelId}>`))
-      .catch(err => message.reply('❌ Failed to send message. Check bot permissions.'));
-  }
-
-  // ---- Haunt ----
+  // ---- Haunt Commands ----
   else if (command === '$haunt') {
     if (hauntedChannels.has(message.channel.id)) return message.channel.send('👻 Already haunting this channel!');
     hauntedChannels.add(message.channel.id);
@@ -312,28 +244,33 @@ client.on('messageCreate', async (message) => {
       message.channel.send(spookyMessages[Math.floor(Math.random() * spookyMessages.length)]);
     }, 30000);
     hauntIntervals.set(message.channel.id, interval);
-  } else if (command === '$unhaunt') {
+  } 
+  else if (command === '$unhaunt') {
     hauntedChannels.delete(message.channel.id);
-    if (hauntIntervals.has(message.channel.id)) {
-      clearInterval(hauntIntervals.get(message.channel.id));
-      hauntIntervals.delete(message.channel.id);
-    }
+    if (hauntIntervals.has(message.channel.id)) { clearInterval(hauntIntervals.get(message.channel.id)); hauntIntervals.delete(message.channel.id); }
     message.channel.send('🕯️ The spirits have left...');
+  }
+
+  // ---- Send Command (unchanged) ----
+  else if (command === '$send') {
+    const channelId = args.shift();
+    if (!channelId) return message.reply('⚠️ Provide the channel ID.');
+    const text = args.join(' ');
+    if (!text) return message.reply('⚠️ Provide a message to send.');
+    const channel = client.channels.cache.get(channelId);
+    if (!channel || channel.type !== 0) return message.reply('⚠️ Channel not found or not text-based.');
+    channel.send(text).then(() => message.reply(`✅ Message sent to <#${channelId}>`)).catch(err => message.reply('❌ Failed to send message. Check bot permissions.'));
   }
 
   // ---- AI Chat ----
   else if (message.mentions.has(client.user)) {
     const prompt = message.content.replace(new RegExp(`<@!?${client.user.id}>`, 'g'), '').trim();
     if (!prompt) return message.reply('❓ What would you like to ask?');
-
     try {
       await message.channel.sendTyping();
       const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: 'openrouter/auto',
           max_tokens: 100,
@@ -343,10 +280,8 @@ client.on('messageCreate', async (message) => {
           ]
         }),
       });
-
       const data = await response.json();
       const reply = data?.choices?.[0]?.message?.content;
-
       if (reply) await message.reply(reply);
       else if (data?.error?.message) await message.reply(`⚠️ AI error: ${data.error.message}`);
       else await message.reply('⚠️ Sorry, I couldn’t come up with a reply.');
