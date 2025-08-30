@@ -25,9 +25,38 @@ const spookyMessages = [
   '🔪 Behind you...', '🕷️ Something crawled across your screen...',
 ];
 
-const spicyTruths = [ /* your truth list here */ ];
-const spicyDares = [ /* your dare list here */ ];
-const compliments = [ /* your compliment list here */ ];
+const spicyTruths = [
+  "What’s your most embarrassing moment?",
+  "Who was your first crush?",
+  "Have you ever lied to get out of trouble?",
+  "What’s the most childish thing you still do?",
+  "What’s a secret you’ve never told anyone here?",
+  "If you could switch lives with someone for a day, who would it be?",
+  "What’s your biggest fear?",
+  "What’s the worst thing you’ve ever eaten?",
+];
+
+const spicyDares = [
+  "Change your nickname to something silly for 10 minutes.",
+  "Type your next 3 messages in ALL CAPS.",
+  "Send a random emoji in the chat every 10 seconds for 1 minute.",
+  "Say something nice about the last person who spoke.",
+  "Do 10 pushups (or pretend to and tell us how it went).",
+  "Put your status to 'I love pineapples on pizza' for 1 hour.",
+  "Send a gif that describes your current mood.",
+  "Use only memes to communicate for the next 5 minutes.",
+];
+
+const compliments = [
+  "You have great taste in music.",
+  "Your energy makes the chat better.",
+  "You’re really funny!",
+  "You’re smarter than you give yourself credit for.",
+  "You have an amazing vibe.",
+  "You’re one of the kindest people I’ve seen here.",
+  "I admire how confident you are.",
+  "You always make people feel welcome.",
+];
 
 // ---- Blackjack Game ----
 const blackjackGames = new Map();
@@ -102,8 +131,7 @@ client.on('messageCreate', async (message) => {
       `📣 \`$say [msg]\` — Echo\n` +
       `✉️ \`$send <channelID> <message>\` — Send to another server/channel`;
     message.channel.send(helpText);
-}
-    
+  }
   // ---- Utility ----
   else if (command === '$ping') {
     const sent = await message.channel.send('Pinging...');
@@ -162,8 +190,8 @@ client.on('messageCreate', async (message) => {
     message.channel.send(`💖 ${user.username}, ${compliments[Math.floor(Math.random() * compliments.length)]}`);
   }
 
- // ---- Kick ----
-else if (command === '$kick') {
+  // ---- Kick ----
+  else if (command === '$kick') {
     const member = message.mentions.members.first();
     if (!member) return message.reply('⚠️ Please mention a user to kick.');
     if (!member.kickable) return message.reply('❌ I cannot kick this user.');
@@ -171,10 +199,10 @@ else if (command === '$kick') {
     member.kick(reason)
       .then(() => message.channel.send(`✅ Kicked ${member.user.tag} | Reason: ${reason}`))
       .catch(err => message.reply(`❌ Failed to kick: ${err}`));
-}
+  }
 
-// ---- Ban ----
-else if (command === '$ban') {
+  // ---- Ban ----
+  else if (command === '$ban') {
     const member = message.mentions.members.first();
     if (!member) return message.reply('⚠️ Please mention a user to ban.');
     if (!member.bannable) return message.reply('❌ I cannot ban this user.');
@@ -182,8 +210,8 @@ else if (command === '$ban') {
     member.ban({ reason })
       .then(() => message.channel.send(`✅ Banned ${member.user.tag} | Reason: ${reason}`))
       .catch(err => message.reply(`❌ Failed to ban: ${err}`));
-}
-  
+  }
+
   // ---- Blackjack ----
   else if (command === '$blackjack') {
     if (blackjackGames.has(message.author.id)) return message.reply('⚠️ You already have a game! Use `$hit` or `$stand`.');
