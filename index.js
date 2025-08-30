@@ -308,7 +308,7 @@ else if (command === '$ban') {
         },
         body: JSON.stringify({
           model: 'openrouter/auto',
-          max_tokens: 175,
+          max_tokens: 100,
           messages: [
             { role: 'system', content: 'You are a helpful and fun AI assistant living inside a Discord bot.' },
             { role: 'user', content: prompt }
