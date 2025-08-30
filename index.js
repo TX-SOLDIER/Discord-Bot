@@ -160,7 +160,8 @@ client.on('messageCreate', async (message) => {
       `📣 \`$say [msg]\` — Echo\n` +
       `✉️ \`$send <channelID> <message>\` — Send to another server/channel`;
     message.channel.send(helpText2);
-  } else if (command === '$ping') {
+  }
+  else if (command === '$ping') {
     const sent = await message.channel.send('Pinging...');
     sent.edit(`🏓 Pong! Latency is ${sent.createdTimestamp - message.createdTimestamp}ms`);
   } else if (command === '$stats') {
@@ -212,27 +213,21 @@ client.on('messageCreate', async (message) => {
     const user = message.mentions.users.first();
     if (!user) return message.reply('💖 Tag someone to compliment.');
     message.channel.send(`💖 ${user.username}, ${compliments[Math.floor(Math.random() * compliments.length)]}`);
-      }
-  // ---- Kick ----
+  }
+
+  // ---- Kick / Ban ----
   else if (command === '$kick') {
     const member = message.mentions.members.first();
     if (!member) return message.reply('⚠️ Please mention a user to kick.');
     if (!member.kickable) return message.reply('❌ I cannot kick this user.');
     const reason = args.slice(1).join(' ') || 'No reason provided';
-    member.kick(reason)
-      .then(() => message.channel.send(`✅ Kicked ${member.user.tag} | Reason: ${reason}`))
-      .catch(err => message.reply(`❌ Failed to kick: ${err}`));
-  }
-
-  // ---- Ban ----
-  else if (command === '$ban') {
+    member.kick(reason).then(() => message.channel.send(`✅ Kicked ${member.user.tag} | Reason: ${reason}`));
+  } else if (command === '$ban') {
     const member = message.mentions.members.first();
     if (!member) return message.reply('⚠️ Please mention a user to ban.');
     if (!member.bannable) return message.reply('❌ I cannot ban this user.');
     const reason = args.slice(1).join(' ') || 'No reason provided';
-    member.ban({ reason })
-      .then(() => message.channel.send(`✅ Banned ${member.user.tag} | Reason: ${reason}`))
-      .catch(err => message.reply(`❌ Failed to ban: ${err}`));
+    member.ban({ reason }).then(() => message.channel.send(`✅ Banned ${member.user.tag} | Reason: ${reason}`));
   }
 
   // ---- Mute / Unmute ----
@@ -241,14 +236,12 @@ client.on('messageCreate', async (message) => {
     if (!member) return message.reply('⚠️ Please mention a user to mute.');
     const time = args[1] || '60';
     member.timeout(parseInt(time) * 1000, 'Muted by bot')
-      .then(() => message.channel.send(`🤐 ${member.user.tag} has been muted for ${time} seconds.`))
-      .catch(err => message.reply(`❌ Failed to mute: ${err}`));
+      .then(() => message.channel.send(`🤐 ${member.user.tag} has been muted for ${time} seconds.`));
   } else if (command === '$unmute') {
     const member = message.mentions.members.first();
     if (!member) return message.reply('⚠️ Please mention a user to unmute.');
     member.timeout(null, 'Unmuted by bot')
-      .then(() => message.channel.send(`🔊 ${member.user.tag} has been unmuted.`))
-      .catch(err => message.reply(`❌ Failed to unmute: ${err}`));
+      .then(() => message.channel.send(`🔊 ${member.user.tag} has been unmuted.`));
   }
 
   // ---- Warn / Warnings ----
@@ -277,19 +270,16 @@ client.on('messageCreate', async (message) => {
     const count = parseInt(args[0]);
     if (!count || isNaN(count)) return message.reply('⚠️ Please provide a valid number of messages to delete.');
     message.channel.bulkDelete(count, true)
-      .then(() => message.channel.send(`🧹 Deleted ${count} messages.`).then(msg => setTimeout(() => msg.delete(), 5000)))
-      .catch(err => message.reply(`❌ Failed to delete messages: ${err}`));
+      .then(() => message.channel.send(`🧹 Deleted ${count} messages.`).then(msg => setTimeout(() => msg.delete(), 5000)));
   }
 
   // ---- Lock / Unlock ----
   else if (command === '$lock') {
     message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: false })
-      .then(() => message.channel.send('🔒 Channel locked.'))
-      .catch(err => message.reply(`❌ Failed to lock: ${err}`));
+      .then(() => message.channel.send('🔒 Channel locked.'));
   } else if (command === '$unlock') {
     message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: true })
-      .then(() => message.channel.send('🔓 Channel unlocked.'))
-      .catch(err => message.reply(`❌ Failed to unlock: ${err}`));
+      .then(() => message.channel.send('🔓 Channel unlocked.'));
   }
 
   // ---- Slowmode ----
@@ -297,8 +287,7 @@ client.on('messageCreate', async (message) => {
     const seconds = parseInt(args[0]);
     if (!seconds || isNaN(seconds)) return message.reply('⚠️ Provide a valid number of seconds.');
     message.channel.setRateLimitPerUser(seconds)
-      .then(() => message.channel.send(`🐌 Slowmode set to ${seconds} seconds.`))
-      .catch(err => message.reply(`❌ Failed to set slowmode: ${err}`));
+      .then(() => message.channel.send(`🐌 Slowmode set to ${seconds} seconds.`));
   }
 
   // ---- Role management ----
@@ -367,13 +356,9 @@ client.on('messageCreate', async (message) => {
     if (!channelId) return message.reply('⚠️ Provide the channel ID.');
     const text = args.join(' ');
     if (!text) return message.reply('⚠️ Provide a message to send.');
-
     const channel = client.channels.cache.get(channelId);
     if (!channel || channel.type !== 0) return message.reply('⚠️ Channel not found or not text-based.');
-
-    channel.send(text)
-      .then(() => message.reply(`✅ Message sent to <#${channelId}>`))
-      .catch(err => message.reply('❌ Failed to send message. Check bot permissions.'));
+    channel.send(text).then(() => message.reply(`✅ Message sent to <#${channelId}>`));
   } else if (command === '$prefix') {
     message.channel.send(`📌 The current prefix is: \`$\``);
   }
