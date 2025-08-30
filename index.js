@@ -301,7 +301,11 @@ client.on('messageCreate', async (message) => {
       .then(() => message.reply(`✅ Message sent to <#${channelId}>`))
       .catch(err => message.reply('❌ Failed to send message. Check bot permissions.'));
   }
-
+    // ---- Show Prefix ----
+  else if (command === '$prefix') {
+      message.channel.send(`📌 The current prefix is: \`$\``);
+  }
+    
   // ---- Haunt ----
   else if (command === '$haunt') {
     if (hauntedChannels.has(message.channel.id)) return message.channel.send('👻 Already haunting this channel!');
