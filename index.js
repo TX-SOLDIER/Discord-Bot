@@ -100,53 +100,56 @@ client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
   const args = message.content.trim().split(/ +/);
   const command = args.shift().toLowerCase();
-
-  // ---- Help ----
-  if (command === '$help') {
-    const helpText = `📖 **Bot Commands — Utility**\n\n` +
-      `📌 \`$prefix\` — Show the bot prefix\n` +
-      `🏓 \`$ping\` — Check bot response time\n` +
-      `📊 \`$stats\` — Server member stats\n` +
-      `⏱️ \`$uptime\` — Bot active time\n` +
-      `🤖 \`$botinfo\` — Info about the bot\n` +
-      `🔗 \`$invite\` — Get bot invite link\n\n` +
-      `📖 **Fun & Games**\n\n` +
-      `🪙 \`$flip\` — Flip a coin\n` +
-      `🎱 \`$8ball [question]\` — Magic 8-ball\n` +
-      `🎲 \`$dice\` — Roll a die\n` +
-      `🎯 \`$rate @user\` — Rate someone\n` +
-      `🌈 \`$howgay @user\` — Gay meter\n` +
-      `🕵️ \`$sus @user\` — Sus meter\n` +
-      `💬 \`$truth\` — Truth question\n` +
-      `😈 \`$dare\` — Dare\n` +
-      `🔥 \`$roast @user\` — Roast\n` +
-      `💖 \`$compliment @user\` — Compliment\n` +
-      `👻 \`$haunt\` / \`$unhaunt\` — Haunting\n` +
-      `🃏 \`$blackjack\`, \`$hit\`, \`$stand\` — Play Blackjack\n\n` +
-      `📖 **Moderation Commands**\n\n` +
-`🔨 \`$kick @user [reason]\` — Kick a user\n` +
-`🚫 \`$ban @user [reason]\` — Ban a user\n` +
-`🤐 \`$mute @user [time]\` — Mute a user\n` +
-`🔊 \`$unmute @user\` — Unmute a user\n` +
-`⚠️ \`$warn @user [reason]\` — Warn a user\n` +
-`📄 \`$warnings @user\` — Show warnings\n` +
-`🧹 \`$clear [number]\` — Delete messages\n` +
-`🔒 \`$lock\` — Lock channel\n` +
-`🔓 \`$unlock\` — Unlock channel\n` +
-`🐌 \`$slowmode [seconds]\` — Set slowmode\n` +
-`🏷️ \`$role add @user <role>\` — Add role\n` +
-`🏷️ \`$role remove @user <role>\` — Remove role\n` +
-`❌ \`$unauthorized\` — Unauthorized response\n`;
-      `📖 **Info & Tools**\n\n` +
-      `🧑‍💼 \`$userinfo\` — User info\n` +
-      `🖼️ \`$avatar @user\` — Avatar\n` +
-      `🏠 \`$serverinfo\` — Server info\n` +
-      `📢 \`$shout [msg]\` — Shout\n` +
-      `🤐 \`$spoiler [msg]\` — Spoiler\n` +
-      `📣 \`$say [msg]\` — Echo\n` +
-      `✉️ \`$send <channelID> <message>\` — Send to another server/channel`;
-    message.channel.send(helpText);
-  }
+// ---- Help Part 1 ----
+if (command === '$help') {
+  const helpText1 = `📖 **Bot Commands — Utility**\n\n` +
+    `📌 \`$prefix\` — Show the bot prefix\n` +
+    `🏓 \`$ping\` — Check bot response time\n` +
+    `📊 \`$stats\` — Server member stats\n` +
+    `⏱️ \`$uptime\` — Bot active time\n` +
+    `🤖 \`$botinfo\` — Info about the bot\n` +
+    `🔗 \`$invite\` — Get bot invite link\n\n` +
+    `📖 **Fun & Games**\n\n` +
+    `🪙 \`$flip\` — Flip a coin\n` +
+    `🎱 \`$8ball [question]\` — Magic 8-ball\n` +
+    `🎲 \`$dice\` — Roll a die\n` +
+    `🎯 \`$rate @user\` — Rate someone\n` +
+    `🌈 \`$howgay @user\` — Gay meter\n` +
+    `🕵️ \`$sus @user\` — Sus meter\n` +
+    `💬 \`$truth\` — Truth question\n` +
+    `😈 \`$dare\` — Dare\n` +
+    `🔥 \`$roast @user\` — Roast\n` +
+    `💖 \`$compliment @user\` — Compliment\n` +
+    `👻 \`$haunt\` / \`$unhaunt\` — Haunting\n` +
+    `🃏 \`$blackjack\`, \`$hit\`, \`$stand\` — Play Blackjack\n\n` +
+    `📖 **Moderation Commands**\n\n` +
+    `🔨 \`$kick @user [reason]\` — Kick a user\n` +
+    `🚫 \`$ban @user [reason]\` — Ban a user\n` +
+    `🤐 \`$mute @user [time]\` — Mute a user\n` +
+    `🔊 \`$unmute @user\` — Unmute a user\n` +
+    `⚠️ \`$warn @user [reason]\` — Warn a user\n` +
+    `📄 \`$warnings @user\` — Show warnings\n` +
+    `🧹 \`$clear [number]\` — Delete messages\n` +
+    `🔒 \`$lock\` — Lock channel\n` +
+    `🔓 \`$unlock\` — Unlock channel\n` +
+    `🐌 \`$slowmode [seconds]\` — Set slowmode\n` +
+    `🏷️ \`$role add @user <role>\` — Add role\n` +
+    `🏷️ \`$role remove @user <role>\` — Remove role\n` +
+    `❌ \`$unauthorized\` — Unauthorized response\n`;
+  message.channel.send(helpText1);
+}
+  // ---- Help Part 2 ----
+if (command === '$help') {
+  const helpText2 = `📖 **Info & Tools**\n\n` +
+    `🧑‍💼 \`$userinfo\` — User info\n` +
+    `🖼️ \`$avatar @user\` — Avatar\n` +
+    `🏠 \`$serverinfo\` — Server info\n` +
+    `📢 \`$shout [msg]\` — Shout\n` +
+    `🤐 \`$spoiler [msg]\` — Spoiler\n` +
+    `📣 \`$say [msg]\` — Echo\n` +
+    `✉️ \`$send <channelID> <message>\` — Send to another server/channel`;
+  message.channel.send(helpText2);
+}
   // ---- Utility ----
   else if (command === '$ping') {
     const sent = await message.channel.send('Pinging...');
