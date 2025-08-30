@@ -107,13 +107,13 @@ function formatHand(hand) {
 client.once('ready', () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
 });
-
 // ---- Commands ----
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
   const args = message.content.trim().split(/ +/);
   const command = args.shift().toLowerCase();
 
+  // ---- Help Command (Split into 2 messages to avoid Discord limits) ----
   if (command === '$help') {
     const helpText1 = `📖 **Bot Commands — Utility**\n\n` +
       `📌 \`$prefix\` — Show the bot prefix\n` +
@@ -148,11 +148,9 @@ client.on('messageCreate', async (message) => {
       `🐌 \`$slowmode [seconds]\` — Set slowmode\n` +
       `🏷️ \`$role add @user <role>\` — Add role\n` +
       `🏷️ \`$role remove @user <role>\` — Remove role\n` +
-      `❌ \`$unauthorized\` — Unauthorized response\n`;
+      `❌ \`$unauthorized\` — Unauthorized response`;
+    await message.channel.send(helpText1);
 
-    message.channel.send(helpText1);
-  }
-  else if (command === '$help') {
     const helpText2 = `📖 **Info & Tools**\n\n` +
       `🧑‍💼 \`$userinfo\` — User info\n` +
       `🖼️ \`$avatar @user\` — Avatar\n` +
@@ -161,8 +159,11 @@ client.on('messageCreate', async (message) => {
       `🤐 \`$spoiler [msg]\` — Spoiler\n` +
       `📣 \`$say [msg]\` — Echo\n` +
       `✉️ \`$send <channelID> <message>\` — Send to another server/channel`;
-    message.channel.send(helpText2);
-  } else if (command === '$ping') {
+    return message.channel.send(helpText2);
+  }
+
+  // ---- Utility ----
+  else if (command === '$ping') {
     const sent = await message.channel.send('Pinging...');
     sent.edit(`🏓 Pong! Latency is ${sent.createdTimestamp - message.createdTimestamp}ms`);
   } else if (command === '$stats') {
@@ -174,7 +175,12 @@ client.on('messageCreate', async (message) => {
     message.channel.send(`🤖 I am ${client.user.tag}, your friendly bot helper!`);
   } else if (command === '$invite') {
     message.channel.send('🔗 Invite me: https://discord.com/api/oauth2/authorize?client_id=YOUR_CLIENT_ID&permissions=8&scope=bot%20applications.commands');
-  } else if (command === '$flip') {
+  } else if (command === '$prefix') {
+    message.channel.send(`📌 The current prefix is: \`$\``);
+  }
+
+  // ---- Fun & Games ----
+  else if (command === '$flip') {
     const result = Math.random() < 0.5 ? 'Heads' : 'Tails';
     message.channel.send(`🪙 You flipped **${result}**!`);
   } else if (command === '$8ball') {
@@ -215,7 +221,6 @@ client.on('messageCreate', async (message) => {
     if (!user) return message.reply('💖 Tag someone to compliment.');
     message.channel.send(`💖 ${user.username}, ${compliments[Math.floor(Math.random() * compliments.length)]}`);
   }
-
   // ---- Kick ----
   else if (command === '$kick') {
     const member = message.mentions.members.first();
@@ -274,6 +279,7 @@ client.on('messageCreate', async (message) => {
     });
     message.channel.send(reply);
   }
+
   // ---- Clear ----
   else if (command === '$clear') {
     const count = parseInt(args[0]);
@@ -324,7 +330,7 @@ client.on('messageCreate', async (message) => {
     message.channel.send('❌ You are not authorized to do that!');
   }
 
-  // ---- Haunt / Unhaunt ----
+  // ---- Haunt ----
   else if (command === '$haunt') {
     if (hauntedChannels.has(message.channel.id)) return message.channel.send('👻 Already haunting this channel!');
     hauntedChannels.add(message.channel.id);
@@ -341,6 +347,41 @@ client.on('messageCreate', async (message) => {
       hauntIntervals.delete(message.channel.id);
     }
     message.channel.send('🕯️ The spirits have left...');
+  }
+
+  // ---- Info & Tools ----
+  else if (command === '$userinfo') {
+    const user = message.mentions.users.first() || message.author;
+    message.channel.send(`🧑‍💼 Username: ${user.username}\nID: ${user.id}`);
+  } else if (command === '$avatar') {
+    const user = message.mentions.users.first() || message.author;
+    message.channel.send(`🖼️ Avatar for ${user.username}: ${user.displayAvatarURL({ dynamic: true })}`);
+  } else if (command === '$serverinfo') {
+    message.channel.send(`🏠 Server: ${message.guild.name}\nMembers: ${message.guild.memberCount}`);
+  } else if (command === '$shout') {
+    const text = args.join(' ');
+    if (!text) return message.reply('📢 What should I shout?');
+    message.channel.send(`📢 **${text.toUpperCase()}**`);
+  } else if (command === '$spoiler') {
+    const text = args.join(' ');
+    if (!text) return message.reply('🤐 What should I hide?');
+    message.channel.send(`||${text}||`);
+  } else if (command === '$say') {
+    const text = args.join(' ');
+    if (!text) return message.reply('📣 What should I say?');
+    message.channel.send(text);
+  } else if (command === '$send') {
+    const channelId = args.shift();
+    if (!channelId) return message.reply('⚠️ Provide the channel ID.');
+    const text = args.join(' ');
+    if (!text) return message.reply('⚠️ Provide a message to send.');
+
+    const channel = client.channels.cache.get(channelId);
+    if (!channel || channel.type !== 0) return message.reply('⚠️ Channel not found or not text-based.');
+
+    channel.send(text)
+      .then(() => message.reply(`✅ Message sent to <#${channelId}>`))
+      .catch(err => message.reply('❌ Failed to send message. Check bot permissions.'));
   }
 
   // ---- Blackjack ----
