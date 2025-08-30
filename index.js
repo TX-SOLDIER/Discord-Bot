@@ -326,6 +326,84 @@ client.on('messageCreate', async (message) => {
     message.channel.send('🕯️ The spirits have left...');
   }
 
+    // ---- Moderation Commands ----
+else if (command === '$kick') {
+  const member = message.mentions.members.first();
+  if (!member) return message.reply('⚠️ Please mention a user to kick.');
+  if (!member.kickable) return message.reply('❌ I cannot kick this user.');
+  const reason = args.slice(1).join(' ') || 'No reason provided';
+  member.kick(reason)
+    .then(() => message.channel.send(`✅ Kicked ${member.user.tag} | Reason: ${reason}`))
+    .catch(err => message.reply(`❌ Failed to kick: ${err}`));
+} else if (command === '$ban') {
+  const member = message.mentions.members.first();
+  if (!member) return message.reply('⚠️ Please mention a user to ban.');
+  if (!member.bannable) return message.reply('❌ I cannot ban this user.');
+  const reason = args.slice(1).join(' ') || 'No reason provided';
+  member.ban({ reason })
+    .then(() => message.channel.send(`✅ Banned ${member.user.tag} | Reason: ${reason}`))
+    .catch(err => message.reply(`❌ Failed to ban: ${err}`));
+} else if (command === '$mute') {
+  const member = message.mentions.members.first();
+  if (!member) return message.reply('⚠️ Please mention a user to mute.');
+  const time = args[1] || '60'; // default 60 seconds
+  member.timeout(parseInt(time) * 1000, 'Muted by bot')
+    .then(() => message.channel.send(`🤐 ${member.user.tag} has been muted for ${time} seconds.`))
+    .catch(err => message.reply(`❌ Failed to mute: ${err}`));
+} else if (command === '$unmute') {
+  const member = message.mentions.members.first();
+  if (!member) return message.reply('⚠️ Please mention a user to unmute.');
+  member.timeout(null, 'Unmuted by bot')
+    .then(() => message.channel.send(`🔊 ${member.user.tag} has been unmuted.`))
+    .catch(err => message.reply(`❌ Failed to unmute: ${err}`));
+} else if (command === '$warn') {
+  const member = message.mentions.members.first();
+  if (!member) return message.reply('⚠️ Please mention a user to warn.');
+  const reason = args.slice(1).join(' ') || 'No reason provided';
+  // You need to implement a storage system to keep track of warnings, e.g., Map or database
+  message.channel.send(`⚠️ ${member.user.tag} has been warned. Reason: ${reason}`);
+} else if (command === '$warnings') {
+  const member = message.mentions.members.first();
+  if (!member) return message.reply('⚠️ Please mention a user to check warnings.');
+  // Retrieve warnings from storage system here
+  message.channel.send(`📄 ${member.user.tag} has X warnings.`); // Replace X with actual count
+} else if (command === '$clear') {
+  const count = parseInt(args[0]);
+  if (!count || isNaN(count)) return message.reply('⚠️ Please provide a valid number of messages to delete.');
+  message.channel.bulkDelete(count, true)
+    .then(() => message.channel.send(`🧹 Deleted ${count} messages.`).then(msg => setTimeout(() => msg.delete(), 5000)))
+    .catch(err => message.reply(`❌ Failed to delete messages: ${err}`));
+} else if (command === '$lock') {
+  message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: false })
+    .then(() => message.channel.send('🔒 Channel locked.'))
+    .catch(err => message.reply(`❌ Failed to lock: ${err}`));
+} else if (command === '$unlock') {
+  message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: true })
+    .then(() => message.channel.send('🔓 Channel unlocked.'))
+    .catch(err => message.reply(`❌ Failed to unlock: ${err}`));
+} else if (command === '$slowmode') {
+  const seconds = parseInt(args[0]);
+  if (!seconds || isNaN(seconds)) return message.reply('⚠️ Provide a valid number of seconds.');
+  message.channel.setRateLimitPerUser(seconds)
+    .then(() => message.channel.send(`🐌 Slowmode set to ${seconds} seconds.`))
+    .catch(err => message.reply(`❌ Failed to set slowmode: ${err}`));
+} else if (command === '$role') {
+  const subCommand = args[0];
+  const member = message.mentions.members.first();
+  const roleName = args.slice(2).join(' ');
+  const role = message.guild.roles.cache.find(r => r.name.toLowerCase() === roleName.toLowerCase());
+  if (!member || !role) return message.reply('⚠️ User or role not found.');
+  if (subCommand === 'add') {
+    member.roles.add(role).then(() => message.channel.send(`🏷️ Added role **${role.name}** to ${member.user.tag}`));
+  } else if (subCommand === 'remove') {
+    member.roles.remove(role).then(() => message.channel.send(`🏷️ Removed role **${role.name}** from ${member.user.tag}`));
+  } else {
+    message.reply('⚠️ Use `$role add @user <role>` or `$role remove @user <role>`');
+  }
+} else if (command === '$unauthorized') {
+  message.channel.send('❌ You are not authorized to do that!');
+}
+
   // ---- AI Chat ----
   else if (message.mentions.has(client.user)) {
     const prompt = message.content.replace(new RegExp(`<@!?${client.user.id}>`, 'g'), '').trim();
