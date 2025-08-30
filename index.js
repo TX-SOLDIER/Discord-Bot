@@ -123,6 +123,20 @@ client.on('messageCreate', async (message) => {
       `💖 \`$compliment @user\` — Compliment\n` +
       `👻 \`$haunt\` / \`$unhaunt\` — Haunting\n` +
       `🃏 \`$blackjack\`, \`$hit\`, \`$stand\` — Play Blackjack\n\n` +
+      `📖 **Moderation Commands**\n\n` +
+`🔨 \`$kick @user [reason]\` — Kick a user\n` +
+`🚫 \`$ban @user [reason]\` — Ban a user\n` +
+`🤐 \`$mute @user [time]\` — Mute a user\n` +
+`🔊 \`$unmute @user\` — Unmute a user\n` +
+`⚠️ \`$warn @user [reason]\` — Warn a user\n` +
+`📄 \`$warnings @user\` — Show warnings\n` +
+`🧹 \`$clear [number]\` — Delete messages\n` +
+`🔒 \`$lock\` — Lock channel\n` +
+`🔓 \`$unlock\` — Unlock channel\n` +
+`🐌 \`$slowmode [seconds]\` — Set slowmode\n` +
+`🏷️ \`$role add @user <role>\` — Add role\n` +
+`🏷️ \`$role remove @user <role>\` — Remove role\n` +
+`❌ \`$unauthorized\` — Unauthorized response\n`;
       `📖 **Info & Tools**\n\n` +
       `🧑‍💼 \`$userinfo\` — User info\n` +
       `🖼️ \`$avatar @user\` — Avatar\n` +
