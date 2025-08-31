@@ -1,5 +1,5 @@
 require('dotenv').config();
-const { Client, GatewayIntentBits } = require('discord.js');
+const { Client, GatewayIntentBits, PermissionsBitField } = require('discord.js');
 const fetch = require('node-fetch');
 const fs = require('fs');
 const express = require('express');
@@ -107,13 +107,14 @@ function formatHand(hand) {
 client.once('ready', () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
 });
-// ---- Commands ----
+
+// ---- Command Handler ----
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
   const args = message.content.trim().split(/ +/);
   const command = args.shift().toLowerCase();
 
-  // ---- Help Command (Split into 2 messages to avoid Discord limits) ----
+  // ---- Help Command (Split in 2 messages) ----
   if (command === '$help') {
     const helpText1 = `📖 **Bot Commands — Utility**\n\n` +
       `📌 \`$prefix\` — Show the bot prefix\n` +
@@ -221,39 +222,54 @@ client.on('messageCreate', async (message) => {
     if (!user) return message.reply('💖 Tag someone to compliment.');
     message.channel.send(`💖 ${user.username}, ${compliments[Math.floor(Math.random() * compliments.length)]}`);
   }
+
+  // ---- Moderation Permissions Helper ----
+  function checkPermission(permission) {
+    if (!message.member.permissions.has(permission)) {
+      message.reply('❌ You do not have permission to do that!');
+      return false;
+    }
+    return true;
+                                                            }
   // ---- Kick ----
   else if (command === '$kick') {
-    const member = message.mentions.members.first();
-    if (!member) return message.reply('⚠️ Please mention a user to kick.');
-    if (!member.kickable) return message.reply('❌ I cannot kick this user.');
+    if (!checkPermission(PermissionsBitField.Flags.KickMembers)) return;
+    const members = message.mentions.members;
+    if (!members.size) return message.reply('⚠️ Mention at least one user to kick.');
     const reason = args.slice(1).join(' ') || 'No reason provided';
-    member.kick(reason)
-      .then(() => message.channel.send(`✅ Kicked ${member.user.tag} | Reason: ${reason}`))
-      .catch(err => message.reply(`❌ Failed to kick: ${err}`));
+    members.forEach(member => {
+      if (!member.kickable) return message.channel.send(`❌ Cannot kick ${member.user.tag}`);
+      member.kick(reason).catch(err => message.channel.send(`❌ Failed to kick ${member.user.tag}: ${err}`));
+    });
+    message.channel.send(`✅ Attempted to kick ${members.size} member(s).`);
   }
 
   // ---- Ban ----
   else if (command === '$ban') {
-    const member = message.mentions.members.first();
-    if (!member) return message.reply('⚠️ Please mention a user to ban.');
-    if (!member.bannable) return message.reply('❌ I cannot ban this user.');
+    if (!checkPermission(PermissionsBitField.Flags.BanMembers)) return;
+    const members = message.mentions.members;
+    if (!members.size) return message.reply('⚠️ Mention at least one user to ban.');
     const reason = args.slice(1).join(' ') || 'No reason provided';
-    member.ban({ reason })
-      .then(() => message.channel.send(`✅ Banned ${member.user.tag} | Reason: ${reason}`))
-      .catch(err => message.reply(`❌ Failed to ban: ${err}`));
+    members.forEach(member => {
+      if (!member.bannable) return message.channel.send(`❌ Cannot ban ${member.user.tag}`);
+      member.ban({ reason }).catch(err => message.channel.send(`❌ Failed to ban ${member.user.tag}: ${err}`));
+    });
+    message.channel.send(`✅ Attempted to ban ${members.size} member(s).`);
   }
 
   // ---- Mute / Unmute ----
   else if (command === '$mute') {
+    if (!checkPermission(PermissionsBitField.Flags.ModerateMembers)) return;
     const member = message.mentions.members.first();
-    if (!member) return message.reply('⚠️ Please mention a user to mute.');
-    const time = args[1] || '60';
-    member.timeout(parseInt(time) * 1000, 'Muted by bot')
+    if (!member) return message.reply('⚠️ Mention a user to mute.');
+    const time = parseInt(args[1]) || 60;
+    member.timeout(time * 1000, 'Muted by bot')
       .then(() => message.channel.send(`🤐 ${member.user.tag} has been muted for ${time} seconds.`))
       .catch(err => message.reply(`❌ Failed to mute: ${err}`));
   } else if (command === '$unmute') {
+    if (!checkPermission(PermissionsBitField.Flags.ModerateMembers)) return;
     const member = message.mentions.members.first();
-    if (!member) return message.reply('⚠️ Please mention a user to unmute.');
+    if (!member) return message.reply('⚠️ Mention a user to unmute.');
     member.timeout(null, 'Unmuted by bot')
       .then(() => message.channel.send(`🔊 ${member.user.tag} has been unmuted.`))
       .catch(err => message.reply(`❌ Failed to unmute: ${err}`));
@@ -261,16 +277,18 @@ client.on('messageCreate', async (message) => {
 
   // ---- Warn / Warnings ----
   else if (command === '$warn') {
+    if (!checkPermission(PermissionsBitField.Flags.KickMembers)) return;
     const member = message.mentions.members.first();
-    if (!member) return message.reply('⚠️ Please mention a user to warn.');
+    if (!member) return message.reply('⚠️ Mention a user to warn.');
     const reason = args.slice(1).join(' ') || 'No reason provided';
     if (!warnings[member.id]) warnings[member.id] = [];
     warnings[member.id].push({ reason, date: new Date().toISOString() });
     saveWarnings();
     message.channel.send(`⚠️ ${member.user.tag} has been warned. Reason: ${reason}`);
   } else if (command === '$warnings') {
+    if (!checkPermission(PermissionsBitField.Flags.KickMembers)) return;
     const member = message.mentions.members.first();
-    if (!member) return message.reply('⚠️ Please mention a user to check warnings.');
+    if (!member) return message.reply('⚠️ Mention a user to check warnings.');
     const userWarnings = warnings[member.id] || [];
     if (!userWarnings.length) return message.channel.send(`📄 ${member.user.tag} has no warnings.`);
     let reply = `📄 Warnings for ${member.user.tag}:\n`;
@@ -282,8 +300,9 @@ client.on('messageCreate', async (message) => {
 
   // ---- Clear ----
   else if (command === '$clear') {
+    if (!checkPermission(PermissionsBitField.Flags.ManageMessages)) return;
     const count = parseInt(args[0]);
-    if (!count || isNaN(count)) return message.reply('⚠️ Please provide a valid number of messages to delete.');
+    if (!count || isNaN(count)) return message.reply('⚠️ Provide a valid number of messages.');
     message.channel.bulkDelete(count, true)
       .then(() => message.channel.send(`🧹 Deleted ${count} messages.`).then(msg => setTimeout(() => msg.delete(), 5000)))
       .catch(err => message.reply(`❌ Failed to delete messages: ${err}`));
@@ -291,10 +310,12 @@ client.on('messageCreate', async (message) => {
 
   // ---- Lock / Unlock ----
   else if (command === '$lock') {
+    if (!checkPermission(PermissionsBitField.Flags.ManageChannels)) return;
     message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: false })
       .then(() => message.channel.send('🔒 Channel locked.'))
       .catch(err => message.reply(`❌ Failed to lock: ${err}`));
   } else if (command === '$unlock') {
+    if (!checkPermission(PermissionsBitField.Flags.ManageChannels)) return;
     message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: true })
       .then(() => message.channel.send('🔓 Channel unlocked.'))
       .catch(err => message.reply(`❌ Failed to unlock: ${err}`));
@@ -302,6 +323,7 @@ client.on('messageCreate', async (message) => {
 
   // ---- Slowmode ----
   else if (command === '$slowmode') {
+    if (!checkPermission(PermissionsBitField.Flags.ManageChannels)) return;
     const seconds = parseInt(args[0]);
     if (!seconds || isNaN(seconds)) return message.reply('⚠️ Provide a valid number of seconds.');
     message.channel.setRateLimitPerUser(seconds)
@@ -311,6 +333,7 @@ client.on('messageCreate', async (message) => {
 
   // ---- Role management ----
   else if (command === '$role') {
+    if (!checkPermission(PermissionsBitField.Flags.ManageRoles)) return;
     const subCommand = args[0];
     const member = message.mentions.members.first();
     const roleName = args.slice(2).join(' ');
@@ -375,10 +398,8 @@ client.on('messageCreate', async (message) => {
     if (!channelId) return message.reply('⚠️ Provide the channel ID.');
     const text = args.join(' ');
     if (!text) return message.reply('⚠️ Provide a message to send.');
-
     const channel = client.channels.cache.get(channelId);
     if (!channel || channel.type !== 0) return message.reply('⚠️ Channel not found or not text-based.');
-
     channel.send(text)
       .then(() => message.reply(`✅ Message sent to <#${channelId}>`))
       .catch(err => message.reply('❌ Failed to send message. Check bot permissions.'));
@@ -390,7 +411,6 @@ client.on('messageCreate', async (message) => {
     const playerHand = [drawCard(), drawCard()];
     const dealerHand = [drawCard(), drawCard()];
     blackjackGames.set(message.author.id, { playerHand, dealerHand });
-
     const playerTotal = handValue(playerHand);
     let msg = `🃏 **Blackjack Started!** 🃏\n\n` +
       `**Your hand:** ${formatHand(playerHand)} (Total: ${playerTotal})\n` +
@@ -402,7 +422,6 @@ client.on('messageCreate', async (message) => {
     if (!game) return message.reply('⚠️ No active game. Start one with `$blackjack`.');
     game.playerHand.push(drawCard());
     const playerTotal = handValue(game.playerHand);
-
     let msg = `**Your hand:** ${formatHand(game.playerHand)} (Total: ${playerTotal})`;
     if (playerTotal > 21) {
       msg += `\n💥 You busted! Dealer wins.`;
@@ -414,24 +433,20 @@ client.on('messageCreate', async (message) => {
   } else if (command === '$stand') {
     const game = blackjackGames.get(message.author.id);
     if (!game) return message.reply('⚠️ No active game. Start one with `$blackjack`.');
-
     const dealerHand = game.dealerHand;
     let dealerTotal = handValue(dealerHand);
     while (dealerTotal < 17) {
       dealerHand.push(drawCard());
       dealerTotal = handValue(dealerHand);
     }
-
     const playerTotal = handValue(game.playerHand);
     let result = `**Your hand:** ${formatHand(game.playerHand)} (Total: ${playerTotal})\n` +
       `**Dealer’s hand:** ${formatHand(dealerHand)} (Total: ${dealerTotal})\n\n`;
-
     if (playerTotal > 21) result += `💥 You busted! Dealer wins.`;
     else if (dealerTotal > 21) result += `🎉 Dealer busted! You win!`;
     else if (playerTotal > dealerTotal) result += `🎉 You win!`;
     else if (playerTotal < dealerTotal) result += `😢 Dealer wins.`;
     else result += `🤝 It’s a tie!`;
-
     blackjackGames.delete(message.author.id);
     message.channel.send(result);
   }
@@ -440,7 +455,6 @@ client.on('messageCreate', async (message) => {
   else if (message.mentions.has(client.user)) {
     const prompt = message.content.replace(new RegExp(`<@!?${client.user.id}>`, 'g'), '').trim();
     if (!prompt) return message.reply('❓ What would you like to ask?');
-
     try {
       await message.channel.sendTyping();
       const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -458,10 +472,8 @@ client.on('messageCreate', async (message) => {
           ]
         }),
       });
-
       const data = await response.json();
       const reply = data?.choices?.[0]?.message?.content;
-
       if (reply) await message.reply(reply);
       else if (data?.error?.message) await message.reply(`⚠️ AI error: ${data.error.message}`);
       else await message.reply('⚠️ Sorry, I couldn’t come up with a reply.');
