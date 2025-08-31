@@ -257,7 +257,7 @@ client.on('messageCreate', async (message) => {
     message.channel.send('🕯️ The spirits have left...');
   }
 
-  // ---- Info & Tools ----
+  // ---- Info & Tools continued ----
   else if (command === '$userinfo') {
     const user = message.mentions.users.first() || message.author;
     message.channel.send(`🧑‍💼 Username: ${user.username}\nID: ${user.id}`);
@@ -287,10 +287,10 @@ client.on('messageCreate', async (message) => {
     if (!channel || channel.type !== 0) return message.reply('⚠️ Channel not found or not text-based.');
     channel.send(text)
       .then(() => message.reply(`✅ Message sent to <#${channelId}>`))
-      .catch(err => message.reply('❌ Failed to send message. Check bot permissions.'));
+      .catch(() => message.reply('❌ Failed to send message. Check bot permissions.'));
   }
 
-  // ---- Blackjack ----
+  // ---- Blackjack continued ----
   else if (command === '$blackjack') {
     if (blackjackGames.has(message.author.id)) return message.reply('⚠️ You already have a game! Use `$hit` or `$stand`.');
     const playerHand = [drawCard(), drawCard()];
@@ -368,7 +368,7 @@ client.on('messageCreate', async (message) => {
     }
   }
 
-  // ---- Moderation Commands with Immunity ----
+  // ---- Moderation Commands ----
   else if (command === '$kick') {
     const target = message.mentions.members.first();
     if (!target) return message.reply('🔨 Tag a user to kick.');
@@ -387,21 +387,13 @@ client.on('messageCreate', async (message) => {
     target.ban({ reason })
       .then(() => message.reply(`✅ Banned ${target.user.tag}. Reason: ${reason}`))
       .catch(() => message.reply('❌ Cannot ban this user.'));
-  }
-
-  // ---- Helper: Immunity ----
-  function isImmune(user) {
-    return user.id === '782155864134909952';
-  }
-
-  // ---- Mute ----
-  else if (command === '$mute') {
+  } else if (command === '$mute') {
     const target = message.mentions.members.first();
     if (!target) return message.reply('🤐 Tag a user to mute.');
     if (isImmune(target.user)) return message.reply('❌ This user is immune!');
     if (!checkPermission(PermissionsBitField.Flags.MuteMembers)) return;
-    const time = args[1] ? parseInt(args[1]) * 1000 : null;
-    target.timeout(time || 600000, 'Muted by bot')
+    const time = args[1] ? parseInt(args[1]) * 1000 : 600000;
+    target.timeout(time, 'Muted by bot')
       .then(() => message.reply(`✅ Muted ${target.user.tag}${time ? ` for ${args[1]} seconds` : ''}.`))
       .catch(() => message.reply('❌ Cannot mute this user.'));
   } else if (command === '$unmute') {
@@ -434,7 +426,7 @@ client.on('messageCreate', async (message) => {
     message.channel.send(text);
   }
 
-  // ---- Clear messages ----
+  // ---- Clear, Lock, Unlock, Slowmode, Role ----
   else if (command === '$clear') {
     if (!checkPermission(PermissionsBitField.Flags.ManageMessages)) return;
     const count = parseInt(args[0]);
@@ -442,10 +434,7 @@ client.on('messageCreate', async (message) => {
     message.channel.bulkDelete(count, true)
       .then(() => message.reply(`🧹 Deleted ${count} messages.`))
       .catch(() => message.reply('❌ Cannot delete messages.'));
-  }
-
-  // ---- Lock / Unlock ----
-  else if (command === '$lock') {
+  } else if (command === '$lock') {
     if (!checkPermission(PermissionsBitField.Flags.ManageChannels)) return;
     message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: false })
       .then(() => message.reply('🔒 Channel locked.'))
@@ -455,20 +444,14 @@ client.on('messageCreate', async (message) => {
     message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: true })
       .then(() => message.reply('🔓 Channel unlocked.'))
       .catch(() => message.reply('❌ Cannot unlock this channel.'));
-  }
-
-  // ---- Slowmode ----
-  else if (command === '$slowmode') {
+  } else if (command === '$slowmode') {
     if (!checkPermission(PermissionsBitField.Flags.ManageChannels)) return;
     const time = parseInt(args[0]);
     if (isNaN(time) || time < 0 || time > 21600) return message.reply('❌ Enter a valid number (0-21600 seconds).');
     message.channel.setRateLimitPerUser(time)
       .then(() => message.reply(`🐌 Slowmode set to ${time} seconds.`))
       .catch(() => message.reply('❌ Cannot set slowmode.'));
-  }
-
-  // ---- Role Add / Remove ----
-  else if (command === '$role') {
+  } else if (command === '$role') {
     const subcommand = args.shift();
     const target = message.mentions.members.first();
     if (!target) return message.reply('🏷️ Tag a user.');
@@ -491,9 +474,9 @@ client.on('messageCreate', async (message) => {
     }
   }
 
-  // ---- Unauthorized catch ----
-  else if (command === '$unauthorized') {
-    message.reply('❌ You do not have permission to do this!');
+  // ---- Unauthorized catch-all ----
+  else {
+    message.reply('❌ Unknown command or you do not have permission.');
   }
 
 }); // ---- End of messageCreate ----
