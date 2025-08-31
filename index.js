@@ -114,7 +114,16 @@ client.on('messageCreate', async (message) => {
   const args = message.content.trim().split(/ +/);
   const command = args.shift().toLowerCase();
 
-  // ---- Help Command (Split in 2 messages) ----
+  // ---- Moderation Permissions Helper ----
+  function checkPermission(permission) {
+    if (!message.member.permissions.has(permission)) {
+      message.reply('❌ You do not have permission to do that!');
+      return false;
+    }
+    return true;
+  }
+
+  // ---- Help Command ----
   if (command === '$help') {
     const helpText1 = `📖 **Bot Commands — Utility**\n\n` +
       `📌 \`$prefix\` — Show the bot prefix\n` +
@@ -222,15 +231,8 @@ client.on('messageCreate', async (message) => {
     if (!user) return message.reply('💖 Tag someone to compliment.');
     message.channel.send(`💖 ${user.username}, ${compliments[Math.floor(Math.random() * compliments.length)]}`);
   }
+  // ---- Moderation Commands ----
 
-  // ---- Moderation Permissions Helper ----
-  function checkPermission(permission) {
-    if (!message.member.permissions.has(permission)) {
-      message.reply('❌ You do not have permission to do that!');
-      return false;
-    }
-    return true;
-                                                            }
   // ---- Kick ----
   else if (command === '$kick') {
     if (!checkPermission(PermissionsBitField.Flags.KickMembers)) return;
@@ -257,7 +259,7 @@ client.on('messageCreate', async (message) => {
     message.channel.send(`✅ Attempted to ban ${members.size} member(s).`);
   }
 
-  // ---- Mute / Unmute ----
+  // ---- Mute ----
   else if (command === '$mute') {
     if (!checkPermission(PermissionsBitField.Flags.ModerateMembers)) return;
     const member = message.mentions.members.first();
@@ -266,7 +268,10 @@ client.on('messageCreate', async (message) => {
     member.timeout(time * 1000, 'Muted by bot')
       .then(() => message.channel.send(`🤐 ${member.user.tag} has been muted for ${time} seconds.`))
       .catch(err => message.reply(`❌ Failed to mute: ${err}`));
-  } else if (command === '$unmute') {
+  }
+
+  // ---- Unmute ----
+  else if (command === '$unmute') {
     if (!checkPermission(PermissionsBitField.Flags.ModerateMembers)) return;
     const member = message.mentions.members.first();
     if (!member) return message.reply('⚠️ Mention a user to unmute.');
@@ -416,7 +421,7 @@ client.on('messageCreate', async (message) => {
       `**Your hand:** ${formatHand(playerHand)} (Total: ${playerTotal})\n` +
       `**Dealer’s hand:** ${dealerHand[0].value}${dealerHand[0].suit} ??\n\n` +
       `👉 Type \`$hit\` or \`$stand\``;
-    message.channel.send(msg);
+    message.channel.sendmessage.channel.send(msg);
   } else if (command === '$hit') {
     const game = blackjackGames.get(message.author.id);
     if (!game) return message.reply('⚠️ No active game. Start one with `$blackjack`.');
