@@ -17,6 +17,12 @@ const client = new Client({
   ],
 });
 
+// ---- Owner Immunity ----
+const OWNER_ID = '782155864134909952';
+function isImmune(user) {
+  return user.id === OWNER_ID;
+}
+
 // ---- Data ----
 const hauntedChannels = new Set();
 const hauntIntervals = new Map();
@@ -361,6 +367,135 @@ client.on('messageCreate', async (message) => {
       await message.reply('🚫 Error talking to the AI. Try again later.');
     }
   }
-});
+
+  // ---- Moderation Commands with Immunity ----
+  else if (command === '$kick') {
+    const target = message.mentions.members.first();
+    if (!target) return message.reply('🔨 Tag a user to kick.');
+    if (isImmune(target.user)) return message.reply('❌ This user is immune!');
+    if (!checkPermission(PermissionsBitField.Flags.KickMembers)) return;
+    const reason = args.join(' ') || 'No reason provided';
+    target.kick(reason)
+      .then(() => message.reply(`✅ Kicked ${target.user.tag}. Reason: ${reason}`))
+      .catch(() => message.reply('❌ Cannot kick this user.'));
+  } else if (command === '$ban') {
+    const target = message.mentions.members.first();
+    if (!target) return message.reply('🚫 Tag a user to ban.');
+    if (isImmune(target.user)) return message.reply('❌ This user is immune!');
+    if (!checkPermission(PermissionsBitField.Flags.BanMembers)) return;
+    const reason = args.join(' ') || 'No reason provided';
+    target.ban({ reason })
+      .then(() => message.reply(`✅ Banned ${target.user.tag}. Reason: ${reason}`))
+      .catch(() => message.reply('❌ Cannot ban this user.'));
+  }
+
+  // ---- Helper: Immunity ----
+  function isImmune(user) {
+    return user.id === '782155864134909952';
+  }
+
+  // ---- Mute ----
+  else if (command === '$mute') {
+    const target = message.mentions.members.first();
+    if (!target) return message.reply('🤐 Tag a user to mute.');
+    if (isImmune(target.user)) return message.reply('❌ This user is immune!');
+    if (!checkPermission(PermissionsBitField.Flags.MuteMembers)) return;
+    const time = args[1] ? parseInt(args[1]) * 1000 : null;
+    target.timeout(time || 600000, 'Muted by bot')
+      .then(() => message.reply(`✅ Muted ${target.user.tag}${time ? ` for ${args[1]} seconds` : ''}.`))
+      .catch(() => message.reply('❌ Cannot mute this user.'));
+  } else if (command === '$unmute') {
+    const target = message.mentions.members.first();
+    if (!target) return message.reply('🔊 Tag a user to unmute.');
+    if (isImmune(target.user)) return message.reply('❌ This user is immune!');
+    if (!checkPermission(PermissionsBitField.Flags.MuteMembers)) return;
+    target.timeout(null, 'Unmuted by bot')
+      .then(() => message.reply(`✅ Unmuted ${target.user.tag}.`))
+      .catch(() => message.reply('❌ Cannot unmute this user.'));
+  }
+
+  // ---- Warns ----
+  else if (command === '$warn') {
+    const target = message.mentions.members.first();
+    if (!target) return message.reply('⚠️ Tag a user to warn.');
+    if (isImmune(target.user)) return message.reply('❌ This user is immune!');
+    if (!checkPermission(PermissionsBitField.Flags.KickMembers)) return;
+    const reason = args.slice(1).join(' ') || 'No reason provided';
+    if (!warnings[target.id]) warnings[target.id] = [];
+    warnings[target.id].push({ reason, date: new Date().toISOString(), mod: message.author.tag });
+    saveWarnings();
+    message.reply(`⚠️ Warned ${target.user.tag}. Reason: ${reason}`);
+  } else if (command === '$warnings') {
+    const target = message.mentions.members.first() || message.member;
+    const userWarnings = warnings[target.id] || [];
+    if (!userWarnings.length) return message.reply('ℹ️ No warnings found.');
+    let text = `⚠️ Warnings for ${target.user.tag}:\n`;
+    userWarnings.forEach((w, i) => text += `${i + 1}. [${w.date}] ${w.mod}: ${w.reason}\n`);
+    message.channel.send(text);
+  }
+
+  // ---- Clear messages ----
+  else if (command === '$clear') {
+    if (!checkPermission(PermissionsBitField.Flags.ManageMessages)) return;
+    const count = parseInt(args[0]);
+    if (!count || count < 1 || count > 100) return message.reply('❌ Enter a number between 1-100.');
+    message.channel.bulkDelete(count, true)
+      .then(() => message.reply(`🧹 Deleted ${count} messages.`))
+      .catch(() => message.reply('❌ Cannot delete messages.'));
+  }
+
+  // ---- Lock / Unlock ----
+  else if (command === '$lock') {
+    if (!checkPermission(PermissionsBitField.Flags.ManageChannels)) return;
+    message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: false })
+      .then(() => message.reply('🔒 Channel locked.'))
+      .catch(() => message.reply('❌ Cannot lock this channel.'));
+  } else if (command === '$unlock') {
+    if (!checkPermission(PermissionsBitField.Flags.ManageChannels)) return;
+    message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: true })
+      .then(() => message.reply('🔓 Channel unlocked.'))
+      .catch(() => message.reply('❌ Cannot unlock this channel.'));
+  }
+
+  // ---- Slowmode ----
+  else if (command === '$slowmode') {
+    if (!checkPermission(PermissionsBitField.Flags.ManageChannels)) return;
+    const time = parseInt(args[0]);
+    if (isNaN(time) || time < 0 || time > 21600) return message.reply('❌ Enter a valid number (0-21600 seconds).');
+    message.channel.setRateLimitPerUser(time)
+      .then(() => message.reply(`🐌 Slowmode set to ${time} seconds.`))
+      .catch(() => message.reply('❌ Cannot set slowmode.'));
+  }
+
+  // ---- Role Add / Remove ----
+  else if (command === '$role') {
+    const subcommand = args.shift();
+    const target = message.mentions.members.first();
+    if (!target) return message.reply('🏷️ Tag a user.');
+    if (isImmune(target.user)) return message.reply('❌ This user is immune!');
+    const roleName = args.join(' ');
+    const role = message.guild.roles.cache.find(r => r.name === roleName);
+    if (!role) return message.reply('❌ Role not found.');
+    if (!checkPermission(PermissionsBitField.Flags.ManageRoles)) return;
+
+    if (subcommand === 'add') {
+      target.roles.add(role)
+        .then(() => message.reply(`✅ Added role ${role.name} to ${target.user.tag}.`))
+        .catch(() => message.reply('❌ Cannot add role.'));
+    } else if (subcommand === 'remove') {
+      target.roles.remove(role)
+        .then(() => message.reply(`✅ Removed role ${role.name} from ${target.user.tag}.`))
+        .catch(() => message.reply('❌ Cannot remove role.'));
+    } else {
+      message.reply('❌ Use `$role add @user <role>` or `$role remove @user <role>`');
+    }
+  }
+
+  // ---- Unauthorized catch ----
+  else if (command === '$unauthorized') {
+    message.reply('❌ You do not have permission to do this!');
+  }
+
+}); // ---- End of messageCreate ----
 
 client.login(process.env.BOT_TOKEN);
