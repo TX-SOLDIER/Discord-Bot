@@ -231,132 +231,6 @@ client.on('messageCreate', async (message) => {
     if (!user) return message.reply('💖 Tag someone to compliment.');
     message.channel.send(`💖 ${user.username}, ${compliments[Math.floor(Math.random() * compliments.length)]}`);
   }
-  // ---- Moderation Commands ----
-
-  // ---- Kick ----
-  else if (command === '$kick') {
-    if (!checkPermission(PermissionsBitField.Flags.KickMembers)) return;
-    const members = message.mentions.members;
-    if (!members.size) return message.reply('⚠️ Mention at least one user to kick.');
-    const reason = args.slice(1).join(' ') || 'No reason provided';
-    members.forEach(member => {
-      if (!member.kickable) return message.channel.send(`❌ Cannot kick ${member.user.tag}`);
-      member.kick(reason).catch(err => message.channel.send(`❌ Failed to kick ${member.user.tag}: ${err}`));
-    });
-    message.channel.send(`✅ Attempted to kick ${members.size} member(s).`);
-  }
-
-  // ---- Ban ----
-  else if (command === '$ban') {
-    if (!checkPermission(PermissionsBitField.Flags.BanMembers)) return;
-    const members = message.mentions.members;
-    if (!members.size) return message.reply('⚠️ Mention at least one user to ban.');
-    const reason = args.slice(1).join(' ') || 'No reason provided';
-    members.forEach(member => {
-      if (!member.bannable) return message.channel.send(`❌ Cannot ban ${member.user.tag}`);
-      member.ban({ reason }).catch(err => message.channel.send(`❌ Failed to ban ${member.user.tag}: ${err}`));
-    });
-    message.channel.send(`✅ Attempted to ban ${members.size} member(s).`);
-  }
-
-  // ---- Mute ----
-  else if (command === '$mute') {
-    if (!checkPermission(PermissionsBitField.Flags.ModerateMembers)) return;
-    const member = message.mentions.members.first();
-    if (!member) return message.reply('⚠️ Mention a user to mute.');
-    const time = parseInt(args[1]) || 60;
-    member.timeout(time * 1000, 'Muted by bot')
-      .then(() => message.channel.send(`🤐 ${member.user.tag} has been muted for ${time} seconds.`))
-      .catch(err => message.reply(`❌ Failed to mute: ${err}`));
-  }
-
-  // ---- Unmute ----
-  else if (command === '$unmute') {
-    if (!checkPermission(PermissionsBitField.Flags.ModerateMembers)) return;
-    const member = message.mentions.members.first();
-    if (!member) return message.reply('⚠️ Mention a user to unmute.');
-    member.timeout(null, 'Unmuted by bot')
-      .then(() => message.channel.send(`🔊 ${member.user.tag} has been unmuted.`))
-      .catch(err => message.reply(`❌ Failed to unmute: ${err}`));
-  }
-
-  // ---- Warn / Warnings ----
-  else if (command === '$warn') {
-    if (!checkPermission(PermissionsBitField.Flags.KickMembers)) return;
-    const member = message.mentions.members.first();
-    if (!member) return message.reply('⚠️ Mention a user to warn.');
-    const reason = args.slice(1).join(' ') || 'No reason provided';
-    if (!warnings[member.id]) warnings[member.id] = [];
-    warnings[member.id].push({ reason, date: new Date().toISOString() });
-    saveWarnings();
-    message.channel.send(`⚠️ ${member.user.tag} has been warned. Reason: ${reason}`);
-  } else if (command === '$warnings') {
-    if (!checkPermission(PermissionsBitField.Flags.KickMembers)) return;
-    const member = message.mentions.members.first();
-    if (!member) return message.reply('⚠️ Mention a user to check warnings.');
-    const userWarnings = warnings[member.id] || [];
-    if (!userWarnings.length) return message.channel.send(`📄 ${member.user.tag} has no warnings.`);
-    let reply = `📄 Warnings for ${member.user.tag}:\n`;
-    userWarnings.forEach((w, i) => {
-      reply += `${i + 1}. ${w.reason} | ${new Date(w.date).toLocaleString()}\n`;
-    });
-    message.channel.send(reply);
-  }
-
-  // ---- Clear ----
-  else if (command === '$clear') {
-    if (!checkPermission(PermissionsBitField.Flags.ManageMessages)) return;
-    const count = parseInt(args[0]);
-    if (!count || isNaN(count)) return message.reply('⚠️ Provide a valid number of messages.');
-    message.channel.bulkDelete(count, true)
-      .then(() => message.channel.send(`🧹 Deleted ${count} messages.`).then(msg => setTimeout(() => msg.delete(), 5000)))
-      .catch(err => message.reply(`❌ Failed to delete messages: ${err}`));
-  }
-
-  // ---- Lock / Unlock ----
-  else if (command === '$lock') {
-    if (!checkPermission(PermissionsBitField.Flags.ManageChannels)) return;
-    message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: false })
-      .then(() => message.channel.send('🔒 Channel locked.'))
-      .catch(err => message.reply(`❌ Failed to lock: ${err}`));
-  } else if (command === '$unlock') {
-    if (!checkPermission(PermissionsBitField.Flags.ManageChannels)) return;
-    message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: true })
-      .then(() => message.channel.send('🔓 Channel unlocked.'))
-      .catch(err => message.reply(`❌ Failed to unlock: ${err}`));
-  }
-
-  // ---- Slowmode ----
-  else if (command === '$slowmode') {
-    if (!checkPermission(PermissionsBitField.Flags.ManageChannels)) return;
-    const seconds = parseInt(args[0]);
-    if (!seconds || isNaN(seconds)) return message.reply('⚠️ Provide a valid number of seconds.');
-    message.channel.setRateLimitPerUser(seconds)
-      .then(() => message.channel.send(`🐌 Slowmode set to ${seconds} seconds.`))
-      .catch(err => message.reply(`❌ Failed to set slowmode: ${err}`));
-  }
-
-  // ---- Role management ----
-  else if (command === '$role') {
-    if (!checkPermission(PermissionsBitField.Flags.ManageRoles)) return;
-    const subCommand = args[0];
-    const member = message.mentions.members.first();
-    const roleName = args.slice(2).join(' ');
-    const role = message.guild.roles.cache.find(r => r.name.toLowerCase() === roleName.toLowerCase());
-    if (!member || !role) return message.reply('⚠️ User or role not found.');
-    if (subCommand === 'add') {
-      member.roles.add(role).then(() => message.channel.send(`🏷️ Added role **${role.name}** to ${member.user.tag}`));
-    } else if (subCommand === 'remove') {
-      member.roles.remove(role).then(() => message.channel.send(`🏷️ Removed role **${role.name}** from ${member.user.tag}`));
-    } else {
-      message.reply('⚠️ Use `$role add @user <role>` or `$role remove @user <role>`');
-    }
-  }
-
-  // ---- Unauthorized ----
-  else if (command === '$unauthorized') {
-    message.channel.send('❌ You are not authorized to do that!');
-  }
 
   // ---- Haunt ----
   else if (command === '$haunt') {
@@ -417,11 +291,11 @@ client.on('messageCreate', async (message) => {
     const dealerHand = [drawCard(), drawCard()];
     blackjackGames.set(message.author.id, { playerHand, dealerHand });
     const playerTotal = handValue(playerHand);
-    let msg = `🃏 **Blackjack Started!** 🃏\n\n` +
+    const msg = `🃏 **Blackjack Started!** 🃏\n\n` +
       `**Your hand:** ${formatHand(playerHand)} (Total: ${playerTotal})\n` +
       `**Dealer’s hand:** ${dealerHand[0].value}${dealerHand[0].suit} ??\n\n` +
       `👉 Type \`$hit\` or \`$stand\``;
-    message.channel.sendmessage.channel.send(msg);
+    message.channel.send(msg);
   } else if (command === '$hit') {
     const game = blackjackGames.get(message.author.id);
     if (!game) return message.reply('⚠️ No active game. Start one with `$blackjack`.');
