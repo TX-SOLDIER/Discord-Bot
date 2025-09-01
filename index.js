@@ -415,9 +415,15 @@ else if (command === 'say') {
 }
 else if (command === 'send') {
     if (args.length < 2) return message.reply('✉️ Usage: $send <channelID> <message>');
-    const channel = message.guild.channels.cache.get(args[0]);
-    if (!channel) return message.reply('❌ Channel not found.');
-    channel.send(args.slice(1).join(' '));
+    
+    const channel = client.channels.cache.get(args[0]); // search all channels bot can see
+    if (!channel) return message.reply('❌ Channel not found or I do not have access.');
+    if (!channel.permissionsFor(channel.guild.me)?.has('SendMessages')) 
+        return message.reply('❌ I cannot send messages in that channel.');
+    
+    channel.send(args.slice(1).join(' '))
+        .then(() => message.reply(`✅ Message sent to ${channel.name} in ${channel.guild.name}.`))
+        .catch(() => message.reply('❌ Failed to send message.'));
 }
 
   // ---- Warns ----
