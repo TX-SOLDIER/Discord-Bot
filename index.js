@@ -116,7 +116,8 @@ client.once('ready', () => {
 
 // ---- Command Handler ----
 client.on('messageCreate', async (message) => {
-  if (message.author.bot) return;
+  if (message.author.bot) return; // Ignore bot messages
+
   const args = message.content.trim().split(/ +/);
   const command = args.shift().toLowerCase();
 
@@ -394,7 +395,7 @@ client.on('messageCreate', async (message) => {
     if (!checkPermission(PermissionsBitField.Flags.MuteMembers)) return;
     const time = args[1] ? parseInt(args[1]) * 1000 : 600000;
     target.timeout(time, 'Muted by bot')
-      .then(() => message.reply(`✅ Muted ${target.user.tag}${time ? ` for ${args[1]} seconds` : ''}.`))
+      .then(() => message.reply(`✅ Muted ${target.user.tag}${args[1] ? ` for ${args[1]} seconds` : ''}.`))
       .catch(() => message.reply('❌ Cannot mute this user.'));
   } else if (command === '$unmute') {
     const target = message.mentions.members.first();
@@ -474,8 +475,9 @@ client.on('messageCreate', async (message) => {
     }
   }
 
-  // ---- Unauthorized catch-all ----
-  else {
+  // ---- Catch-all for unknown messages ----
+  // Fix: Only respond if the message starts with the prefix '$'
+  else if (message.content.startsWith('$')) {
     message.reply('❌ Unknown command or you do not have permission.');
   }
 
