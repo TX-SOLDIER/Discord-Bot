@@ -114,11 +114,13 @@ client.once('ready', () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
 });
 
-// ---- Command Handler ----
-client.on('messageCreate', async (message) => {
-  if (message.author.bot) return; // Ignore bot messages
+const PREFIX = '$';
 
-  const args = message.content.trim().split(/ +/);
+client.on('messageCreate', async (message) => {
+  if (message.author.bot) return;
+  if (!message.content.startsWith(PREFIX)) return; // ✅ Ignore normal messages
+
+  const args = message.content.slice(PREFIX.length).trim().split(/ +/);
   const command = args.shift().toLowerCase();
 
   // ---- Moderation Permissions Helper ----
@@ -131,99 +133,101 @@ client.on('messageCreate', async (message) => {
   }
 
   // ---- Help Command ----
-  if (command === '$help') {
+  if (command === 'help') {
     const helpText1 = `📖 **Bot Commands — Utility**\n\n` +
-      `📌 \`$prefix\` — Show the bot prefix\n` +
-      `🏓 \`$ping\` — Check bot response time\n` +
-      `📊 \`$stats\` — Server member stats\n` +
-      `⏱️ \`$uptime\` — Bot active time\n` +
-      `🤖 \`$botinfo\` — Info about the bot\n` +
-      `🔗 \`$invite\` — Get bot invite link\n\n` +
+      `📌 \`${PREFIX}prefix\` — Show the bot prefix\n` +
+      `🏓 \`${PREFIX}ping\` — Check bot response time\n` +
+      `📊 \`${PREFIX}stats\` — Server member stats\n` +
+      `⏱️ \`${PREFIX}uptime\` — Bot active time\n` +
+      `🤖 \`${PREFIX}botinfo\` — Info about the bot\n` +
+      `🔗 \`${PREFIX}invite\` — Get bot invite link\n\n` +
       `📖 **Fun & Games**\n\n` +
-      `🪙 \`$flip\` — Flip a coin\n` +
-      `🎱 \`$8ball [question]\` — Magic 8-ball\n` +
-      `🎲 \`$dice\` — Roll a die\n` +
-      `🎯 \`$rate @user\` — Rate someone\n` +
-      `🌈 \`$howgay @user\` — Gay meter\n` +
-      `🕵️ \`$sus @user\` — Sus meter\n` +
-      `💬 \`$truth\` — Truth question\n` +
-      `😈 \`$dare\` — Dare\n` +
-      `🔥 \`$roast @user\` — Roast\n` +
-      `💖 \`$compliment @user\` — Compliment\n` +
-      `👻 \`$haunt\` / \`$unhaunt\` — Haunting\n` +
-      `🃏 \`$blackjack\`, \`$hit\`, \`$stand\` — Play Blackjack\n\n` +
+      `🪙 \`${PREFIX}flip\` — Flip a coin\n` +
+      `🎱 \`${PREFIX}8ball [question]\` — Magic 8-ball\n` +
+      `🎲 \`${PREFIX}dice\` — Roll a die\n` +
+      `🎯 \`${PREFIX}rate @user\` — Rate someone\n` +
+      `🌈 \`${PREFIX}howgay @user\` — Gay meter\n` +
+      `🕵️ \`${PREFIX}sus @user\` — Sus meter\n` +
+      `💬 \`${PREFIX}truth\` — Truth question\n` +
+      `😈 \`${PREFIX}dare\` — Dare\n` +
+      `🔥 \`${PREFIX}roast @user\` — Roast\n` +
+      `💖 \`${PREFIX}compliment @user\` — Compliment\n` +
+      `👻 \`${PREFIX}haunt\` / \`${PREFIX}unhaunt\` — Haunting\n` +
+      `🃏 \`${PREFIX}blackjack\`, \`${PREFIX}hit\`, \`${PREFIX}stand\` — Play Blackjack\n\n` +
       `📖 **Moderation Commands**\n\n` +
-      `🔨 \`$kick @user [reason]\` — Kick a user\n` +
-      `🚫 \`$ban @user [reason]\` — Ban a user\n` +
-      `🤐 \`$mute @user [time]\` — Mute a user\n` +
-      `🔊 \`$unmute @user\` — Unmute a user\n` +
-      `⚠️ \`$warn @user [reason]\` — Warn a user\n` +
-      `📄 \`$warnings @user\` — Show warnings\n` +
-      `🧹 \`$clear [number]\` — Delete messages\n` +
-      `🔒 \`$lock\` — Lock channel\n` +
-      `🔓 \`$unlock\` — Unlock channel\n` +
-      `🐌 \`$slowmode [seconds]\` — Set slowmode\n` +
-      `🏷️ \`$role add @user <role>\` — Add role\n` +
-      `🏷️ \`$role remove @user <role>\` — Remove role\n` +
-      `❌ \`$unauthorized\` — Unauthorized response`;
+      `🔨 \`${PREFIX}kick @user [reason]\` — Kick a user\n` +
+      `🚫 \`${PREFIX}ban @user [reason]\` — Ban a user\n` +
+      `🤐 \`${PREFIX}mute @user [time]\` — Mute a user\n` +
+      `🔊 \`${PREFIX}unmute @user\` — Unmute a user\n` +
+      `⚠️ \`${PREFIX}warn @user [reason]\` — Warn a user\n` +
+      `📄 \`${PREFIX}warnings @user\` — Show warnings\n` +
+      `🧹 \`${PREFIX}clear [number]\` — Delete messages\n` +
+      `🔒 \`${PREFIX}lock\` — Lock channel\n` +
+      `🔓 \`${PREFIX}unlock\` — Unlock channel\n` +
+      `🐌 \`${PREFIX}slowmode [seconds]\` — Set slowmode\n` +
+      `🏷️ \`${PREFIX}role add @user <role>\` — Add role\n` +
+      `🏷️ \`${PREFIX}role remove @user <role>\` — Remove role\n` +
+      `❌ \`${PREFIX}unauthorized\` — Unauthorized response`;
+
     await message.channel.send(helpText1);
 
     const helpText2 = `📖 **Info & Tools**\n\n` +
-      `🧑‍💼 \`$userinfo\` — User info\n` +
-      `🖼️ \`$avatar @user\` — Avatar\n` +
-      `🏠 \`$serverinfo\` — Server info\n` +
-      `📢 \`$shout [msg]\` — Shout\n` +
-      `🤐 \`$spoiler [msg]\` — Spoiler\n` +
-      `📣 \`$say [msg]\` — Echo\n` +
-      `✉️ \`$send <channelID> <message>\` — Send to another server/channel`;
+      `🧑‍💼 \`${PREFIX}userinfo\` — User info\n` +
+      `🖼️ \`${PREFIX}avatar @user\` — Avatar\n` +
+      `🏠 \`${PREFIX}serverinfo\` — Server info\n` +
+      `📢 \`${PREFIX}shout [msg]\` — Shout\n` +
+      `🤐 \`${PREFIX}spoiler [msg]\` — Spoiler\n` +
+      `📣 \`${PREFIX}say [msg]\` — Echo\n` +
+      `✉️ \`${PREFIX}send <channelID> <message>\` — Send to another server/channel`;
     return message.channel.send(helpText2);
   }
 
   // ---- Utility ----
-  else if (command === '$ping') {
+  else if (command === 'ping') {
     const sent = await message.channel.send('Pinging...');
     sent.edit(`🏓 Pong! Latency is ${sent.createdTimestamp - message.createdTimestamp}ms`);
-  } else if (command === '$stats') {
+  } else if (command === 'stats') {
     message.channel.send(`📊 Server has ${message.guild.memberCount} members.`);
-  } else if (command === '$uptime') {
+  } else if (command === 'uptime') {
     const uptime = Math.floor(process.uptime());
     message.channel.send(`⏱️ Bot uptime: ${uptime} seconds.`);
-  } else if (command === '$botinfo') {
+  } else if (command === 'botinfo') {
     message.channel.send(`🤖 I am ${client.user.tag}, your friendly bot helper!`);
-  } else if (command === '$invite') {
+  } else if (command === 'invite') {
     message.channel.send('🔗 Invite me: https://discord.com/api/oauth2/authorize?client_id=YOUR_CLIENT_ID&permissions=8&scope=bot%20applications.commands');
-  } else if (command === '$prefix') {
-    message.channel.send(`📌 The current prefix is: \`$\``);
+  } else if (command === 'prefix') {
+    message.channel.send(`📌 The current prefix is: \`${PREFIX}\``);
   }
 
   // ---- Fun & Games ----
-  else if (command === '$flip') {
+  else if (command === 'flip') {
     const result = Math.random() < 0.5 ? 'Heads' : 'Tails';
     message.channel.send(`🪙 You flipped **${result}**!`);
-  } else if (command === '$8ball') {
+  } else if (command === '8ball') {
     const responses = ['Yes.', 'No.', 'Maybe.', 'Ask again later.', 'Definitely!', 'I don’t think so.'];
     if (!args.length) return message.reply('🎱 Ask me a question.');
     message.channel.send(`🎱 ${responses[Math.floor(Math.random() * responses.length)]}`);
-  } else if (command === '$dice') {
+  } else if (command === 'dice') {
     const roll = Math.floor(Math.random() * 6) + 1;
     message.channel.send(`🎲 You rolled a **${roll}**!`);
-  } else if (command === '$rate') {
+  } else if (command === 'rate') {
     const user = message.mentions.users.first() || message.author;
     const rating = Math.floor(Math.random() * 11);
     message.channel.send(`🎯 I rate ${user.username} a **${rating}/10**!`);
-  } else if (command === '$howgay') {
+  } else if (command === 'howgay') {
     const user = message.mentions.users.first() || message.author;
     const gayness = Math.floor(Math.random() * 101);
     message.channel.send(`🌈 ${user.username} is **${gayness}%** gay!`);
-  } else if (command === '$sus') {
+  } else if (command === 'sus') {
     const user = message.mentions.users.first() || message.author;
     const sus = Math.floor(Math.random() * 101);
     message.channel.send(`🕵️ ${user.username} is **${sus}%** sus!`);
-  } else if (command === '$truth') {
+  } else if (command === 'truth') {
     message.channel.send(`💬 Truth: ${spicyTruths[Math.floor(Math.random() * spicyTruths.length)]}`);
-  } else if (command === '$dare') {
+  } else if (command === 'dare') {
     message.channel.send(`😈 Dare: ${spicyDares[Math.floor(Math.random() * spicyDares.length)]}`);
-  } else if (command === '$roast') {
+  }
+  else if (command === 'roast') {
     const user = message.mentions.users.first();
     if (!user) return message.reply('🔥 Tag someone to roast.');
     const roasts = [
@@ -233,14 +237,14 @@ client.on('messageCreate', async (message) => {
       'You have something on your chin... no, the third one down.',
     ];
     message.channel.send(`🔥 ${user.username}, ${roasts[Math.floor(Math.random() * roasts.length)]}`);
-  } else if (command === '$compliment') {
+  } else if (command === 'compliment') {
     const user = message.mentions.users.first();
     if (!user) return message.reply('💖 Tag someone to compliment.');
     message.channel.send(`💖 ${user.username}, ${compliments[Math.floor(Math.random() * compliments.length)]}`);
   }
 
   // ---- Haunt ----
-  else if (command === '$haunt') {
+  else if (command === 'haunt') {
     if (hauntedChannels.has(message.channel.id)) return message.channel.send('👻 Already haunting this channel!');
     hauntedChannels.add(message.channel.id);
     message.channel.send('💀 The haunting has begun...');
@@ -249,7 +253,7 @@ client.on('messageCreate', async (message) => {
       message.channel.send(spookyMessages[Math.floor(Math.random() * spookyMessages.length)]);
     }, 30000);
     hauntIntervals.set(message.channel.id, interval);
-  } else if (command === '$unhaunt') {
+  } else if (command === 'unhaunt') {
     hauntedChannels.delete(message.channel.id);
     if (hauntIntervals.has(message.channel.id)) {
       clearInterval(hauntIntervals.get(message.channel.id));
@@ -258,41 +262,8 @@ client.on('messageCreate', async (message) => {
     message.channel.send('🕯️ The spirits have left...');
   }
 
-  // ---- Info & Tools continued ----
-  else if (command === '$userinfo') {
-    const user = message.mentions.users.first() || message.author;
-    message.channel.send(`🧑‍💼 Username: ${user.username}\nID: ${user.id}`);
-  } else if (command === '$avatar') {
-    const user = message.mentions.users.first() || message.author;
-    message.channel.send(`🖼️ Avatar for ${user.username}: ${user.displayAvatarURL({ dynamic: true })}`);
-  } else if (command === '$serverinfo') {
-    message.channel.send(`🏠 Server: ${message.guild.name}\nMembers: ${message.guild.memberCount}`);
-  } else if (command === '$shout') {
-    const text = args.join(' ');
-    if (!text) return message.reply('📢 What should I shout?');
-    message.channel.send(`📢 **${text.toUpperCase()}**`);
-  } else if (command === '$spoiler') {
-    const text = args.join(' ');
-    if (!text) return message.reply('🤐 What should I hide?');
-    message.channel.send(`||${text}||`);
-  } else if (command === '$say') {
-    const text = args.join(' ');
-    if (!text) return message.reply('📣 What should I say?');
-    message.channel.send(text);
-  } else if (command === '$send') {
-    const channelId = args.shift();
-    if (!channelId) return message.reply('⚠️ Provide the channel ID.');
-    const text = args.join(' ');
-    if (!text) return message.reply('⚠️ Provide a message to send.');
-    const channel = client.channels.cache.get(channelId);
-    if (!channel || channel.type !== 0) return message.reply('⚠️ Channel not found or not text-based.');
-    channel.send(text)
-      .then(() => message.reply(`✅ Message sent to <#${channelId}>`))
-      .catch(() => message.reply('❌ Failed to send message. Check bot permissions.'));
-  }
-
-  // ---- Blackjack continued ----
-  else if (command === '$blackjack') {
+  // ---- Blackjack ----
+  else if (command === 'blackjack') {
     if (blackjackGames.has(message.author.id)) return message.reply('⚠️ You already have a game! Use `$hit` or `$stand`.');
     const playerHand = [drawCard(), drawCard()];
     const dealerHand = [drawCard(), drawCard()];
@@ -303,7 +274,7 @@ client.on('messageCreate', async (message) => {
       `**Dealer’s hand:** ${dealerHand[0].value}${dealerHand[0].suit} ??\n\n` +
       `👉 Type \`$hit\` or \`$stand\``;
     message.channel.send(msg);
-  } else if (command === '$hit') {
+  } else if (command === 'hit') {
     const game = blackjackGames.get(message.author.id);
     if (!game) return message.reply('⚠️ No active game. Start one with `$blackjack`.');
     game.playerHand.push(drawCard());
@@ -316,7 +287,7 @@ client.on('messageCreate', async (message) => {
       msg += `\n👉 Type \`$hit\` or \`$stand\``;
     }
     message.channel.send(msg);
-  } else if (command === '$stand') {
+  } else if (command === 'stand') {
     const game = blackjackGames.get(message.author.id);
     if (!game) return message.reply('⚠️ No active game. Start one with `$blackjack`.');
     const dealerHand = game.dealerHand;
@@ -370,7 +341,7 @@ client.on('messageCreate', async (message) => {
   }
 
   // ---- Moderation Commands ----
-  else if (command === '$kick') {
+  else if (command === 'kick') {
     const target = message.mentions.members.first();
     if (!target) return message.reply('🔨 Tag a user to kick.');
     if (isImmune(target.user)) return message.reply('❌ This user is immune!');
@@ -379,7 +350,7 @@ client.on('messageCreate', async (message) => {
     target.kick(reason)
       .then(() => message.reply(`✅ Kicked ${target.user.tag}. Reason: ${reason}`))
       .catch(() => message.reply('❌ Cannot kick this user.'));
-  } else if (command === '$ban') {
+  } else if (command === 'ban') {
     const target = message.mentions.members.first();
     if (!target) return message.reply('🚫 Tag a user to ban.');
     if (isImmune(target.user)) return message.reply('❌ This user is immune!');
@@ -388,16 +359,16 @@ client.on('messageCreate', async (message) => {
     target.ban({ reason })
       .then(() => message.reply(`✅ Banned ${target.user.tag}. Reason: ${reason}`))
       .catch(() => message.reply('❌ Cannot ban this user.'));
-  } else if (command === '$mute') {
+  } else if (command === 'mute') {
     const target = message.mentions.members.first();
     if (!target) return message.reply('🤐 Tag a user to mute.');
     if (isImmune(target.user)) return message.reply('❌ This user is immune!');
     if (!checkPermission(PermissionsBitField.Flags.MuteMembers)) return;
     const time = args[1] ? parseInt(args[1]) * 1000 : 600000;
     target.timeout(time, 'Muted by bot')
-      .then(() => message.reply(`✅ Muted ${target.user.tag}${args[1] ? ` for ${args[1]} seconds` : ''}.`))
+      .then(() => message.reply(`✅ Muted ${target.user.tag}${time ? ` for ${args[1]} seconds` : ''}.`))
       .catch(() => message.reply('❌ Cannot mute this user.'));
-  } else if (command === '$unmute') {
+  } else if (command === 'unmute') {
     const target = message.mentions.members.first();
     if (!target) return message.reply('🔊 Tag a user to unmute.');
     if (isImmune(target.user)) return message.reply('❌ This user is immune!');
@@ -408,7 +379,7 @@ client.on('messageCreate', async (message) => {
   }
 
   // ---- Warns ----
-  else if (command === '$warn') {
+  else if (command === 'warn') {
     const target = message.mentions.members.first();
     if (!target) return message.reply('⚠️ Tag a user to warn.');
     if (isImmune(target.user)) return message.reply('❌ This user is immune!');
@@ -418,7 +389,7 @@ client.on('messageCreate', async (message) => {
     warnings[target.id].push({ reason, date: new Date().toISOString(), mod: message.author.tag });
     saveWarnings();
     message.reply(`⚠️ Warned ${target.user.tag}. Reason: ${reason}`);
-  } else if (command === '$warnings') {
+  } else if (command === 'warnings') {
     const target = message.mentions.members.first() || message.member;
     const userWarnings = warnings[target.id] || [];
     if (!userWarnings.length) return message.reply('ℹ️ No warnings found.');
@@ -428,31 +399,31 @@ client.on('messageCreate', async (message) => {
   }
 
   // ---- Clear, Lock, Unlock, Slowmode, Role ----
-  else if (command === '$clear') {
+  else if (command === 'clear') {
     if (!checkPermission(PermissionsBitField.Flags.ManageMessages)) return;
     const count = parseInt(args[0]);
     if (!count || count < 1 || count > 100) return message.reply('❌ Enter a number between 1-100.');
     message.channel.bulkDelete(count, true)
       .then(() => message.reply(`🧹 Deleted ${count} messages.`))
       .catch(() => message.reply('❌ Cannot delete messages.'));
-  } else if (command === '$lock') {
+  } else if (command === 'lock') {
     if (!checkPermission(PermissionsBitField.Flags.ManageChannels)) return;
     message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: false })
       .then(() => message.reply('🔒 Channel locked.'))
       .catch(() => message.reply('❌ Cannot lock this channel.'));
-  } else if (command === '$unlock') {
+  } else if (command === 'unlock') {
     if (!checkPermission(PermissionsBitField.Flags.ManageChannels)) return;
     message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: true })
       .then(() => message.reply('🔓 Channel unlocked.'))
       .catch(() => message.reply('❌ Cannot unlock this channel.'));
-  } else if (command === '$slowmode') {
+  } else if (command === 'slowmode') {
     if (!checkPermission(PermissionsBitField.Flags.ManageChannels)) return;
     const time = parseInt(args[0]);
     if (isNaN(time) || time < 0 || time > 21600) return message.reply('❌ Enter a valid number (0-21600 seconds).');
     message.channel.setRateLimitPerUser(time)
       .then(() => message.reply(`🐌 Slowmode set to ${time} seconds.`))
       .catch(() => message.reply('❌ Cannot set slowmode.'));
-  } else if (command === '$role') {
+  } else if (command === 'role') {
     const subcommand = args.shift();
     const target = message.mentions.members.first();
     if (!target) return message.reply('🏷️ Tag a user.');
@@ -475,9 +446,10 @@ client.on('messageCreate', async (message) => {
     }
   }
 
-  // ---- Catch-all for unknown messages ----
-  // Fix: Only respond if the message starts with the prefix '$'
-  else if (message.content.startsWith('$')) {
+  // ---- Final catch-all for unknown commands ----
+  else {
+    // Do nothing on normal messages
+    if (!message.content.startsWith('$')) return;
     message.reply('❌ Unknown command or you do not have permission.');
   }
 
