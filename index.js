@@ -414,16 +414,29 @@ else if (command === 'say') {
     message.channel.send(args.join(' '));
 }
 else if (command === 'send') {
-    if (args.length < 2) return message.reply('✉️ Usage: $send <channelID> <message>');
-    
-    const channel = client.channels.cache.get(args[0]); // search all channels bot can see
-    if (!channel) return message.reply('❌ Channel not found or I do not have access.');
-    if (!channel.permissionsFor(channel.guild.me)?.has('SendMessages')) 
-        return message.reply('❌ I cannot send messages in that channel.');
-    
+    if (args.length < 2) 
+        return message.reply('✉️ Usage: $send <channelID> <message>');
+
+    // Get the channel from all channels the bot can see
+    const channel = client.channels.cache.get(args[0]);
+    if (!channel) 
+        return message.reply('❌ Channel not found or I do not have access.');
+
+    // Only allow text-based channels
+    if (!channel.isTextBased()) 
+        return message.reply('❌ That channel is not a text channel.');
+
+    // Check if the bot can send messages in that channel
+    const botMember = channel.guild.members.me; // Bot's member in the target guild
+    if (!channel.permissionsFor(botMember)?.has('SendMessages')) 
+        return message.reply('❌ I do not have permission to send messages in that channel.');
+
+    // Attempt to send the message
     channel.send(args.slice(1).join(' '))
-        .then(() => message.reply(`✅ Message sent to ${channel.name} in ${channel.guild.name}.`))
-        .catch(() => message.reply('❌ Failed to send message.'));
+        .then(() => message.reply(`✅ Message sent to #${channel.name} in ${channel.guild.name}.`))
+        .catch(err => 
+            message.reply(`❌ Failed to send message. Error: ${err.message}`)
+        );
 }
 
   // ---- Warns ----
