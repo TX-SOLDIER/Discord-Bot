@@ -378,6 +378,48 @@ client.on('messageCreate', async (message) => {
       .catch(() => message.reply('❌ Cannot unmute this user.'));
   }
 
+  // ---- Info & Tools ----
+else if (command === 'userinfo') {
+    const user = message.mentions.users.first() || message.author;
+    const member = message.guild.members.cache.get(user.id);
+    message.channel.send(`🧑 User Info:
+Username: ${user.username}
+Tag: ${user.tag}
+ID: ${user.id}
+Joined Server: ${member.joinedAt.toDateString()}
+Account Created: ${user.createdAt.toDateString()}`);
+}
+else if (command === 'avatar') {
+    const user = message.mentions.users.first() || message.author;
+    message.channel.send(`${user.username}'s Avatar: ${user.displayAvatarURL({ dynamic: true, size: 1024 })}`);
+}
+else if (command === 'serverinfo') {
+    const guild = message.guild;
+    message.channel.send(`🏠 Server Info:
+Name: ${guild.name}
+ID: ${guild.id}
+Members: ${guild.memberCount}
+Created: ${guild.createdAt.toDateString()}`);
+}
+else if (command === 'shout') {
+    if (!args.length) return message.reply('📢 Provide a message to shout.');
+    message.channel.send(args.join(' ').toUpperCase());
+}
+else if (command === 'spoiler') {
+    if (!args.length) return message.reply('🤐 Provide a message to hide as spoiler.');
+    message.channel.send(`||${args.join(' ')}||`);
+}
+else if (command === 'say') {
+    if (!args.length) return message.reply('📣 Provide a message to echo.');
+    message.channel.send(args.join(' '));
+}
+else if (command === 'send') {
+    if (args.length < 2) return message.reply('✉️ Usage: $send <channelID> <message>');
+    const channel = message.guild.channels.cache.get(args[0]);
+    if (!channel) return message.reply('❌ Channel not found.');
+    channel.send(args.slice(1).join(' '));
+}
+
   // ---- Warns ----
   else if (command === 'warn') {
     const target = message.mentions.members.first();
