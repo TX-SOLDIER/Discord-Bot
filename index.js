@@ -5,11 +5,13 @@ const fs = require('fs');
 const express = require('express');
 const { GoogleGenerativeAI } = require('@google/generative-ai'); // Gemini import
 
+// ---- Keep-alive Server ----
 const app = express();
 app.get('/', (req, res) => res.send('✅ Bot is running!'));
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`✅ Keep-alive server running on port ${PORT}`));
 
+// ---- Discord Client ----
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -92,7 +94,11 @@ function drawCard() {
   const values = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
   return { suit: suits[Math.floor(Math.random() * suits.length)], value: values[Math.floor(Math.random() * values.length)] };
 }
-function cardValue(card) { if(['J','Q','K'].includes(card.value)) return 10; if(card.value==='A') return 11; return parseInt(card.value); }
+function cardValue(card) { 
+  if(['J','Q','K'].includes(card.value)) return 10; 
+  if(card.value==='A') return 11; 
+  return parseInt(card.value); 
+}
 function handValue(hand) {
   let total = hand.reduce((sum,c)=>sum+cardValue(c),0);
   let aces = hand.filter(c=>c.value==='A').length;
@@ -227,162 +233,240 @@ client.on('messageCreate', async (message) => {
     message.channel.send(`💖 ${user.username}, ${compliments[Math.floor(Math.random() * compliments.length)]}`);
   }
 
-  // ---- Haunt Commands ----
+   // ---- Haunt Command ----
   else if (command === 'haunt') {
+    if (hauntedUsers.has(message.author.id)) {
+      return message.reply('👻 You are already haunting someone!');
+    }
     const user = message.mentions.users.first();
-    if (!user) return message.reply('👻 Tag someone to haunt.');
-    hauntedUsers.add(user.id);
-    message.channel.send(`👻 ${user.username} is now haunted!`);
+    if (!user) return message.reply('👻 Mention someone to haunt.');
+    hauntedUsers.set(message.author.id, user.id);
+    message.channel.send(`👻 ${message.author.username} is now haunting ${user.username}!`);
   } else if (command === 'unhaunt') {
-    const user = message.mentions.users.first();
-    if (!user) return message.reply('👻 Tag someone to unhaunt.');
-    hauntedUsers.delete(user.id);
-    message.channel.send(`👻 ${user.username} is no longer haunted.`);
+    if (!hauntedUsers.has(message.author.id)) {
+      return message.reply('❌ You are not haunting anyone.');
+    }
+    hauntedUsers.delete(message.author.id);
+    message.channel.send(`✅ ${message.author.username} has stopped haunting.`);
   }
 
-  // ---- Blackjack Commands ----
+  // ---- Blackjack ----
   else if (command === 'blackjack') {
-    if (blackjackGames.has(message.author.id)) return message.reply('🃏 You already have a game in progress.');
+    if (blackjackGames.has(message.author.id)) {
+      return message.reply('🃏 You already have a game in progress! Use `!hit` or `!stand`.');
+    }
+
     const deck = createDeck();
-    const playerHand = [drawCard(deck), drawCard(deck)];
-    const dealerHand = [drawCard(deck), drawCard(deck)];
-    blackjackGames.set(message.author.id, { deck, playerHand, dealerHand, stand: false });
-    message.channel.send(`🃏 Blackjack started!\nYour hand: ${playerHand.join(', ')}\nDealer shows: ${dealerHand[0]}`);
+    const playerHand = [deck.pop(), deck.pop()];
+    const dealerHand = [deck.pop(), deck.pop()];
+
+    blackjackGames.set(message.author.id, { deck, playerHand, dealerHand });
+
+    message.channel.send(
+      `🃏 Blackjack started!\nYour hand: ${handToString(playerHand)}\nDealer shows: ${dealerHand[0]}`
+    );
   } else if (command === 'hit') {
     const game = blackjackGames.get(message.author.id);
-    if (!game) return message.reply('🃏 Start a game first with `!blackjack`.');
-    if (game.stand) return message.reply('🃏 You already chose to stand.');
-    game.playerHand.push(drawCard(game.deck));
-    const total = handValue(game.playerHand);
-    if (total > 21) {
+    if (!game) return message.reply('❌ You don’t have a game in progress.');
+
+    game.playerHand.push(game.deck.pop());
+
+    const playerValue = handValue(game.playerHand);
+    if (playerValue > 21) {
       blackjackGames.delete(message.author.id);
-      return message.channel.send(`💥 Bust! Your hand: ${game.playerHand.join(', ')}. You lose.`);
+      return message.channel.send(
+        `💥 You busted with ${handToString(game.playerHand)} (value ${playerValue})! Dealer wins.`
+      );
     }
-    message.channel.send(`🃏 Your hand: ${game.playerHand.join(', ')}. Total: ${total}`);
+
+    message.channel.send(
+      `👉 You hit: ${handToString(game.playerHand)} (value ${playerValue})`
+    );
   } else if (command === 'stand') {
     const game = blackjackGames.get(message.author.id);
-    if (!game) return message.reply('🃏 Start a game first with `!blackjack`.');
-    game.stand = true;
+    if (!game) return message.reply('❌ You don’t have a game in progress.');
 
-    let dealerTotal = handValue(game.dealerHand);
-    while (dealerTotal < 17) {
-      game.dealerHand.push(drawCard(game.deck));
-      dealerTotal = handValue(game.dealerHand);
+    let dealerValue = handValue(game.dealerHand);
+    while (dealerValue < 17) {
+      game.dealerHand.push(game.deck.pop());
+      dealerValue = handValue(game.dealerHand);
     }
 
-    const playerTotal = handValue(game.playerHand);
-    let result = '';
-    if (dealerTotal > 21 || playerTotal > dealerTotal) result = '🎉 You win!';
-    else if (playerTotal < dealerTotal) result = '💥 You lose!';
-    else result = '🤝 It\'s a tie!';
-
-    message.channel.send(`🃏 Dealer hand: ${game.dealerHand.join(', ')}\nYour hand: ${game.playerHand.join(', ')}\n${result}`);
+    const playerValue = handValue(game.playerHand);
     blackjackGames.delete(message.author.id);
+
+    message.channel.send(
+      `🏁 Final Hands:\n` +
+      `You: ${handToString(game.playerHand)} (value ${playerValue})\n` +
+      `Dealer: ${handToString(game.dealerHand)} (value ${dealerValue})`
+    );
+
+    if (dealerValue > 21 || playerValue > dealerValue) {
+      message.channel.send('🎉 You win!');
+    } else if (playerValue < dealerValue) {
+      message.channel.send('😢 Dealer wins!');
+    } else {
+      message.channel.send('🤝 It’s a tie!');
+    }
   }
 
-  // ---- Moderation Commands ----
+  // ---- Moderation ----
   else if (command === 'kick') {
     if (!checkPermission(PermissionsBitField.Flags.KickMembers)) return;
     const user = message.mentions.members.first();
-    if (!user) return message.reply('🔨 Tag someone to kick.');
-    const reason = args.slice(1).join(' ') || 'No reason provided';
-    user.kick(reason).then(() => message.channel.send(`🔨 Kicked ${user.user.tag} | Reason: ${reason}`))
-      .catch(err => message.reply(`❌ Error: ${err}`));
+    if (!user) return message.reply('❌ Mention a user to kick.');
+    await user.kick(args.slice(1).join(' ') || 'No reason provided');
+    message.channel.send(`👢 ${user.user.username} was kicked.`);
   } else if (command === 'ban') {
     if (!checkPermission(PermissionsBitField.Flags.BanMembers)) return;
     const user = message.mentions.members.first();
-    if (!user) return message.reply('🚫 Tag someone to ban.');
-    const reason = args.slice(1).join(' ') || 'No reason provided';
-    user.ban({ reason }).then(() => message.channel.send(`🚫 Banned ${user.user.tag} | Reason: ${reason}`))
-      .catch(err => message.reply(`❌ Error: ${err}`));
+    if (!user) return message.reply('❌ Mention a user to ban.');
+    await user.ban({ reason: args.slice(1).join(' ') || 'No reason provided' });
+    message.channel.send(`⛔ ${user.user.username} was banned.`);
   } else if (command === 'mute') {
     if (!checkPermission(PermissionsBitField.Flags.ModerateMembers)) return;
-    const member = message.mentions.members.first();
-    if (!member) return message.reply('🤐 Tag someone to mute.');
-    const time = args[1] || '10m';
-    member.timeout(ms(time), 'Muted by bot').then(() => message.channel.send(`🤐 ${member.user.tag} muted for ${time}`))
-      .catch(err => message.reply(`❌ Error: ${err}`));
+    const user = message.mentions.members.first();
+    if (!user) return message.reply('❌ Mention a user to mute.');
+    const time = parseInt(args[1]) || 10;
+    await user.timeout(time * 1000, 'Muted by command');
+    message.channel.send(`🤐 ${user.user.username} was muted for ${time} seconds.`);
   } else if (command === 'unmute') {
     if (!checkPermission(PermissionsBitField.Flags.ModerateMembers)) return;
-    const member = message.mentions.members.first();
-    if (!member) return message.reply('🤐 Tag someone to unmute.');
-    member.timeout(null, 'Unmuted by bot').then(() => message.channel.send(`✅ ${member.user.tag} unmuted.`))
-      .catch(err => message.reply(`❌ Error: ${err}`));
+    const user = message.mentions.members.first();
+    if (!user) return message.reply('❌ Mention a user to unmute.');
+    await user.timeout(null);
+    message.channel.send(`🔊 ${user.user.username} was unmuted.`);
   } else if (command === 'warn') {
-    if (!checkPermission(PermissionsBitField.Flags.KickMembers)) return;
+    if (!checkPermission(PermissionsBitField.Flags.ModerateMembers)) return;
     const user = message.mentions.users.first();
-    if (!user) return message.reply('⚠️ Tag someone to warn.');
+    if (!user) return message.reply('❌ Mention a user to warn.');
     const reason = args.slice(1).join(' ') || 'No reason provided';
     if (!warnings[user.id]) warnings[user.id] = [];
-    warnings[user.id].push({ reason, moderator: message.author.tag });
-    message.channel.send(`⚠️ Warned ${user.tag} | Reason: ${reason}`);
+    warnings[user.id].push(reason);
+    fs.writeFileSync('./warnings.json', JSON.stringify(warnings, null, 2));
+    message.channel.send(`⚠️ ${user.username} was warned: ${reason}`);
   } else if (command === 'warnings') {
-    const user = message.mentions.users.first() || message.author;
+    const user = message.mentions.users.first();
+    if (!user) return message.reply('❌ Mention a user to check warnings.');
     const userWarnings = warnings[user.id] || [];
-    if (!userWarnings.length) return message.channel.send(`${user.tag} has no warnings.`);
-    message.channel.send(`⚠️ Warnings for ${user.tag}:\n` + userWarnings.map((w, i) => `${i + 1}. ${w.reason} (by ${w.moderator})`).join('\n'));
+    if (userWarnings.length === 0) {
+      return message.channel.send(`✅ ${user.username} has no warnings.`);
+    }
+    message.channel.send(`⚠️ ${user.username} has warnings:\n- ${userWarnings.join('\n- ')}`);
   } else if (command === 'clear') {
     if (!checkPermission(PermissionsBitField.Flags.ManageMessages)) return;
-    const count = parseInt(args[0], 10);
-    if (!count) return message.reply('🧹 Specify number of messages to delete.');
-    message.channel.bulkDelete(count, true).then(() => message.channel.send(`🧹 Deleted ${count} messages.`)).catch(err => message.reply(`❌ Error: ${err}`));
-  }
-
-  // ---- Role Commands ----
-  else if (command === 'role') {
-    if (!checkPermission(PermissionsBitField.Flags.ManageRoles)) return;
-    const subcommand = args.shift();
-    const member = message.mentions.members.first();
-    if (!member) return message.reply('🏷️ Tag a user.');
-    const roleName = args.join(' ');
-    const role = message.guild.roles.cache.find(r => r.name === roleName);
-    if (!role) return message.reply('❌ Role not found.');
-
-    if (subcommand === 'add') {
-      member.roles.add(role).then(() => message.channel.send(`✅ Added ${role.name} to ${member.user.tag}`))
-        .catch(err => message.reply(`❌ Error: ${err}`));
-    } else if (subcommand === 'remove') {
-      member.roles.remove(role).then(() => message.channel.send(`✅ Removed ${role.name} from ${member.user.tag}`))
-        .catch(err => message.reply(`❌ Error: ${err}`));
-    } else {
-      message.reply('❌ Use `$role add @user <role>` or `$role remove @user <role>`');
-    }
-  }
-
-  // ---- Send Command ----
-  else if (command === 'send') {
+    const amount = parseInt(args[0]);
+    if (!amount || isNaN(amount)) return message.reply('❌ Enter a number of messages to delete.');
+    await message.channel.bulkDelete(amount, true);
+    message.channel.send(`🧹 Deleted ${amount} messages.`);
+  } else if (command === 'lock') {
     if (!checkPermission(PermissionsBitField.Flags.ManageChannels)) return;
-    const channelId = args.shift();
-    const targetChannel = client.channels.cache.get(channelId);
-    if (!targetChannel) return message.reply('❌ Channel not found.');
-    const text = args.join(' ');
-    targetChannel.send(text).catch(err => message.reply(`❌ Error: ${err}`));
-  }
+    await message.channel.permissionOverwrites.edit(message.guild.id, { SendMessages: false });
+    message.channel.send('🔒 Channel locked.');
+  } else if (command === 'unlock') {
+    if (!checkPermission(PermissionsBitField.Flags.ManageChannels)) return;
+    await message.channel.permissionOverwrites.edit(message.guild.id, { SendMessages: true });
+    message.channel.send('🔓 Channel unlocked.');
+  } else if (command === 'slowmode') {
+    if (!checkPermission(PermissionsBitField.Flags.ManageChannels)) return;
+    const time = parseInt(args[0]) || 0;
+    await message.channel.setRateLimitPerUser(time);
+    message.channel.send(`🐌 Slowmode set to ${time} seconds.`);
+  } else if (command === 'role') {
+    if (!checkPermission(PermissionsBitField.Flags.ManageRoles)) return;
+    const action = args[0];
+    const member = message.mentions.members.first();
+    const roleName = args.slice(2).join(' ');
+    const role = message.guild.roles.cache.find(r => r.name === roleName);
+    if (!member || !role) return message.reply('❌ Usage: `!role add/remove @user <role name>`');
 
-  // ---- AI Chat with Google Gemini ----
-  else if (message.mentions.has(client.user.id)) {
-    const prompt = message.content.replace(new RegExp(`<@!?${client.user.id}>`, 'g'), '').trim();
-    if (!prompt) return message.reply('❓ What would you like to ask?');
-
-    try {
-      await message.channel.sendTyping();
-      const reply = await askGemini(prompt);
-      await message.reply(reply);
-    } catch (err) {
-      console.error('❌ Error sending Gemini reply:', err);
-      message.reply('🚫 Something went wrong with the AI.');
+    if (action === 'add') {
+      await member.roles.add(role);
+      message.channel.send(`🏷️ Added role ${role.name} to ${member.user.username}`);
+    } else if (action === 'remove') {
+      await member.roles.remove(role);
+      message.channel.send(`🏷️ Removed role ${role.name} from ${member.user.username}`);
+    } else {
+      message.reply('❌ Use `add` or `remove`.');
     }
+  }       
+
+  // ---- Info & Tools ----
+  else if (command === 'userinfo') {
+    const user = message.mentions.users.first() || message.author;
+    const member = message.guild.members.cache.get(user.id);
+    message.channel.send(
+      `🧑‍💼 **User Info**\n` +
+      `Username: ${user.tag}\nID: ${user.id}\nJoined: ${member.joinedAt}`
+    );
+  } else if (command === 'avatar') {
+    const user = message.mentions.users.first() || message.author;
+    message.channel.send(user.displayAvatarURL({ size: 512 }));
+  } else if (command === 'serverinfo') {
+    message.channel.send(
+      `🏠 **Server Info**\nName: ${message.guild.name}\nID: ${message.guild.id}\nMembers: ${message.guild.memberCount}`
+    );
+  } else if (command === 'shout') {
+    if (!args.length) return message.reply('📢 Provide a message.');
+    message.channel.send(`📢 **${args.join(' ').toUpperCase()}**`);
+  } else if (command === 'spoiler') {
+    if (!args.length) return message.reply('🤐 Provide a message.');
+    message.channel.send(`||${args.join(' ')}||`);
+  } else if (command === 'say') {
+    if (!args.length) return message.reply('💬 Provide a message.');
+    message.channel.send(args.join(' '));
+  } else if (command === 'send') {
+    if (!checkPermission(PermissionsBitField.Flags.Administrator)) return;
+    const channelId = args[0];
+    const text = args.slice(1).join(' ');
+    const targetChannel = client.channels.cache.get(channelId);
+    if (!targetChannel) return message.reply('❌ Invalid channel ID.');
+    targetChannel.send(text);
+    message.reply(`✅ Message sent to <#${channelId}>`);
   }
+});
 
-  // ---- Unknown Command ----
-  else {
-    message.reply('❌ Unknown command or insufficient permissions.');
+// ---- AI Chat (OpenRouter + Gemini) ----
+client.on('messageCreate', async (message) => {
+  if (message.author.bot) return;
+  if (!message.mentions.has(client.user)) return;
+
+  const prompt = message.content.replace(`<@!${client.user.id}>`, '').trim();
+  if (!prompt) return message.reply('💬 Ask me something!');
+
+  try {
+    // ---- OpenRouter API ----
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'openai/gpt-4o-mini',
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+    const data = await response.json();
+    if (data.choices && data.choices.length > 0) {
+      return message.reply(data.choices[0].message.content);
+    }
+
+    // ---- Gemini Fallback ----
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const result = await model.generateContent(prompt);
+    return message.reply(result.response.text());
+  } catch (err) {
+    console.error('AI Error:', err);
+    message.reply('❌ AI chat failed.');
   }
+});
 
-}); // ---- End of messageCreate ----
-
-// ---- Keep-alive server ----
+// ---- Keep-alive server (only once, no duplicates) ----
+const PORT = process.env.PORT || 3000;
+app.get('/', (req, res) => res.send('✅ Bot is running!'));
 app.listen(PORT, () => console.log(`✅ Keep-alive server running on port ${PORT}`));
 
 // ---- Bot Login ----
-client.login(process.env.BOT_TOKEN);
+client.login(process.env.TOKEN);
