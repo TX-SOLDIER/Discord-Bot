@@ -399,7 +399,7 @@ Username: ${user.username}
 Tag: ${user.tag}
 ID: ${user.id}
 Joined Server: ${member.joinedAt.toDateString()}
-Account Created: ${user.createdAt.toDateString()`);
+Account Created: ${user.createdAt.toDateString()}`);
   }
   else if (command === 'avatar') {
     const user = message.mentions.users.first() || message.author;
