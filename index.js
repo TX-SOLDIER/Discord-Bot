@@ -3,7 +3,8 @@ const { Client, GatewayIntentBits, PermissionsBitField } = require('discord.js')
 const fetch = require('node-fetch');
 const fs = require('fs');
 const express = require('express');
-
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY); // Make sure GOOGLE_API_KEY is in your .env
 const app = express();
 app.get('/', (req, res) => res.send('✅ Bot is running!'));
 const PORT = process.env.PORT || 3000;
