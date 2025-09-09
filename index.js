@@ -1,15 +1,16 @@
 require('dotenv').config();
 const { Client, GatewayIntentBits, PermissionsBitField } = require('discord.js');
-const fetch = require('node-fetch');
 const fs = require('fs');
 const express = require('express');
-const { GoogleGenerativeAI } = require('@google/generative-ai'); // Added Gemini
+const { GoogleGenerativeAI } = require('@google/generative-ai'); // ✅ Gemini fixed
 
+// ---- Keep-Alive Express Server ----
 const app = express();
 app.get('/', (req, res) => res.send('✅ Bot is running!'));
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`✅ Keep-alive server running on port ${PORT}`));
 
+// ---- Discord Client ----
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -19,15 +20,13 @@ const client = new Client({
 });
 
 // ---- Google Gemini AI Setup ----
-const genAI = new GoogleGenerativeAI({ apiKey: process.env.GOOGLE_API_KEY });
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
 
 async function askGemini(prompt) {
   try {
-    const response = await genAI.chat.sendMessage({
-      model: 'chat-bison-001',
-      messages: [{ role: 'user', content: prompt }],
-    });
-    return response?.candidates?.[0]?.content || "🤖 I couldn't generate a response.";
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const result = await model.generateContent(prompt);
+    return result.response.text() || "🤖 I couldn't generate a response.";
   } catch (err) {
     console.error('❌ Gemini AI error:', err);
     return "🚫 Error communicating with Gemini AI.";
@@ -130,8 +129,8 @@ function formatHand(hand) {
 client.once('ready', () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
 });
-
 const PREFIX = '$';
+
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
   if (!message.content.startsWith(PREFIX)) return; // ✅ Ignore normal messages
@@ -210,7 +209,7 @@ client.on('messageCreate', async (message) => {
   } else if (command === 'botinfo') {
     message.channel.send(`🤖 I am ${client.user.tag}, your friendly bot helper!`);
   } else if (command === 'invite') {
-    message.channel.send('🔗 Invite me: https://discord.com/api/oauth2/authorize?client_id=YOUR_CLIENT_ID&permissions=8&scope=bot%20applications.commands');
+    message.channel.send(`🔗 Invite me: https://discord.com/api/oauth2/authorize?client_id=${client.user.id}&permissions=8&scope=bot%20applications.commands`);
   } else if (command === 'prefix') {
     message.channel.send(`📌 The current prefix is: \`${PREFIX}\``);
   }
@@ -275,14 +274,14 @@ client.on('messageCreate', async (message) => {
       hauntIntervals.delete(message.channel.id);
     }
     message.channel.send('🕯️ The spirits have left...');
-}
+  }
 
-// ---- Blackjack ----
+  // ---- Blackjack ----
   else if (command === 'blackjack') {
     if (blackjackGames.has(message.author.id)) return message.reply('⚠️ You already have a game! Use `$hit` or `$stand`.');
     const playerHand = [drawCard(), drawCard()];
     const dealerHand = [drawCard(), drawCard()];
-    blackjackGames.set(message.author.id, { playerHand, dealerHand });
+    blackjackGames.set(message.author.id, { playerHand, dealerHand, started: Date.now() });
     const playerTotal = handValue(playerHand);
     const msg = `🃏 **Blackjack Started!** 🃏\n\n` +
       `**Your hand:** ${formatHand(playerHand)} (Total: ${playerTotal})\n` +
@@ -330,29 +329,15 @@ client.on('messageCreate', async (message) => {
 
     try {
       await message.channel.sendTyping();
-
-      const { GoogleGenerativeAI } = require("@google/generative-ai");
-      const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
-
-      const aiResponse = await genAI.chat.completions.create({
-        model: "gemini-1.5",
-        messages: [
-          { role: "system", content: "You are a helpful, fun, and friendly AI assistant in a Discord bot." },
-          { role: "user", content: prompt }
-        ],
-        maxOutputTokens: 150
-      });
-
-      const reply = aiResponse?.candidates?.[0]?.content?.[0]?.text || "⚠️ Sorry, I couldn’t generate a reply.";
+      const reply = await askGemini(prompt);
       await message.reply(reply);
-
     } catch (err) {
       console.error('❌ Gemini AI request failed:', err);
       await message.reply('🚫 Error talking to the AI. Try again later.');
     }
-  }
+}
 
-  // ---- Moderation Commands ----
+// ---- Moderation Commands ----
   else if (command === 'kick') {
     const target = message.mentions.members.first();
     if (!target) return message.reply('🔨 Tag a user to kick.');
@@ -375,16 +360,16 @@ client.on('messageCreate', async (message) => {
     const target = message.mentions.members.first();
     if (!target) return message.reply('🤐 Tag a user to mute.');
     if (isImmune(target.user)) return message.reply('❌ This user is immune!');
-    if (!checkPermission(PermissionsBitField.Flags.MuteMembers)) return;
+    if (!checkPermission(PermissionsBitField.Flags.ModerateMembers)) return;
     const time = args[1] ? parseInt(args[1]) * 1000 : 600000;
     target.timeout(time, 'Muted by bot')
-      .then(() => message.reply(`✅ Muted ${target.user.tag}${time ? ` for ${args[1]} seconds` : ''}.`))
+      .then(() => message.reply(`✅ Muted ${target.user.tag}${args[1] ? ` for ${args[1]} seconds` : ''}.`))
       .catch(() => message.reply('❌ Cannot mute this user.'));
   } else if (command === 'unmute') {
     const target = message.mentions.members.first();
     if (!target) return message.reply('🔊 Tag a user to unmute.');
     if (isImmune(target.user)) return message.reply('❌ This user is immune!');
-    if (!checkPermission(PermissionsBitField.Flags.MuteMembers)) return;
+    if (!checkPermission(PermissionsBitField.Flags.ModerateMembers)) return;
     target.timeout(null, 'Unmuted by bot')
       .then(() => message.reply(`✅ Unmuted ${target.user.tag}.`))
       .catch(() => message.reply('❌ Cannot unmute this user.'));
@@ -511,10 +496,10 @@ Created: ${guild.createdAt.toDateString()}`);
 
   // ---- Unknown command ----
   else {
-    if (!message.content.startsWith('$')) return;
+    if (!message.content.startsWith(PREFIX)) return;
     message.reply('❌ Unknown command or you do not have permission.');
   }
-
 }); // ---- End of messageCreate ----
 
+// ---- Login ----
 client.login(process.env.BOT_TOKEN);
