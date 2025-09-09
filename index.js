@@ -324,27 +324,12 @@ client.on('messageCreate', async (message) => {
 
   // ---- AI Chat with Google Gemini ----
   else if (message.mentions.has(client.user)) {
-    const prompt = message.content.replace(new RegExp(`<@!?${client.user.id}>`, 'g'), '').trim();
-    if (!prompt) return message.reply('❓ What would you like to ask?');
+  const prompt = message.content.replace(new RegExp(`<@!?${client.user.id}>`, 'g'), '').trim();
+  if (!prompt) return message.reply('❓ What would you like to ask?');
 
-    try {
-      await message.channel.sendTyping();
-
-      const aiResponse = await genAI.chat.sendMessage({
-        model: 'chat-bison-001',
-        messages: [
-          { role: 'system', content: 'You are a helpful, fun, and friendly AI assistant in a Discord bot.' },
-          { role: 'user', content: prompt }
-        ],
-      });
-
-      const reply = aiResponse?.candidates?.[0]?.content || "⚠️ Sorry, I couldn’t generate a reply.";
-      await message.reply(reply);
-
-    } catch (err) {
-      console.error('❌ Gemini AI request failed:', err);
-      await message.reply('🚫 Error talking to the AI. Try again later.');
-    }
+  await message.channel.sendTyping();
+  const reply = await askGemini(prompt);
+  await message.reply(reply);
   }
 
   // ---- Moderation Commands ----
