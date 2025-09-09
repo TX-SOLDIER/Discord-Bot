@@ -3,7 +3,7 @@ const { Client, GatewayIntentBits, PermissionsBitField } = require('discord.js')
 const fetch = require('node-fetch');
 const fs = require('fs');
 const express = require('express');
-const { GoogleGenerativeAI } = require('@google/generative-ai'); // Added Gemini
+const { GoogleGenerativeAI } = require('@google/generative-ai'); // Gemini import
 
 const app = express();
 app.get('/', (req, res) => res.send('✅ Bot is running!'));
@@ -85,16 +85,14 @@ const compliments = [
 // ---- Persistent Warnings ----
 const warningsFile = './warnings.json';
 let warnings = {};
-
 if (fs.existsSync(warningsFile)) {
   warnings = JSON.parse(fs.readFileSync(warningsFile, 'utf8'));
 }
-
 function saveWarnings() {
   fs.writeFileSync(warningsFile, JSON.stringify(warnings, null, 2));
 }
 
-// ---- Blackjack Game ----
+// ---- Blackjack Game Helpers ----
 const blackjackGames = new Map();
 
 function drawCard() {
@@ -126,12 +124,13 @@ function formatHand(hand) {
   return hand.map(c => `${c.value}${c.suit}`).join(' ');
 }
 
-// ---- Ready ----
+// ---- Ready Event ----
 client.once('ready', () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
 });
 
 const PREFIX = '$';
+
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
   if (!message.content.startsWith(PREFIX)) return; // ✅ Ignore normal messages
@@ -256,9 +255,9 @@ client.on('messageCreate', async (message) => {
     const user = message.mentions.users.first();
     if (!user) return message.reply('💖 Tag someone to compliment.');
     message.channel.send(`💖 ${user.username}, ${compliments[Math.floor(Math.random() * compliments.length)]}`);
-  }
+      }
 
-  // ---- Haunt ----
+      // ---- Haunt Commands ----
   else if (command === 'haunt') {
     if (hauntedChannels.has(message.channel.id)) return message.channel.send('👻 Already haunting this channel!');
     hauntedChannels.add(message.channel.id);
@@ -275,9 +274,9 @@ client.on('messageCreate', async (message) => {
       hauntIntervals.delete(message.channel.id);
     }
     message.channel.send('🕯️ The spirits have left...');
-}
+  }
 
-// ---- Blackjack ----
+  // ---- Blackjack Commands ----
   else if (command === 'blackjack') {
     if (blackjackGames.has(message.author.id)) return message.reply('⚠️ You already have a game! Use `$hit` or `$stand`.');
     const playerHand = [drawCard(), drawCard()];
@@ -331,19 +330,15 @@ client.on('messageCreate', async (message) => {
     try {
       await message.channel.sendTyping();
 
-      const { GoogleGenerativeAI } = require("@google/generative-ai");
-      const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
-
-      const aiResponse = await genAI.chat.completions.create({
-        model: "gemini-1.5",
+      const aiResponse = await genAI.chat.sendMessage({
+        model: 'chat-bison-001',
         messages: [
-          { role: "system", content: "You are a helpful, fun, and friendly AI assistant in a Discord bot." },
-          { role: "user", content: prompt }
+          { role: 'system', content: 'You are a helpful, fun, and friendly AI assistant in a Discord bot.' },
+          { role: 'user', content: prompt }
         ],
-        maxOutputTokens: 150
       });
 
-      const reply = aiResponse?.candidates?.[0]?.content?.[0]?.text || "⚠️ Sorry, I couldn’t generate a reply.";
+      const reply = aiResponse?.candidates?.[0]?.content || "⚠️ Sorry, I couldn’t generate a reply.";
       await message.reply(reply);
 
     } catch (err) {
@@ -376,7 +371,7 @@ client.on('messageCreate', async (message) => {
     if (!target) return message.reply('🤐 Tag a user to mute.');
     if (isImmune(target.user)) return message.reply('❌ This user is immune!');
     if (!checkPermission(PermissionsBitField.Flags.MuteMembers)) return;
-    const time = args[1] ? parseInt(args[1]) * 1000 : 600000;
+    const time = args[1] ? parseInt(args[1]) * 1000 : 600000; // default 10 minutes
     target.timeout(time, 'Muted by bot')
       .then(() => message.reply(`✅ Muted ${target.user.tag}${time ? ` for ${args[1]} seconds` : ''}.`))
       .catch(() => message.reply('❌ Cannot mute this user.'));
@@ -390,53 +385,6 @@ client.on('messageCreate', async (message) => {
       .catch(() => message.reply('❌ Cannot unmute this user.'));
   }
 
-  // ---- Info & Tools ----
-  else if (command === 'userinfo') {
-    const user = message.mentions.users.first() || message.author;
-    const member = message.guild.members.cache.get(user.id);
-    message.channel.send(`🧑 User Info:
-Username: ${user.username}
-Tag: ${user.tag}
-ID: ${user.id}
-Joined Server: ${member.joinedAt.toDateString()}
-Account Created: ${user.createdAt.toDateString()}`);
-  }
-  else if (command === 'avatar') {
-    const user = message.mentions.users.first() || message.author;
-    message.channel.send(`${user.username}'s Avatar: ${user.displayAvatarURL({ dynamic: true, size: 1024 })}`);
-  }
-  else if (command === 'serverinfo') {
-    const guild = message.guild;
-    message.channel.send(`🏠 Server Info:
-Name: ${guild.name}
-ID: ${guild.id}
-Members: ${guild.memberCount}
-Created: ${guild.createdAt.toDateString()}`);
-  }
-  else if (command === 'shout') {
-    if (!args.length) return message.reply('📢 Provide a message to shout.');
-    message.channel.send(args.join(' ').toUpperCase());
-  }
-  else if (command === 'spoiler') {
-    if (!args.length) return message.reply('🤐 Provide a message to hide as spoiler.');
-    message.channel.send(`||${args.join(' ')}||`);
-  }
-  else if (command === 'say') {
-    if (!args.length) return message.reply('📣 Provide a message to echo.');
-    message.channel.send(args.join(' '));
-  }
-  else if (command === 'send') {
-    if (args.length < 2) return message.reply('✉️ Usage: $send <channelID> <message>');
-    const channel = client.channels.cache.get(args[0]);
-    if (!channel) return message.reply('❌ Channel not found or I do not have access.');
-    if (!channel.isTextBased()) return message.reply('❌ That channel is not a text channel.');
-    const botMember = channel.guild.members.me;
-    if (!channel.permissionsFor(botMember)?.has('SendMessages')) return message.reply('❌ I do not have permission to send messages in that channel.');
-    channel.send(args.slice(1).join(' '))
-      .then(() => message.reply(`✅ Message sent to #${channel.name} in ${channel.guild.name}.`))
-      .catch(err => message.reply(`❌ Failed to send message. Error: ${err.message}`));
-  }
-
   // ---- Persistent Warnings ----
   else if (command === 'warn') {
     const target = message.mentions.members.first();
@@ -448,8 +396,7 @@ Created: ${guild.createdAt.toDateString()}`);
     warnings[target.id].push({ reason, date: new Date().toISOString(), mod: message.author.tag });
     saveWarnings();
     message.reply(`⚠️ Warned ${target.user.tag}. Reason: ${reason}`);
-  }
-  else if (command === 'warnings') {
+  } else if (command === 'warnings') {
     const target = message.mentions.members.first() || message.member;
     const userWarnings = warnings[target.id] || [];
     if (!userWarnings.length) return message.reply('ℹ️ No warnings found.');
@@ -511,10 +458,11 @@ Created: ${guild.createdAt.toDateString()}`);
 
   // ---- Unknown command ----
   else {
-    if (!message.content.startsWith('$')) return;
+    if (!message.content.startsWith(PREFIX)) return;
     message.reply('❌ Unknown command or you do not have permission.');
   }
 
 }); // ---- End of messageCreate ----
 
+// ---- Bot Login ----
 client.login(process.env.BOT_TOKEN);
