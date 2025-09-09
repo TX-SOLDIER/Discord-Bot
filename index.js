@@ -323,14 +323,19 @@ client.on('messageCreate', async (message) => {
   }
 
   // ---- AI Chat with Google Gemini ----
-  else if (message.mentions.has(client.user)) {
+else if (message.mentions.has(client.user.id)) {
   const prompt = message.content.replace(new RegExp(`<@!?${client.user.id}>`, 'g'), '').trim();
   if (!prompt) return message.reply('❓ What would you like to ask?');
 
-  await message.channel.sendTyping();
-  const reply = await askGemini(prompt);
-  await message.reply(reply);
+  try {
+    await message.channel.sendTyping();
+    const reply = await askGemini(prompt);
+    await message.reply(reply);
+  } catch (err) {
+    console.error('❌ Error sending Gemini reply:', err);
+    message.reply('🚫 Something went wrong with the AI.');
   }
+}
 
   // ---- Moderation Commands ----
   else if (command === 'kick') {
