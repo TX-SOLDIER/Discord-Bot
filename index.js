@@ -4,12 +4,35 @@ const fetch = require('node-fetch');
 const fs = require('fs');
 const express = require('express');
 const { GoogleGenerativeAI } = require("@google/generative-ai");
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY); // Make sure GOOGLE_API_KEY is in your .env
+
+// ---- Gemini AI Setup ----
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
+
+async function askGemini(prompt) {
+  try {
+    const response = await genAI.chat({
+      model: "gemini-pro",
+      temperature: 0.7,
+      max_output_tokens: 300,
+      messages: [
+        { role: "system", content: "You are a helpful and fun AI assistant living inside a Discord bot." },
+        { role: "user", content: prompt }
+      ]
+    });
+    return response?.candidates?.[0]?.content || "⚠️ No response from AI.";
+  } catch (err) {
+    console.error("❌ Gemini AI error:", err);
+    return "🚫 Error contacting AI. Try again later.";
+  }
+}
+
+// ---- Express Keep-Alive ----
 const app = express();
 app.get('/', (req, res) => res.send('✅ Bot is running!'));
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`✅ Keep-alive server running on port ${PORT}`));
 
+// ---- Discord Client ----
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -69,11 +92,9 @@ const compliments = [
 // ---- Persistent Warnings ----
 const warningsFile = './warnings.json';
 let warnings = {};
-
 if (fs.existsSync(warningsFile)) {
   warnings = JSON.parse(fs.readFileSync(warningsFile, 'utf8'));
 }
-
 function saveWarnings() {
   fs.writeFileSync(warningsFile, JSON.stringify(warnings, null, 2));
 }
@@ -116,7 +137,6 @@ client.once('ready', () => {
 });
 
 const PREFIX = '$';
-
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
   if (!message.content.startsWith(PREFIX)) return; // ✅ Ignore normal messages
@@ -227,8 +247,7 @@ client.on('messageCreate', async (message) => {
     message.channel.send(`💬 Truth: ${spicyTruths[Math.floor(Math.random() * spicyTruths.length)]}`);
   } else if (command === 'dare') {
     message.channel.send(`😈 Dare: ${spicyDares[Math.floor(Math.random() * spicyDares.length)]}`);
-  }
-  else if (command === 'roast') {
+  } else if (command === 'roast') {
     const user = message.mentions.users.first();
     if (!user) return message.reply('🔥 Tag someone to roast.');
     const roasts = [
@@ -262,7 +281,6 @@ client.on('messageCreate', async (message) => {
     }
     message.channel.send('🕯️ The spirits have left...');
   }
-
   // ---- Blackjack ----
   else if (command === 'blackjack') {
     if (blackjackGames.has(message.author.id)) return message.reply('⚠️ You already have a game! Use `$hit` or `$stand`.');
@@ -309,36 +327,13 @@ client.on('messageCreate', async (message) => {
     message.channel.send(result);
   }
 
-  // ---- AI Chat ----
+  // ---- AI Chat (Gemini) ----
   else if (message.mentions.has(client.user)) {
     const prompt = message.content.replace(new RegExp(`<@!?${client.user.id}>`, 'g'), '').trim();
     if (!prompt) return message.reply('❓ What would you like to ask?');
-    try {
-      await message.channel.sendTyping();
-      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'openrouter/auto',
-          max_tokens: 100,
-          messages: [
-            { role: 'system', content: 'You are a helpful and fun AI assistant living inside a Discord bot.' },
-            { role: 'user', content: prompt }
-          ]
-        }),
-      });
-      const data = await response.json();
-      const reply = data?.choices?.[0]?.message?.content;
-      if (reply) await message.reply(reply);
-      else if (data?.error?.message) await message.reply(`⚠️ AI error: ${data.error.message}`);
-      else await message.reply('⚠️ Sorry, I couldn’t come up with a reply.');
-    } catch (err) {
-      console.error('❌ AI request failed:', err);
-      await message.reply('🚫 Error talking to the AI. Try again later.');
-    }
+    await message.channel.sendTyping();
+    const reply = await askGemini(prompt);
+    message.reply(reply);
   }
 
   // ---- Moderation Commands ----
@@ -378,9 +373,8 @@ client.on('messageCreate', async (message) => {
       .then(() => message.reply(`✅ Unmuted ${target.user.tag}.`))
       .catch(() => message.reply('❌ Cannot unmute this user.'));
   }
-
   // ---- Info & Tools ----
-else if (command === 'userinfo') {
+  else if (command === 'userinfo') {
     const user = message.mentions.users.first() || message.author;
     const member = message.guild.members.cache.get(user.id);
     message.channel.send(`🧑 User Info:
@@ -389,56 +383,41 @@ Tag: ${user.tag}
 ID: ${user.id}
 Joined Server: ${member.joinedAt.toDateString()}
 Account Created: ${user.createdAt.toDateString()}`);
-}
-else if (command === 'avatar') {
+  } else if (command === 'avatar') {
     const user = message.mentions.users.first() || message.author;
     message.channel.send(`${user.username}'s Avatar: ${user.displayAvatarURL({ dynamic: true, size: 1024 })}`);
-}
-else if (command === 'serverinfo') {
+  } else if (command === 'serverinfo') {
     const guild = message.guild;
     message.channel.send(`🏠 Server Info:
 Name: ${guild.name}
 ID: ${guild.id}
 Members: ${guild.memberCount}
 Created: ${guild.createdAt.toDateString()}`);
-}
-else if (command === 'shout') {
+  } else if (command === 'shout') {
     if (!args.length) return message.reply('📢 Provide a message to shout.');
     message.channel.send(args.join(' ').toUpperCase());
-}
-else if (command === 'spoiler') {
+  } else if (command === 'spoiler') {
     if (!args.length) return message.reply('🤐 Provide a message to hide as spoiler.');
     message.channel.send(`||${args.join(' ')}||`);
-}
-else if (command === 'say') {
+  } else if (command === 'say') {
     if (!args.length) return message.reply('📣 Provide a message to echo.');
     message.channel.send(args.join(' '));
-}
-else if (command === 'send') {
+  } else if (command === 'send') {
     if (args.length < 2) 
-        return message.reply('✉️ Usage: $send <channelID> <message>');
+      return message.reply('✉️ Usage: $send <channelID> <message>');
 
-    // Get the channel from all channels the bot can see
     const channel = client.channels.cache.get(args[0]);
-    if (!channel) 
-        return message.reply('❌ Channel not found or I do not have access.');
+    if (!channel) return message.reply('❌ Channel not found or I do not have access.');
+    if (!channel.isTextBased()) return message.reply('❌ That channel is not a text channel.');
 
-    // Only allow text-based channels
-    if (!channel.isTextBased()) 
-        return message.reply('❌ That channel is not a text channel.');
-
-    // Check if the bot can send messages in that channel
-    const botMember = channel.guild.members.me; // Bot's member in the target guild
+    const botMember = channel.guild.members.me;
     if (!channel.permissionsFor(botMember)?.has('SendMessages')) 
-        return message.reply('❌ I do not have permission to send messages in that channel.');
+      return message.reply('❌ I do not have permission to send messages in that channel.');
 
-    // Attempt to send the message
     channel.send(args.slice(1).join(' '))
-        .then(() => message.reply(`✅ Message sent to #${channel.name} in ${channel.guild.name}.`))
-        .catch(err => 
-            message.reply(`❌ Failed to send message. Error: ${err.message}`)
-        );
-}
+      .then(() => message.reply(`✅ Message sent to #${channel.name} in ${channel.guild.name}.`))
+      .catch(err => message.reply(`❌ Failed to send message. Error: ${err.message}`));
+  }
 
   // ---- Warns ----
   else if (command === 'warn') {
@@ -510,7 +489,6 @@ else if (command === 'send') {
 
   // ---- Final catch-all for unknown commands ----
   else {
-    // Do nothing on normal messages
     if (!message.content.startsWith('$')) return;
     message.reply('❌ Unknown command or you do not have permission.');
   }
