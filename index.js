@@ -3,13 +3,15 @@ const { Client, GatewayIntentBits, PermissionsBitField } = require('discord.js')
 const fetch = require('node-fetch');
 const fs = require('fs');
 const express = require('express');
-const { GoogleGenerativeAI } = require('@google/generative-ai'); // Gemini import
+const { GoogleGenerativeAI } = require('@google/generative-ai'); // Gemini AI
 
+// ---- Express Keep-Alive ----
 const app = express();
 app.get('/', (req, res) => res.send('✅ Bot is running!'));
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`✅ Keep-alive server running on port ${PORT}`));
 
+// ---- Discord Client ----
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -20,7 +22,6 @@ const client = new Client({
 
 // ---- Google Gemini AI Setup ----
 const genAI = new GoogleGenerativeAI({ apiKey: process.env.GOOGLE_API_KEY });
-
 async function askGemini(prompt) {
   try {
     const response = await genAI.chat.sendMessage({
@@ -40,105 +41,50 @@ function isImmune(user) {
   return user.id === OWNER_ID;
 }
 
-// ---- Data ----
+// ---- Haunted Channels & Messages ----
 const hauntedChannels = new Set();
 const hauntIntervals = new Map();
-
 const spookyMessages = [
   '👻 Boo...', '💀 I see you...', '🩸 The shadows are watching...',
   '🔪 Behind you...', '🕷️ Something crawled across your screen...',
 ];
 
+// ---- Spicy Truths, Dares, Compliments ----
 const spicyTruths = [
-  "What’s your most embarrassing moment?",
-  "Who was your first crush?",
-  "Have you ever lied to get out of trouble?",
-  "What’s the most childish thing you still do?",
-  "What’s a secret you’ve never told anyone here?",
-  "If you could switch lives with someone for a day, who would it be?",
-  "What’s your biggest fear?",
-  "What’s the worst thing you’ve ever eaten?",
+  "What’s your most embarrassing moment?", "Who was your first crush?",
+  "Have you ever lied to get out of trouble?", "What’s the most childish thing you still do?",
+  "What’s a secret you’ve never told anyone here?", "If you could switch lives with someone for a day, who would it be?",
+  "What’s your biggest fear?", "What’s the worst thing you’ve ever eaten?",
 ];
-
 const spicyDares = [
   "Change your nickname to something silly for 10 minutes.",
-  "Type your next 3 messages in ALL CAPS.",
-  "Send a random emoji in the chat every 10 seconds for 1 minute.",
-  "Say something nice about the last person who spoke.",
-  "Do 10 pushups (or pretend to and tell us how it went).",
-  "Put your status to 'I love pineapples on pizza' for 1 hour.",
-  "Send a gif that describes your current mood.",
+  "Type your next 3 messages in ALL CAPS.", "Send a random emoji in the chat every 10 seconds for 1 minute.",
+  "Say something nice about the last person who spoke.", "Do 10 pushups (or pretend to and tell us how it went).",
+  "Put your status to 'I love pineapples on pizza' for 1 hour.", "Send a gif that describes your current mood.",
   "Use only memes to communicate for the next 5 minutes.",
 ];
-
 const compliments = [
-  "You have great taste in music.",
-  "Your energy makes the chat better.",
-  "You’re really funny!",
-  "You’re smarter than you give yourself credit for.",
-  "You have an amazing vibe.",
-  "You’re one of the kindest people I’ve seen here.",
-  "I admire how confident you are.",
-  "You always make people feel welcome.",
+  "You have great taste in music.", "Your energy makes the chat better.", "You’re really funny!",
+  "You’re smarter than you give yourself credit for.", "You have an amazing vibe.", "You’re one of the kindest people I’ve seen here.",
+  "I admire how confident you are.", "You always make people feel welcome.",
 ];
 
 // ---- Persistent Warnings ----
 const warningsFile = './warnings.json';
 let warnings = {};
-if (fs.existsSync(warningsFile)) {
-  warnings = JSON.parse(fs.readFileSync(warningsFile, 'utf8'));
-}
-function saveWarnings() {
-  fs.writeFileSync(warningsFile, JSON.stringify(warnings, null, 2));
-}
+if (fs.existsSync(warningsFile)) warnings = JSON.parse(fs.readFileSync(warningsFile, 'utf8'));
+function saveWarnings() { fs.writeFileSync(warningsFile, JSON.stringify(warnings, null, 2)); }
 
-// ---- Blackjack Game Helpers ----
+// ---- Blackjack Helpers ----
 const blackjackGames = new Map();
-
 function drawCard() {
   const suits = ['♠️', '♥️', '♦️', '♣️'];
-  const values = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
-  return {
-    suit: suits[Math.floor(Math.random() * suits.length)],
-    value: values[Math.floor(Math.random() * values.length)],
-  };
+  const values = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+  return { suit: suits[Math.floor(Math.random()*suits.length)], value: values[Math.floor(Math.random()*values.length)] };
 }
-
-function cardValue(card) {
-  if (['J', 'Q', 'K'].includes(card.value)) return 10;
-  if (card.value === 'A') return 11;
-  return parseInt(card.value);
-}
-
-function handValue(hand) {
-  let total = hand.reduce((sum, c) => sum + cardValue(c), 0);
-  let aces = hand.filter(c => c.value === 'A').length;
-  while (total > 21 && aces > 0) {
-    total -= 10;
-    aces--;
-  }
-  return total;
-}
-
-function formatHand(hand) {
-  return hand.map(c => `${c.value}${c.suit}`).join(' ');
-}
-
- // ---- AI Chat with Google Gemini ----
-else if (message.mentions.has(client.user.id)) {
-  const prompt = message.content.replace(new RegExp(`<@!?${client.user.id}>`, 'g'), '').trim();
-  if (!prompt) return message.reply('❓ What would you like to ask?');
-
-  try {
-    await message.channel.sendTyping();
-    const reply = await askGemini(prompt);
-    await message.reply(reply);
-  } catch (err) {
-    console.error('❌ Error sending Gemini reply:', err);
-    message.reply('🚫 Something went wrong with the AI.');
-  }
-}
-
+function cardValue(card) { if (['J','Q','K'].includes(card.value)) return 10; if(card.value==='A') return 11; return parseInt(card.value); }
+function handValue(hand) { let total=hand.reduce((s,c)=>s+cardValue(c),0), aces=hand.filter(c=>c.value==='A').length; while(total>21 && aces>0){total-=10; aces--;} return total; }
+function formatHand(hand){return hand.map(c=>`${c.value}${c.suit}`).join(' ');}
 // ---- Ready Event ----
 client.once('ready', () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
@@ -148,7 +94,7 @@ const PREFIX = '$';
 
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
-  if (!message.content.startsWith(PREFIX)) return; // ✅ Ignore normal messages
+  if (!message.content.startsWith(PREFIX)) return;
 
   const args = message.content.slice(PREFIX.length).trim().split(/ +/);
   const command = args.shift().toLowerCase();
@@ -270,9 +216,9 @@ client.on('messageCreate', async (message) => {
     const user = message.mentions.users.first();
     if (!user) return message.reply('💖 Tag someone to compliment.');
     message.channel.send(`💖 ${user.username}, ${compliments[Math.floor(Math.random() * compliments.length)]}`);
-      }
+                                                                       }
 
-      // ---- Haunt Commands ----
+          // ---- Haunt Commands ----
   else if (command === 'haunt') {
     if (hauntedChannels.has(message.channel.id)) return message.channel.send('👻 Already haunting this channel!');
     hauntedChannels.add(message.channel.id);
@@ -337,6 +283,21 @@ client.on('messageCreate', async (message) => {
     message.channel.send(result);
   }
 
+  // ---- AI Chat with Google Gemini ----
+  else if (message.mentions.has(client.user.id)) {
+    const prompt = message.content.replace(new RegExp(`<@!?${client.user.id}>`, 'g'), '').trim();
+    if (!prompt) return message.reply('❓ What would you like to ask?');
+
+    try {
+      await message.channel.sendTyping();
+      const reply = await askGemini(prompt);
+      await message.reply(reply);
+    } catch (err) {
+      console.error('❌ Error sending Gemini reply:', err);
+      message.reply('🚫 Something went wrong with the AI.');
+    }
+  }
+
   // ---- Moderation Commands ----
   else if (command === 'kick') {
     const target = message.mentions.members.first();
@@ -395,7 +356,7 @@ client.on('messageCreate', async (message) => {
     message.channel.send(text);
   }
 
-  // ---- Clear, Lock, Unlock, Slowmode, Role ----
+  // ---- Clear, Lock, Unlock, Slowmode ----
   else if (command === 'clear') {
     if (!checkPermission(PermissionsBitField.Flags.ManageMessages)) return;
     const count = parseInt(args[0]);
@@ -403,20 +364,17 @@ client.on('messageCreate', async (message) => {
     message.channel.bulkDelete(count, true)
       .then(() => message.reply(`🧹 Deleted ${count} messages.`))
       .catch(() => message.reply('❌ Cannot delete messages.'));
-  }
-  else if (command === 'lock') {
+  } else if (command === 'lock') {
     if (!checkPermission(PermissionsBitField.Flags.ManageChannels)) return;
     message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: false })
       .then(() => message.reply('🔒 Channel locked.'))
       .catch(() => message.reply('❌ Cannot lock this channel.'));
-  }
-  else if (command === 'unlock') {
+  } else if (command === 'unlock') {
     if (!checkPermission(PermissionsBitField.Flags.ManageChannels)) return;
     message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: true })
       .then(() => message.reply('🔓 Channel unlocked.'))
       .catch(() => message.reply('❌ Cannot unlock this channel.'));
-  }
-  else if (command === 'slowmode') {
+  } else if (command === 'slowmode') {
     if (!checkPermission(PermissionsBitField.Flags.ManageChannels)) return;
     const time = parseInt(args[0]);
     if (isNaN(time) || time < 0 || time > 21600) return message.reply('❌ Enter a valid number (0-21600 seconds).');
@@ -424,6 +382,8 @@ client.on('messageCreate', async (message) => {
       .then(() => message.reply(`🐌 Slowmode set to ${time} seconds.`))
       .catch(() => message.reply('❌ Cannot set slowmode.'));
   }
+
+  // ---- Role Management ----
   else if (command === 'role') {
     const subcommand = args.shift();
     const target = message.mentions.members.first();
@@ -446,7 +406,7 @@ client.on('messageCreate', async (message) => {
     }
   }
 
-  // ---- Unknown command ----
+  // ---- Unknown Command ----
   else {
     if (!message.content.startsWith(PREFIX)) return;
     message.reply('❌ Unknown command or you do not have permission.');
