@@ -5,13 +5,11 @@ const fs = require('fs');
 const express = require('express');
 const { GoogleGenerativeAI } = require('@google/generative-ai'); // Gemini import
 
-// ---- Keep-Alive Server ----
-const app = express();
-app.get('/', (req, res) => res.send('✅ Bot is running!'));
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`✅ Keep-alive server running on port ${PORT}`));
+// ---- Constants & Config ----
+const PORT = process.env.PORT || 3000; // Only declare once
+const OWNER_ID = '782155864134909952';
+const PREFIX = '$';
 
-// ---- Discord Client ----
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -36,11 +34,32 @@ async function askGemini(prompt) {
 }
 
 // ---- Owner Immunity ----
-const OWNER_ID = '782155864134909952';
 function isImmune(user) { return user.id === OWNER_ID; }
 
-// ---- Haunted / Spooky Data ----
-const hauntedUsers = new Set();
+// ---- Express Keep-alive Server ----
+const app = express();
+app.get('/', (req, res) => res.send('✅ Bot is running!'));
+
+// Safe listen to prevent crash if port is already in use
+const server = app.listen(PORT, () => {
+  console.log(`✅ Keep-alive server running on port ${PORT}`);
+});
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.warn(`⚠️ Port ${PORT} in use, keep-alive server could not start.`);
+  } else {
+    console.error('Server error:', err);
+  }
+});
+
+// ---- Data Storage & Warnings ----
+const warningsFile = './warnings.json';
+let warnings = {};
+if (fs.existsSync(warningsFile)) warnings = JSON.parse(fs.readFileSync(warningsFile, 'utf8'));
+function saveWarnings() { fs.writeFileSync(warningsFile, JSON.stringify(warnings, null, 2)); }
+
+// ---- Haunted & Fun Data ----
+const hauntedChannels = new Set();
 const hauntIntervals = new Map();
 
 const spookyMessages = [
@@ -81,16 +100,6 @@ const compliments = [
   "You always make people feel welcome.",
 ];
 
-// ---- Persistent Warnings ----
-const warningsFile = './warnings.json';
-let warnings = {};
-if (fs.existsSync(warningsFile)) {
-  warnings = JSON.parse(fs.readFileSync(warningsFile, 'utf8'));
-}
-function saveWarnings() {
-  fs.writeFileSync(warningsFile, JSON.stringify(warnings, null, 2));
-}
-
 // ---- Blackjack Helpers ----
 const blackjackGames = new Map();
 function drawCard() {
@@ -98,30 +107,20 @@ function drawCard() {
   const values = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
   return { suit: suits[Math.floor(Math.random() * suits.length)], value: values[Math.floor(Math.random() * values.length)] };
 }
-function cardValue(card) {
-  if (['J','Q','K'].includes(card.value)) return 10;
-  if (card.value === 'A') return 11;
-  return parseInt(card.value);
-}
+function cardValue(card) { if(['J','Q','K'].includes(card.value)) return 10; if(card.value==='A') return 11; return parseInt(card.value); }
 function handValue(hand) {
-  let total = hand.reduce((sum, c) => sum + cardValue(c), 0);
-  let aces = hand.filter(c => c.value === 'A').length;
-  while (total > 21 && aces > 0) {
-    total -= 10;
-    aces--;
-  }
+  let total = hand.reduce((sum,c)=>sum+cardValue(c),0);
+  let aces = hand.filter(c=>c.value==='A').length;
+  while(total>21 && aces>0){ total-=10; aces--; }
   return total;
 }
-function formatHand(hand) {
-  return hand.map(c => `${c.value}${c.suit}`).join(' ');
-}
+function formatHand(hand){ return hand.map(c=>`${c.value}${c.suit}`).join(' '); }
 
 // ---- Ready Event ----
 client.once('ready', () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
 });
 
-const PREFIX = '$';
 // ---- Message Handler ----
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
@@ -130,7 +129,7 @@ client.on('messageCreate', async (message) => {
   const args = message.content.slice(PREFIX.length).trim().split(/ +/);
   const command = args.shift().toLowerCase();
 
-  // ---- Moderation Permission Helper ----
+  // ---- Moderation Permission Check ----
   function checkPermission(permission) {
     if (!message.member.permissions.has(permission)) {
       message.reply('❌ You do not have permission to do that!');
@@ -140,267 +139,372 @@ client.on('messageCreate', async (message) => {
   }
 
   // ---- Fun & Utility Commands ----
-  if (command === 'ping') {
+  if (command === 'help') {
+    const helpText1 = `📖 **Bot Commands — Utility**\n\n` +
+      `📌 \`${PREFIX}prefix\` — Show the bot prefix\n` +
+      `🏓 \`${PREFIX}ping\` — Check bot response time\n` +
+      `📊 \`${PREFIX}stats\` — Server member stats\n` +
+      `⏱️ \`${PREFIX}uptime\` — Bot active time\n` +
+      `🤖 \`${PREFIX}botinfo\` — Info about the bot\n` +
+      `🔗 \`${PREFIX}invite\` — Get bot invite link\n\n` +
+      `📖 **Fun & Games**\n\n` +
+      `🪙 \`${PREFIX}flip\` — Flip a coin\n` +
+      `🎱 \`${PREFIX}8ball [question]\` — Magic 8-ball\n` +
+      `🎲 \`${PREFIX}dice\` — Roll a die\n` +
+      `🎯 \`${PREFIX}rate @user\` — Rate someone\n` +
+      `🌈 \`${PREFIX}howgay @user\` — Gay meter\n` +
+      `🕵️ \`${PREFIX}sus @user\` — Sus meter\n` +
+      `💬 \`${PREFIX}truth\` — Truth question\n` +
+      `😈 \`${PREFIX}dare\` — Dare\n` +
+      `🔥 \`${PREFIX}roast @user\` — Roast\n` +
+      `💖 \`${PREFIX}compliment @user\` — Compliment\n` +
+      `👻 \`${PREFIX}haunt\` / \`${PREFIX}unhaunt\` — Haunting\n` +
+      `🃏 \`${PREFIX}blackjack\`, \`${PREFIX}hit\`, \`${PREFIX}stand\` — Play Blackjack\n\n` +
+      `📖 **Moderation Commands**\n\n` +
+      `🔨 \`${PREFIX}kick @user [reason]\` — Kick a user\n` +
+      `🚫 \`${PREFIX}ban @user [reason]\` — Ban a user\n` +
+      `🤐 \`${PREFIX}mute @user [time]\` — Mute a user\n` +
+      `🔊 \`${PREFIX}unmute @user\` — Unmute a user\n` +
+      `⚠️ \`${PREFIX}warn @user [reason]\` — Warn a user\n` +
+      `📄 \`${PREFIX}warnings @user\` — Show warnings\n` +
+      `🧹 \`${PREFIX}clear [number]\` — Delete messages\n` +
+      `🔒 \`${PREFIX}lock\` — Lock channel\n` +
+      `🔓 \`${PREFIX}unlock\` — Unlock channel\n` +
+      `🐌 \`${PREFIX}slowmode [seconds]\` — Set slowmode\n` +
+      `🏷️ \`${PREFIX}role add @user <role>\` — Add role\n` +
+      `🏷️ \`${PREFIX}role remove @user <role>\` — Remove role`;
+
+    const helpText2 = `📖 **Info & Tools**\n\n` +
+      `🧑‍💼 \`${PREFIX}userinfo\` — User info\n` +
+      `🖼️ \`${PREFIX}avatar @user\` — Avatar\n` +
+      `🏠 \`${PREFIX}serverinfo\` — Server info\n` +
+      `📢 \`${PREFIX}shout [msg]\` — Shout\n` +
+      `🤐 \`${PREFIX}spoiler [msg]\` — Spoiler\n` +
+      `📣 \`${PREFIX}say [msg]\` — Echo\n` +
+      `✉️ \`${PREFIX}send <channelID> <message>\` — Send to another server/channel`;
+
+    await message.channel.send(helpText1);
+    return message.channel.send(helpText2);
+  } 
+  else if (command === 'ping') {
     const sent = await message.channel.send('Pinging...');
     sent.edit(`🏓 Pong! Latency is ${sent.createdTimestamp - message.createdTimestamp}ms`);
-  } else if (command === 'flip') {
+  } 
+  else if (command === 'stats') {
+    message.channel.send(`📊 Server has ${message.guild.memberCount} members.`);
+  } 
+  else if (command === 'uptime') {
+    const uptime = Math.floor(process.uptime());
+    message.channel.send(`⏱️ Bot uptime: ${uptime} seconds.`);
+  } 
+  else if (command === 'botinfo') {
+    message.channel.send(`🤖 I am ${client.user.tag}, your friendly bot helper!`);
+  } 
+  else if (command === 'invite') {
+    message.channel.send('🔗 Invite me: https://discord.com/api/oauth2/authorize?client_id=YOUR_CLIENT_ID&permissions=8&scope=bot%20applications.commands');
+  } 
+  else if (command === 'prefix') {
+    message.channel.send(`📌 The current prefix is: \`${PREFIX}\``);
+  } 
+  else if (command === 'flip') {
     const result = Math.random() < 0.5 ? 'Heads' : 'Tails';
     message.channel.send(`🪙 You flipped **${result}**!`);
-  } else if (command === '8ball') {
+  } 
+  else if (command === '8ball') {
     const responses = ['Yes.', 'No.', 'Maybe.', 'Ask again later.', 'Definitely!', 'I don’t think so.'];
     if (!args.length) return message.reply('🎱 Ask me a question.');
     message.channel.send(`🎱 ${responses[Math.floor(Math.random() * responses.length)]}`);
-  } else if (command === 'dice') {
+  } 
+  else if (command === 'dice') {
     const roll = Math.floor(Math.random() * 6) + 1;
     message.channel.send(`🎲 You rolled a **${roll}**!`);
-  } else if (command === 'rate') {
+  } 
+  else if (command === 'rate') {
     const user = message.mentions.users.first() || message.author;
     const rating = Math.floor(Math.random() * 11);
     message.channel.send(`🎯 I rate ${user.username} a **${rating}/10**!`);
-  } else if (command === 'howgay') {
+  } 
+  else if (command === 'howgay') {
     const user = message.mentions.users.first() || message.author;
     const gayness = Math.floor(Math.random() * 101);
     message.channel.send(`🌈 ${user.username} is **${gayness}%** gay!`);
-  } else if (command === 'sus') {
+  } 
+  else if (command === 'sus') {
     const user = message.mentions.users.first() || message.author;
     const sus = Math.floor(Math.random() * 101);
     message.channel.send(`🕵️ ${user.username} is **${sus}%** sus!`);
-  } else if (command === 'truth') {
+  } 
+  else if (command === 'truth') {
     message.channel.send(`💬 Truth: ${spicyTruths[Math.floor(Math.random() * spicyTruths.length)]}`);
-  } else if (command === 'dare') {
+  } 
+  else if (command === 'dare') {
     message.channel.send(`😈 Dare: ${spicyDares[Math.floor(Math.random() * spicyDares.length)]}`);
-  } else if (command === 'roast') {
-    const user = message.mentions.users.first();
-    if (!user) return message.reply('🔥 Tag someone to roast.');
-    const roasts = [
-      'You bring everyone so much joy… when you leave the room.',
-      'If I had a face like yours, I’d sue my parents.',
-      'You’re as useless as the “ueue” in “queue.”',
-      'You have something on your chin... no, the third one down.',
-    ];
-    message.channel.send(`🔥 ${user.username}, ${roasts[Math.floor(Math.random() * roasts.length)]}`);
-  } else if (command === 'compliment') {
-    const user = message.mentions.users.first();
-    if (!user) return message.reply('💖 Tag someone to compliment.');
-    message.channel.send(`💖 ${user.username}, ${compliments[Math.floor(Math.random() * compliments.length)]}`);
   }
 
-  // ---- Haunt Commands ----
+// ---- Haunt Commands ----
   else if (command === 'haunt') {
     const user = message.mentions.users.first();
     if (!user) return message.reply('👻 Tag someone to haunt.');
-    hauntedUsers.add(user.id);
+    hauntedChannels.add(user.id);
     message.channel.send(`👻 ${user.username} is now haunted!`);
-  } else if (command === 'unhaunt') {
+  } 
+  else if (command === 'unhaunt') {
     const user = message.mentions.users.first();
     if (!user) return message.reply('👻 Tag someone to unhaunt.');
-    hauntedUsers.delete(user.id);
+    hauntedChannels.delete(user.id);
     message.channel.send(`👻 ${user.username} is no longer haunted.`);
   }
 
-  // ---- Blackjack Commands ----
-  else if (command === 'blackjack') {
-    if (blackjackGames.has(message.author.id)) return message.reply('🃏 You already have a game in progress.');
-    const playerHand = [drawCard(), drawCard()];
-    const dealerHand = [drawCard(), drawCard()];
-    blackjackGames.set(message.author.id, { playerHand, dealerHand, stand: false });
-    message.channel.send(`🃏 Blackjack started!\nYour hand: ${formatHand(playerHand)}\nDealer shows: ${formatHand([dealerHand[0]])}`);
-  } else if (command === 'hit') {
-    const game = blackjackGames.get(message.author.id);
-    if (!game) return message.reply('🃏 Start a game first with `$blackjack`.');
-    if (game.stand) return message.reply('🃏 You already chose to stand.');
-    game.playerHand.push(drawCard());
-    const total = handValue(game.playerHand);
-    if (total > 21) {
-      blackjackGames.delete(message.author.id);
-      return message.channel.send(`💥 Bust! Your hand: ${formatHand(game.playerHand)}. You lose.`);
-    }
-    message.channel.send(`🃏 Your hand: ${formatHand(game.playerHand)}. Total: ${total}`);
-  } else if (command === 'stand') {
-    const game = blackjackGames.get(message.author.id);
-    if (!game) return message.reply('🃏 Start a game first with `$blackjack`.');
-    game.stand = true;
+}); // ---- End of messageCreate ----
 
-    let dealerTotal = handValue(game.dealerHand);
-    while (dealerTotal < 17) {
-      game.dealerHand.push(drawCard());
-      dealerTotal = handValue(game.dealerHand);
-    }
+// ---- Blackjack System ----
+const blackjackGames = new Map();
 
-    const playerTotal = handValue(game.playerHand);
-    let result = '';
-    if (dealerTotal > 21 || playerTotal > dealerTotal) result = '🎉 You win!';
-    else if (playerTotal < dealerTotal) result = '💥 You lose!';
-    else result = '🤝 It\'s a tie!';
-
-    message.channel.send(`🃏 Dealer hand: ${formatHand(game.dealerHand)}\nYour hand: ${formatHand(game.playerHand)}\n${result}`);
-    blackjackGames.delete(message.author.id);
-  }
-
-}); // ---- End messageCreate handler
-// ---- Moderation Commands ----
 client.on('messageCreate', async (message) => {
-  if (message.author.bot) return;
-  if (!message.content.startsWith(PREFIX)) return;
+  if (message.author.bot || !message.content.startsWith(PREFIX)) return;
 
   const args = message.content.slice(PREFIX.length).trim().split(/ +/);
   const command = args.shift().toLowerCase();
 
-  function checkPermission(permission) {
-    if (!message.member.permissions.has(permission)) {
-      message.reply('❌ You do not have permission to do that!');
-      return false;
+  // ---- Blackjack Commands ----
+  if (command === 'blackjack') {
+    if (blackjackGames.has(message.author.id)) {
+      return message.channel.send('🃏 You are already in a game!');
     }
-    return true;
+    const playerHand = [drawCard(), drawCard()];
+    const dealerHand = [drawCard(), drawCard()];
+    blackjackGames.set(message.author.id, { playerHand, dealerHand, stand: false });
+    message.channel.send(`🃏 Game started!\nYour hand: ${playerHand.join(', ')}\nDealer shows: ${dealerHand[0]}\nUse \`${PREFIX}hit\` or \`${PREFIX}stand\``);
+  } 
+  else if (command === 'hit') {
+    const game = blackjackGames.get(message.author.id);
+    if (!game) return message.channel.send('🃏 You are not in a game!');
+    if (game.stand) return message.channel.send('🃏 You already stood!');
+
+    game.playerHand.push(drawCard());
+    const playerSum = sumHand(game.playerHand);
+    if (playerSum > 21) {
+      blackjackGames.delete(message.author.id);
+      return message.channel.send(`💥 Busted! Your hand: ${game.playerHand.join(', ')} (Total: ${playerSum})`);
+    }
+    message.channel.send(`🃏 Your hand: ${game.playerHand.join(', ')} (Total: ${playerSum})`);
+  } 
+  else if (command === 'stand') {
+    const game = blackjackGames.get(message.author.id);
+    if (!game) return message.channel.send('🃏 You are not in a game!');
+    game.stand = true;
+
+    let dealerSum = sumHand(game.dealerHand);
+    while (dealerSum < 17) {
+      game.dealerHand.push(drawCard());
+      dealerSum = sumHand(game.dealerHand);
+    }
+
+    const playerSum = sumHand(game.playerHand);
+    let result = '';
+    if (dealerSum > 21 || playerSum > dealerSum) result = 'You win! 🎉';
+    else if (playerSum < dealerSum) result = 'Dealer wins! 😢';
+    else result = 'It\'s a tie! 🤝';
+
+    blackjackGames.delete(message.author.id);
+    message.channel.send(`🃏 Dealer hand: ${game.dealerHand.join(', ')} (Total: ${dealerSum})\nYour hand: ${game.playerHand.join(', ')} (Total: ${playerSum})\n**${result}**`);
   }
 
-  // ---- Kick ----
+  // ---- Moderation Commands ----
   if (command === 'kick') {
     if (!checkPermission(PermissionsBitField.Flags.KickMembers)) return;
     const user = message.mentions.members.first();
-    if (!user) return message.reply('🔨 Tag someone to kick.');
+    if (!user) return message.reply('❌ Mention someone to kick.');
     const reason = args.slice(1).join(' ') || 'No reason provided';
-    user.kick(reason).then(() => message.channel.send(`🔨 Kicked ${user.user.tag} | Reason: ${reason}`))
-      .catch(err => message.reply(`❌ Error: ${err}`));
-  }
-
-  // ---- Ban ----
+    user.kick(reason).then(() => message.channel.send(`✅ Kicked ${user.user.tag}`));
+  } 
   else if (command === 'ban') {
     if (!checkPermission(PermissionsBitField.Flags.BanMembers)) return;
     const user = message.mentions.members.first();
-    if (!user) return message.reply('🚫 Tag someone to ban.');
+    if (!user) return message.reply('❌ Mention someone to ban.');
     const reason = args.slice(1).join(' ') || 'No reason provided';
-    user.ban({ reason }).then(() => message.channel.send(`🚫 Banned ${user.user.tag} | Reason: ${reason}`))
-      .catch(err => message.reply(`❌ Error: ${err}`));
-  }
-
-  // ---- Mute ----
+    user.ban({ reason }).then(() => message.channel.send(`✅ Banned ${user.user.tag}`));
+  } 
   else if (command === 'mute') {
-    if (!checkPermission(PermissionsBitField.Flags.ModerateMembers)) return;
-    const member = message.mentions.members.first();
-    if (!member) return message.reply('🤐 Tag someone to mute.');
-    const time = args[1] || '10m';
-    member.timeout(ms(time), 'Muted by bot').then(() => message.channel.send(`🤐 ${member.user.tag} muted for ${time}`))
-      .catch(err => message.reply(`❌ Error: ${err}`));
-  }
-
-  // ---- Unmute ----
+    if (!checkPermission(PermissionsBitField.Flags.MuteMembers)) return;
+    const user = message.mentions.members.first();
+    if (!user) return message.reply('❌ Mention someone to mute.');
+    const time = parseInt(args[1]) || 10;
+    let muteRole = message.guild.roles.cache.find(r => r.name === 'Muted');
+    if (!muteRole) {
+      muteRole = await message.guild.roles.create({ name: 'Muted', permissions: [] });
+      message.guild.channels.cache.forEach(channel => {
+        channel.permissionOverwrites.edit(muteRole, { SendMessages: false, AddReactions: false });
+      });
+    }
+    await user.roles.add(muteRole);
+    message.channel.send(`🔇 Muted ${user.user.tag} for ${time} minutes`);
+    setTimeout(() => user.roles.remove(muteRole), time * 60000);
+  } 
   else if (command === 'unmute') {
-    if (!checkPermission(PermissionsBitField.Flags.ModerateMembers)) return;
-    const member = message.mentions.members.first();
-    if (!member) return message.reply('🤐 Tag someone to unmute.');
-    member.timeout(null, 'Unmuted by bot').then(() => message.channel.send(`✅ ${member.user.tag} unmuted.`))
-      .catch(err => message.reply(`❌ Error: ${err}`));
-  }
-
-  // ---- Warn ----
+    if (!checkPermission(PermissionsBitField.Flags.MuteMembers)) return;
+    const user = message.mentions.members.first();
+    if (!user) return message.reply('❌ Mention someone to unmute.');
+    const muteRole = message.guild.roles.cache.find(r => r.name === 'Muted');
+    if (muteRole && user.roles.cache.has(muteRole.id)) {
+      await user.roles.remove(muteRole);
+      message.channel.send(`🔊 Unmuted ${user.user.tag}`);
+    }
+  } 
   else if (command === 'warn') {
     if (!checkPermission(PermissionsBitField.Flags.KickMembers)) return;
-    const user = message.mentions.users.first();
-    if (!user) return message.reply('⚠️ Tag someone to warn.');
+    const user = message.mentions.members.first();
+    if (!user) return message.reply('❌ Mention someone to warn.');
     const reason = args.slice(1).join(' ') || 'No reason provided';
     if (!warnings[user.id]) warnings[user.id] = [];
-    warnings[user.id].push({ reason, moderator: message.author.tag });
-    saveWarnings();
-    message.channel.send(`⚠️ Warned ${user.tag} | Reason: ${reason}`);
-  }
-
-  // ---- Warnings ----
+    warnings[user.id].push({ reason, date: new Date().toISOString() });
+    fs.writeFileSync('./warnings.json', JSON.stringify(warnings, null, 2));
+    message.channel.send(`⚠️ Warned ${user.user.tag} for: ${reason}`);
+  } 
   else if (command === 'warnings') {
-    const user = message.mentions.users.first() || message.author;
+    const user = message.mentions.members.first() || message.member;
     const userWarnings = warnings[user.id] || [];
-    if (!userWarnings.length) return message.channel.send(`${user.tag} has no warnings.`);
-    message.channel.send(`⚠️ Warnings for ${user.tag}:\n` + userWarnings.map((w, i) => `${i + 1}. ${w.reason} (by ${w.moderator})`).join('\n'));
-  }
-
-  // ---- Clear Messages ----
+    if (!userWarnings.length) return message.channel.send(`✅ ${user.user.tag} has no warnings.`);
+    const warnList = userWarnings.map((w, i) => `${i + 1}. ${w.reason} (${w.date})`).join('\n');
+    message.channel.send(`⚠️ Warnings for ${user.user.tag}:\n${warnList}`);
+  } 
   else if (command === 'clear') {
     if (!checkPermission(PermissionsBitField.Flags.ManageMessages)) return;
-    const count = parseInt(args[0], 10);
-    if (!count) return message.reply('🧹 Specify number of messages to delete.');
-    message.channel.bulkDelete(count, true).then(() => message.channel.send(`🧹 Deleted ${count} messages.`)).catch(err => message.reply(`❌ Error: ${err}`));
+    const num = parseInt(args[0]) || 5;
+    message.channel.bulkDelete(num, true);
+    message.channel.send(`🧹 Deleted ${num} messages`).then(msg => setTimeout(() => msg.delete(), 5000));
+  } 
+  else if (command === 'lock') {
+    if (!checkPermission(PermissionsBitField.Flags.ManageChannels)) return;
+    message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: false });
+    message.channel.send('🔒 Channel locked.');
+  } 
+  else if (command === 'unlock') {
+    if (!checkPermission(PermissionsBitField.Flags.ManageChannels)) return;
+    message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: true });
+    message.channel.send('🔓 Channel unlocked.');
+  } 
+  else if (command === 'slowmode') {
+    if (!checkPermission(PermissionsBitField.Flags.ManageChannels)) return;
+    const seconds = parseInt(args[0]) || 0;
+    message.channel.setRateLimitPerUser(seconds);
+    message.channel.send(`🐌 Slowmode set to ${seconds} seconds.`);
   }
 
-  // ---- Role Commands ----
+  // ---- Role Management ----
   else if (command === 'role') {
     if (!checkPermission(PermissionsBitField.Flags.ManageRoles)) return;
-    const subcommand = args.shift();
-    const member = message.mentions.members.first();
-    if (!member) return message.reply('🏷️ Tag a user.');
-    const roleName = args.join(' ');
-    const role = message.guild.roles.cache.find(r => r.name === roleName);
-    if (!role) return message.reply('❌ Role not found.');
-
-    if (subcommand === 'add') {
-      member.roles.add(role).then(() => message.channel.send(`✅ Added ${role.name} to ${member.user.tag}`))
-        .catch(err => message.reply(`❌ Error: ${err}`));
-    } else if (subcommand === 'remove') {
-      member.roles.remove(role).then(() => message.channel.send(`✅ Removed ${role.name} from ${member.user.tag}`))
-        .catch(err => message.reply(`❌ Error: ${err}`));
-    } else {
-      message.reply('❌ Use `$role add @user <role>` or `$role remove @user <role>`');
+    const sub = args[0];
+    const user = message.mentions.members.first();
+    const roleName = args.slice(1).join(' ');
+    const role = message.guild.roles.cache.find(r => r.name.toLowerCase() === roleName.toLowerCase());
+    if (!user || !role) return message.reply('❌ User or role not found.');
+    if (sub === 'add') {
+      await user.roles.add(role);
+      message.channel.send(`✅ Added role ${role.name} to ${user.user.tag}`);
+    } else if (sub === 'remove') {
+      await user.roles.remove(role);
+      message.channel.send(`✅ Removed role ${role.name} from ${user.user.tag}`);
     }
   }
 
-  // ---- Send Message to Channel ----
-  else if (command === 'send') {
-    if (!checkPermission(PermissionsBitField.Flags.ManageChannels)) return;
-    const channelId = args.shift();
-    const targetChannel = client.channels.cache.get(channelId);
-    if (!targetChannel) return message.reply('❌ Channel not found.');
+}); // ---- End of messageCreate ----
+
+// ---- Helper Functions ----
+function drawCard() {
+  const cards = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
+  return cards[Math.floor(Math.random() * cards.length)];
+}
+
+function sumHand(hand) {
+  let sum = 0;
+  let aceCount = 0;
+  hand.forEach(c => {
+    if (['J', 'Q', 'K'].includes(c)) sum += 10;
+    else if (c === 'A') { sum += 11; aceCount++; }
+    else sum += parseInt(c);
+  });
+  while (sum > 21 && aceCount > 0) { sum -= 10; aceCount--; }
+  return sum;
+}
+
+// ---- Info Commands ----
+client.on('messageCreate', async (message) => {
+  if (message.author.bot || !message.content.startsWith(PREFIX)) return;
+
+  const args = message.content.slice(PREFIX.length).trim().split(/ +/);
+  const command = args.shift().toLowerCase();
+
+  if (command === 'userinfo') {
+    const user = message.mentions.users.first() || message.author;
+    const member = message.guild.members.cache.get(user.id);
+    message.channel.send({
+      embeds: [{
+        color: 0x00ff00,
+        title: `${user.tag} Info`,
+        thumbnail: { url: user.displayAvatarURL({ dynamic: true }) },
+        fields: [
+          { name: 'ID', value: user.id, inline: true },
+          { name: 'Nickname', value: member.nickname || 'None', inline: true },
+          { name: 'Joined Server', value: new Date(member.joinedTimestamp).toLocaleString(), inline: false },
+          { name: 'Account Created', value: new Date(user.createdTimestamp).toLocaleString(), inline: false }
+        ]
+      }]
+    });
+  } 
+  else if (command === 'serverinfo') {
+    const guild = message.guild;
+    message.channel.send({
+      embeds: [{
+        color: 0x00ff00,
+        title: `${guild.name} Info`,
+        thumbnail: { url: guild.iconURL({ dynamic: true }) },
+        fields: [
+          { name: 'ID', value: guild.id, inline: true },
+          { name: 'Owner', value: `<@${guild.ownerId}>`, inline: true },
+          { name: 'Members', value: guild.memberCount.toString(), inline: true },
+          { name: 'Channels', value: guild.channels.cache.size.toString(), inline: true },
+          { name: 'Roles', value: guild.roles.cache.size.toString(), inline: true },
+          { name: 'Boost Level', value: guild.premiumTier.toString(), inline: true }
+        ]
+      }]
+    });
+  }
+
+  // ---- Avatar Command ----
+  else if (command === 'avatar') {
+    const user = message.mentions.users.first() || message.author;
+    message.channel.send({ content: user.displayAvatarURL({ dynamic: true, size: 1024 }) });
+  }
+
+  // ---- Say / Shout / Send ----
+  else if (command === 'say') {
+    if (!checkPermission(PermissionsBitField.Flags.ManageMessages)) return;
     const text = args.join(' ');
-    targetChannel.send(text).catch(err => message.reply(`❌ Error: ${err}`));
+    if (!text) return message.reply('❌ Provide text to say.');
+    message.channel.send(text);
+  } 
+  else if (command === 'shout') {
+    if (!checkPermission(PermissionsBitField.Flags.ManageMessages)) return;
+    const text = args.join(' ').toUpperCase();
+    if (!text) return message.reply('❌ Provide text to shout.');
+    message.channel.send(text);
+  } 
+  else if (command === 'send') {
+    if (!checkPermission(PermissionsBitField.Flags.Administrator)) return;
+    const channel = message.mentions.channels.first();
+    const text = args.slice(1).join(' ');
+    if (!channel || !text) return message.reply('❌ Mention a channel and provide a message.');
+    channel.send(text);
+    message.channel.send(`✅ Sent message to ${channel}`);
   }
+});
 
-  // ---- AI Chat with Google Gemini ----
-  else if (message.mentions.has(client.user.id)) {
-    const prompt = message.content.replace(new RegExp(`<@!?${client.user.id}>`, 'g'), '').trim();
-    if (!prompt) return message.reply('❓ What would you like to ask?');
-
-    try {
-      await message.channel.sendTyping();
-      const reply = await askGemini(prompt);
-      await message.reply(reply);
-    } catch (err) {
-      console.error('❌ Error sending Gemini reply:', err);
-      message.reply('🚫 Something went wrong with the AI.');
-    }
-  }
-
-  // ---- Unknown Command ----
-  else {
-    message.reply('❌ Unknown command or insufficient permissions.');
-  }
-}); // ---- End messageCreate for moderation/roles/AI
-// ---- Keep-Alive Server ----
-// Prevent duplicate server listening and handle EADDRINUSE
+// ---- Final Bot Login  ----
 const PORT = process.env.PORT || 3000;
 
-const server = app.listen(PORT, () => {
-  console.log(`✅ Keep-alive server running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`✅ Web server running on port ${PORT}`));
 
-// Handle if port is already in use
-server.on('error', (err) => {
-  if (err.code === 'EADDRINUSE') {
-    console.error(`❌ Port ${PORT} is already in use. Trying another port...`);
-    server.listen(0); // Let the OS assign a random free port
-  } else {
-    console.error('❌ Server error:', err);
-  }
-});
-
-// ---- Bot Ready Event ----
-client.once('ready', () => {
+client.login(process.env.TOKEN).then(() => {
   console.log(`✅ Logged in as ${client.user.tag}`);
-});
-
-// ---- Keep-alive ping (optional) ----
-setInterval(() => {
-  fetch(`http://localhost:${PORT}/`).catch(() => {});
-}, 5 * 60 * 1000); // ping every 5 minutes
-
-// ---- Bot Login ----
-client.login(process.env.BOT_TOKEN)
-  .then(() => console.log('✅ Bot logged in successfully!'))
-  .catch(err => console.error('❌ Bot failed to login:', err));
+}).catch(err => console.error('❌ Login failed:', err));
