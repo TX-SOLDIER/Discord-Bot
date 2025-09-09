@@ -4,7 +4,6 @@ const fetch = require('node-fetch');
 const fs = require('fs');
 const express = require('express');
 const { GoogleGenerativeAI } = require('@google/generative-ai'); // Gemini AI
-const { OpenAIApi, Configuration } = require('openai'); // OpenAI/OpenRouter
 
 const app = express();
 app.get('/', (req, res) => res.send('✅ Bot is running!'));
@@ -19,9 +18,8 @@ const client = new Client({
   ],
 });
 
-// ---- AI Setup ----
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY); // Gemini
-const openAI = new OpenAIApi(new Configuration({ apiKey: process.env.OPENROUTER_API_KEY })); // OpenAI/OpenRouter
+// ---- Google Gemini AI Setup ----
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
 
 // ---- Owner Immunity ----
 const OWNER_ID = '782155864134909952';
@@ -119,11 +117,10 @@ function formatHand(hand) {
 client.once('ready', () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
 });
-
 const PREFIX = '$';
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
-  if (!message.content.startsWith(PREFIX) && !message.mentions.users.has(client.user.id)) return;
+  if (!message.content.startsWith(PREFIX) && !message.mentions.users.has(client.user.id)) return; // ✅ Allow prefix OR mention
 
   const args = message.content.slice(PREFIX.length).trim().split(/ +/);
   const command = message.content.startsWith(PREFIX) ? args.shift().toLowerCase() : null;
@@ -312,11 +309,10 @@ client.on('messageCreate', async (message) => {
     message.channel.send(result);
       }
 
-      // ---- Dual AI ----
-  // $ai -> Google Gemini
-  else if (command === 'ai') {
-    const prompt = args.join(' ').trim();
-    if (!prompt) return message.reply('❓ Please provide a prompt for AI.');
+      // ---- AI Chat with Google Gemini ----
+  else if (!command && message.mentions.users.has(client.user.id)) {
+    const prompt = message.content.replace(new RegExp(`<@!?${client.user.id}>`, 'g'), '').trim();
+    if (!prompt) return message.reply('❓ What would you like to ask?');
 
     try {
       await message.channel.sendTyping();
@@ -329,29 +325,7 @@ client.on('messageCreate', async (message) => {
 
     } catch (err) {
       console.error('❌ Gemini AI request failed:', err);
-      await message.reply('🚫 Error talking to Gemini AI. Try again later.');
-    }
-  }
-
-  // Tag the bot -> OpenAI/OpenRouter
-  else if (!command && message.mentions.users.has(client.user.id)) {
-    const prompt = message.content.replace(new RegExp(`<@!?${client.user.id}>`, 'g'), '').trim();
-    if (!prompt) return message.reply('❓ What would you like to ask?');
-
-    try {
-      await message.channel.sendTyping();
-
-      const response = await openAI.chat.completions.create({
-        model: "gpt-4o-mini",
-        messages: [{ role: "user", content: prompt }],
-      });
-
-      const reply = response.choices?.[0]?.message?.content || "⚠️ Sorry, I couldn’t generate a reply.";
-      await message.reply(reply);
-
-    } catch (err) {
-      console.error('❌ OpenAI request failed:', err);
-      await message.reply('🚫 Error talking to OpenAI. Try again later.');
+      await message.reply('🚫 Error talking to the AI. Try again later.');
     }
   }
 
@@ -514,7 +488,7 @@ Created: ${guild.createdAt.toDateString()}`);
 
   // ---- Unknown command ----
   else {
-    if (message.content.startsWith(PREFIX)) {
+    if (message.content.startsWith('$')) {
       message.reply('❌ Unknown command or you do not have permission.');
     }
   }
