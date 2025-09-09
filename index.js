@@ -3,7 +3,7 @@ const { Client, GatewayIntentBits, PermissionsBitField } = require('discord.js')
 const fetch = require('node-fetch');
 const fs = require('fs');
 const express = require('express');
-const { GoogleGenerativeAI } = require('@google/generative-ai'); // Added Gemini
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 const app = express();
 app.get('/', (req, res) => res.send('✅ Bot is running!'));
@@ -20,7 +20,6 @@ const client = new Client({
 
 // ---- Google Gemini AI Setup ----
 const genAI = new GoogleGenerativeAI({ apiKey: process.env.GOOGLE_API_KEY });
-
 async function askGemini(prompt) {
   try {
     const response = await genAI.chat.sendMessage({
@@ -85,18 +84,15 @@ const compliments = [
 // ---- Persistent Warnings ----
 const warningsFile = './warnings.json';
 let warnings = {};
-
 if (fs.existsSync(warningsFile)) {
   warnings = JSON.parse(fs.readFileSync(warningsFile, 'utf8'));
 }
-
 function saveWarnings() {
   fs.writeFileSync(warningsFile, JSON.stringify(warnings, null, 2));
 }
 
 // ---- Blackjack Game ----
 const blackjackGames = new Map();
-
 function drawCard() {
   const suits = ['♠️', '♥️', '♦️', '♣️'];
   const values = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
@@ -105,13 +101,11 @@ function drawCard() {
     value: values[Math.floor(Math.random() * values.length)],
   };
 }
-
 function cardValue(card) {
   if (['J', 'Q', 'K'].includes(card.value)) return 10;
   if (card.value === 'A') return 11;
   return parseInt(card.value);
 }
-
 function handValue(hand) {
   let total = hand.reduce((sum, c) => sum + cardValue(c), 0);
   let aces = hand.filter(c => c.value === 'A').length;
@@ -121,7 +115,6 @@ function handValue(hand) {
   }
   return total;
 }
-
 function formatHand(hand) {
   return hand.map(c => `${c.value}${c.suit}`).join(' ');
 }
@@ -130,11 +123,10 @@ function formatHand(hand) {
 client.once('ready', () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
 });
-
 const PREFIX = '$';
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
-  if (!message.content.startsWith(PREFIX)) return; // ✅ Ignore normal messages
+  if (!message.content.startsWith(PREFIX)) return;
 
   const args = message.content.slice(PREFIX.length).trim().split(/ +/);
   const command = args.shift().toLowerCase();
@@ -182,10 +174,7 @@ client.on('messageCreate', async (message) => {
       `🔓 \`${PREFIX}unlock\` — Unlock channel\n` +
       `🐌 \`${PREFIX}slowmode [seconds]\` — Set slowmode\n` +
       `🏷️ \`${PREFIX}role add @user <role>\` — Add role\n` +
-      `🏷️ \`${PREFIX}role remove @user <role>\` — Remove role\n` +
-      `❌ \`${PREFIX}unauthorized\` — Unauthorized response`;
-
-    await message.channel.send(helpText1);
+      `🏷️ \`${PREFIX}role remove @user <role>\` — Remove role`;
 
     const helpText2 = `📖 **Info & Tools**\n\n` +
       `🧑‍💼 \`${PREFIX}userinfo\` — User info\n` +
@@ -195,6 +184,8 @@ client.on('messageCreate', async (message) => {
       `🤐 \`${PREFIX}spoiler [msg]\` — Spoiler\n` +
       `📣 \`${PREFIX}say [msg]\` — Echo\n` +
       `✉️ \`${PREFIX}send <channelID> <message>\` — Send to another server/channel`;
+
+    await message.channel.send(helpText1);
     return message.channel.send(helpText2);
   }
 
@@ -215,7 +206,7 @@ client.on('messageCreate', async (message) => {
     message.channel.send(`📌 The current prefix is: \`${PREFIX}\``);
   }
 
-  // ---- Fun & Games Commands ----
+  // ---- Fun & Games ----
   else if (command === 'flip') {
     const result = Math.random() < 0.5 ? 'Heads' : 'Tails';
     message.channel.send(`🪙 You flipped **${result}**!`);
@@ -258,7 +249,7 @@ client.on('messageCreate', async (message) => {
     message.channel.send(`💖 ${user.username}, ${compliments[Math.floor(Math.random() * compliments.length)]}`);
   }
 
-  // ---- Haunt ----
+  // ---- Haunt Commands ----
   else if (command === 'haunt') {
     if (hauntedChannels.has(message.channel.id)) return message.channel.send('👻 Already haunting this channel!');
     hauntedChannels.add(message.channel.id);
@@ -277,7 +268,7 @@ client.on('messageCreate', async (message) => {
     message.channel.send('🕯️ The spirits have left...');
   }
 
-  // ---- Blackjack ----
+  // ---- Blackjack Commands ----
   else if (command === 'blackjack') {
     if (blackjackGames.has(message.author.id)) return message.reply('⚠️ You already have a game! Use `$hit` or `$stand`.');
     const playerHand = [drawCard(), drawCard()];
@@ -323,7 +314,7 @@ client.on('messageCreate', async (message) => {
     message.channel.send(result);
   }
 
-  // ---- AI Chat with Google Gemini ----
+   // ---- AI Chat with Google Gemini ----
   else if (message.mentions.has(client.user)) {
     const prompt = message.content.replace(new RegExp(`<@!?${client.user.id}>`, 'g'), '').trim();
     if (!prompt) return message.reply('❓ What would you like to ask?');
@@ -394,7 +385,8 @@ client.on('messageCreate', async (message) => {
     warnings[target.id].push({ reason, date: new Date().toISOString(), mod: message.author.tag });
     saveWarnings();
     message.reply(`⚠️ Warned ${target.user.tag}. Reason: ${reason}`);
-  } else if (command === 'warnings') {
+  }
+  else if (command === 'warnings') {
     const target = message.mentions.members.first() || message.member;
     const userWarnings = warnings[target.id] || [];
     if (!userWarnings.length) return message.reply('ℹ️ No warnings found.');
@@ -402,6 +394,53 @@ client.on('messageCreate', async (message) => {
     userWarnings.forEach((w, i) => text += `${i + 1}. [${w.date}] ${w.mod}: ${w.reason}\n`);
     message.channel.send(text);
   }
+
+  // ---- Info & Tools ----
+  else if (command === 'userinfo') {
+    const user = message.mentions.users.first() || message.author;
+    const member = message.guild.members.cache.get(user.id);
+    message.channel.send(`🧑 User Info:
+Username: ${user.username}
+Tag: ${user.tag}
+ID: ${user.id}
+Joined Server: ${member.joinedAt.toDateString()}
+Account Created: ${user.createdAt.toDateString()}`);
+  }
+  else if (command === 'avatar') {
+    const user = message.mentions.users.first() || message.author;
+    message.channel.send(`${user.username}'s Avatar: ${user.displayAvatarURL({ dynamic: true, size: 1024 })}`);
+  }
+  else if (command === 'serverinfo') {
+    const guild = message.guild;
+    message.channel.send(`🏠 Server Info:
+Name: ${guild.name}
+ID: ${guild.id}
+Members: ${guild.memberCount}
+Created: ${guild.createdAt.toDateString()}`);
+  }
+  else if (command === 'shout') {
+    if (!args.length) return message.reply('📢 Provide a message to shout.');
+    message.channel.send(args.join(' ').toUpperCase());
+  }
+  else if (command === 'spoiler') {
+    if (!args.length) return message.reply('🤐 Provide a message to hide as spoiler.');
+    message.channel.send(`||${args.join(' ')}||`);
+  }
+  else if (command === 'say') {
+    if (!args.length) return message.reply('📣 Provide a message to echo.');
+    message.channel.send(args.join(' '));
+  }
+  else if (command === 'send') {
+    if (args.length < 2) return message.reply('✉️ Usage: $send <channelID> <message>');
+    const channel = client.channels.cache.get(args[0]);
+    if (!channel) return message.reply('❌ Channel not found or I do not have access.');
+    if (!channel.isTextBased()) return message.reply('❌ That channel is not a text channel.');
+    const botMember = channel.guild.members.me;
+    if (!channel.permissionsFor(botMember)?.has('SendMessages')) return message.reply('❌ I do not have permission to send messages in that channel.');
+    channel.send(args.slice(1).join(' '))
+      .then(() => message.reply(`✅ Message sent to #${channel.name} in ${channel.guild.name}.`))
+      .catch(err => message.reply(`❌ Failed to send message. Error: ${err.message}`));
+  }       
 
   // ---- Clear, Lock, Unlock, Slowmode, Role ----
   else if (command === 'clear') {
@@ -462,5 +501,4 @@ client.on('messageCreate', async (message) => {
 
 }); // ---- End of messageCreate ----
 
-// ---- Bot Login ----
 client.login(process.env.BOT_TOKEN);
