@@ -309,25 +309,29 @@ client.on('messageCreate', async (message) => {
     message.channel.send(result);
       }
 
-      // ---- AI Chat with Google Gemini ----
-  else if (!command && message.mentions.users.has(client.user.id)) {
-    const prompt = message.content.replace(new RegExp(`<@!?${client.user.id}>`, 'g'), '').trim();
-    if (!prompt) return message.reply('❓ What would you like to ask?');
+// ---- AI Chat with Google Gemini ----
+else if (command === 'ai') {
+  const prompt = args.join(' ');
+  if (!prompt) return message.reply('❓ Please provide a prompt. Example: `$ai tell me a story`');
 
-    try {
-      await message.channel.sendTyping();
+  try {
+    await message.channel.sendTyping();
 
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-      const result = await model.generateContent(prompt);
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const result = await model.generateContent(prompt);
 
-      const reply = result.response.text() || "⚠️ Sorry, I couldn’t generate a reply.";
+    const reply = result.response.text() || "⚠️ Sorry, I couldn’t generate a reply.";
+    if (reply.length > 2000) {
+      await message.reply(reply.slice(0, 1997) + '...');
+    } else {
       await message.reply(reply);
-
-    } catch (err) {
-      console.error('❌ Gemini AI request failed:', err);
-      await message.reply('🚫 Error talking to the AI. Try again later.');
     }
+
+  } catch (err) {
+    console.error('❌ Gemini AI request failed:', err);
+    await message.reply('🚫 Error talking to the AI. Try again later.');
   }
+}
 
   // ---- Moderation Commands ----
   else if (command === 'kick') {
