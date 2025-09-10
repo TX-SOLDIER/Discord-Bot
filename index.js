@@ -308,7 +308,7 @@ client.on('messageCreate', async (message) => {
     blackjackGames.delete(message.author.id);
     message.channel.send(result);
       }
-    // ---- AI Chat with OpenRouter (Bot Mention) ----
+// ---- AI Chat with OpenRouter (Bot Mention) ----
 else if (!command && message.mentions.users.has(client.user.id)) {
   const prompt = message.content.replace(new RegExp(`<@!?${client.user.id}>`, 'g'), '').trim();
   if (!prompt) return message.reply('❓ What would you like to ask?');
@@ -323,12 +323,18 @@ else if (!command && message.mentions.users.has(client.user.id)) {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "openai/gpt-3.5-turbo", // 🔧 You can swap this for another OpenRouter model
+        model: "openai/gpt-3.5-turbo", // 🔧 Fixed model for now
         messages: [{ role: "user", content: prompt }]
       })
     });
 
     const data = await response.json();
+
+    // 🔎 Error handling
+    if (data.error) {
+      return message.reply(`🚫 OpenRouter Error: ${data.error.message}`);
+    }
+
     const reply = data.choices?.[0]?.message?.content || "⚠️ Sorry, I couldn’t generate a reply.";
 
     if (reply.length > 2000) {
