@@ -308,6 +308,40 @@ client.on('messageCreate', async (message) => {
     blackjackGames.delete(message.author.id);
     message.channel.send(result);
       }
+    // ---- AI Chat with OpenRouter (Bot Mention) ----
+else if (!command && message.mentions.users.has(client.user.id)) {
+  const prompt = message.content.replace(new RegExp(`<@!?${client.user.id}>`, 'g'), '').trim();
+  if (!prompt) return message.reply('❓ What would you like to ask?');
+
+  try {
+    await message.channel.sendTyping();
+
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: "openai/gpt-3.5-turbo", // 🔧 You can swap this for another OpenRouter model
+        messages: [{ role: "user", content: prompt }]
+      })
+    });
+
+    const data = await response.json();
+    const reply = data.choices?.[0]?.message?.content || "⚠️ Sorry, I couldn’t generate a reply.";
+
+    if (reply.length > 2000) {
+      await message.reply(reply.slice(0, 1997) + '...');
+    } else {
+      await message.reply(reply);
+    }
+
+  } catch (err) {
+    console.error('❌ OpenRouter request failed:', err);
+    await message.reply('🚫 Error talking to the AI. Try again later.');
+  }
+}
 
 // ---- AI Chat with Google Gemini ----
 else if (command === 'ai') {
