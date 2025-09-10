@@ -360,7 +360,13 @@ else if (command === 'ai') {
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     const result = await model.generateContent(prompt);
 
-    const reply = result.response.text() || "⚠️ Sorry, I couldn’t generate a reply.";
+    // 🔎 Check if Gemini returned text
+    let reply = result.response?.text?.();
+    if (!reply || reply.trim().length === 0) {
+      console.warn("⚠️ Gemini refusal details:", JSON.stringify(result.response, null, 2));
+      reply = "⚠️ Gemini couldn’t answer that. Try rephrasing your question.";
+    }
+
     if (reply.length > 2000) {
       await message.reply(reply.slice(0, 1997) + '...');
     } else {
