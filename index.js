@@ -135,56 +135,57 @@ client.on('messageCreate', async (message) => {
   }
 
   // ---- Help Command ----
-  if (command === 'help') {
-    const helpText1 = `📖 **Bot Commands — Utility**\n\n` +
-      `📌 \`${PREFIX}prefix\` — Show the bot prefix\n` +
-      `🏓 \`${PREFIX}ping\` — Check bot response time\n` +
-      `📊 \`${PREFIX}stats\` — Server member stats\n` +
-      `⏱️ \`${PREFIX}uptime\` — Bot active time\n` +
-      `🤖 \`${PREFIX}botinfo\` — Info about the bot\n` +
-      `🔗 \`${PREFIX}invite\` — Get bot invite link\n\n` +
-      `📖 **Fun & Games**\n\n` +
-      `🪙 \`${PREFIX}flip\` — Flip a coin\n` +
-      `🎱 \`${PREFIX}8ball [question]\` — Magic 8-ball\n` +
-      `🎲 \`${PREFIX}dice\` — Roll a die\n` +
-      `🎯 \`${PREFIX}rate @user\` — Rate someone\n` +
-      `🌈 \`${PREFIX}howgay @user\` — Gay meter\n` +
-      `🕵️ \`${PREFIX}sus @user\` — Sus meter\n` +
-      `💬 \`${PREFIX}truth\` — Truth question\n` +
-      `😈 \`${PREFIX}dare\` — Dare\n` +
-      `🔥 \`${PREFIX}roast @user\` — Roast\n` +
-      `💖 \`${PREFIX}compliment @user\` — Compliment\n` +
-      `👻 \`${PREFIX}haunt\` / \`${PREFIX}unhaunt\` — Haunting\n` +
-      `🃏 \`${PREFIX}blackjack\`, \`${PREFIX}hit\`, \`${PREFIX}stand\` — Play Blackjack\n\n` +
-      `📖 **Moderation Commands**\n\n` +
-      `🔨 \`${PREFIX}kick @user [reason]\` — Kick a user\n` +
-      `🚫 \`${PREFIX}ban @user [reason]\` — Ban a user\n` +
-      `🤐 \`${PREFIX}mute @user [time]\` — Mute a user\n` +
-      `🔊 \`${PREFIX}unmute @user\` — Unmute a user\n` +
-      `⚠️ \`${PREFIX}warn @user [reason]\` — Warn a user\n` +
-      `📄 \`${PREFIX}warnings @user\` — Show warnings\n` +
-      `🧹 \`${PREFIX}clear [number]\` — Delete messages\n` +
-      `🔒 \`${PREFIX}lock\` — Lock channel\n` +
-      `🔓 \`${PREFIX}unlock\` — Unlock channel\n` +
-      `🐌 \`${PREFIX}slowmode [seconds]\` — Set slowmode\n` +
-      `🏷️ \`${PREFIX}role add @user <role>\` — Add role\n` +
-      `🏷️ \`${PREFIX}role remove @user <role>\` — Remove role\n` +
-      `❌ \`${PREFIX}unauthorized\` — Unauthorized response`;
+if (command === 'help') {
+  const helpText1 = `📖 **Bot Commands — Utility**\n\n` +
+    `📌 \`${PREFIX}prefix\` — Show the bot prefix\n` +
+    `🏓 \`${PREFIX}ping\` — Check bot response time\n` +
+    `📊 \`${PREFIX}stats\` — Server member stats\n` +
+    `⏱️ \`${PREFIX}uptime\` — Bot active time\n` +
+    `🤖 \`${PREFIX}botinfo\` — Info about the bot\n` +
+    `🔗 \`${PREFIX}invite\` — Get bot invite link\n\n` +
+    `📖 **Fun & Games**\n\n` +
+    `🪙 \`${PREFIX}flip\` — Flip a coin\n` +
+    `🎱 \`${PREFIX}8ball [question]\` — Magic 8-ball\n` +
+    `🎲 \`${PREFIX}dice\` — Roll a die\n` +
+    `🎯 \`${PREFIX}rate @user\` — Rate someone\n` +
+    `🌈 \`${PREFIX}howgay @user\` — Gay meter\n` +
+    `🕵️ \`${PREFIX}sus @user\` — Sus meter\n` +
+    `💬 \`${PREFIX}truth\` — Truth question\n` +
+    `😈 \`${PREFIX}dare\` — Dare\n` +
+    `🔥 \`${PREFIX}roast @user\` — Roast\n` +
+    `💖 \`${PREFIX}compliment @user\` — Compliment\n` +
+    `👻 \`${PREFIX}haunt\` / \`${PREFIX}unhaunt\` — Haunting\n` +
+    `🃏 \`${PREFIX}blackjack\`, \`${PREFIX}hit\`, \`${PREFIX}stand\` — Play Blackjack\n\n` +
+    `📖 **Moderation Commands**\n\n` +
+    `🔨 \`${PREFIX}kick @user [reason]\` — Kick a user\n` +
+    `🚫 \`${PREFIX}ban @user [reason]\` — Ban a user\n` +
+    `🤐 \`${PREFIX}mute @user [time]\` — Mute a user\n` +
+    `🔊 \`${PREFIX}unmute @user\` — Unmute a user\n` +
+    `⚠️ \`${PREFIX}warn @user [reason]\` — Warn a user\n` +
+    `📄 \`${PREFIX}warnings @user\` — Show warnings\n` +
+    `🧹 \`${PREFIX}clear [number]\` — Delete messages\n` +
+    `🔒 \`${PREFIX}lock\` — Lock channel\n` +
+    `🔓 \`${PREFIX}unlock\` — Unlock channel\n` +
+    `🐌 \`${PREFIX}slowmode [seconds]\` — Set slowmode\n` +
+    `🏷️ \`${PREFIX}role add @user <role>\` — Add role\n` +
+    `🏷️ \`${PREFIX}role remove @user <role>\` — Remove role\n` +
+    `❌ \`${PREFIX}unauthorized\` — Unauthorized response`;
 
-    await message.channel.send(helpText1);
+  await message.channel.send(helpText1);
 
-    const helpText2 = `📖 **Info & Tools**\n\n` +
-  `🧑‍💼 \`${PREFIX}userinfo\` — User info\n` +
-  `🖼️ \`${PREFIX}avatar @user\` — Avatar\n` +
-  `🏠 \`${PREFIX}serverinfo\` — Server info\n` +
-  `📢 \`${PREFIX}shout [msg]\` — Shout\n` +
-  `🤐 \`${PREFIX}spoiler [msg]\` — Spoiler\n` +
-  `📣 \`${PREFIX}say [msg]\` — Echo\n` +
-  `✉️ \`${PREFIX}send <channelID> <message>\` — Send to another server/channel\n\n` +
-  `★ **Google Gemini AI**: \`${PREFIX}<prompt>\` — Ask Gemini AI a prompt\n` +
-  `☆ **OpenRouter AI**: \`@bot <prompt>\` — Ask OpenRouter AI a prompt`;
+  const helpText2 = `📖 **Info & Tools**\n\n` +
+    `🧑‍💼 \`${PREFIX}userinfo\` — User info\n` +
+    `🖼️ \`${PREFIX}avatar @user\` — Avatar\n` +
+    `🏠 \`${PREFIX}serverinfo\` — Server info\n` +
+    `📢 \`${PREFIX}shout [msg]\` — Shout\n` +
+    `🤐 \`${PREFIX}spoiler [msg]\` — Spoiler\n` +
+    `📣 \`${PREFIX}say [msg]\` — Echo\n` +
+    `✉️ \`${PREFIX}send <channelID> <message>\` — Send to another server/channel\n\n` +
+    `★ **Google Gemini AI**: \`${PREFIX}<prompt>\` — Ask Gemini AI a prompt\n` +
+    `☆ **OpenRouter AI**: \`@bot <prompt>\` — Ask OpenRouter AI a prompt`;
 
-return message.channel.send(helpText2);
+  await message.channel.send(helpText2);
+}
 
   // ---- Utility Commands ----
   else if (command === 'ping') {
