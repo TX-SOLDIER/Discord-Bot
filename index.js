@@ -174,15 +174,17 @@ client.on('messageCreate', async (message) => {
     await message.channel.send(helpText1);
 
     const helpText2 = `📖 **Info & Tools**\n\n` +
-      `🧑‍💼 \`${PREFIX}userinfo\` — User info\n` +
-      `🖼️ \`${PREFIX}avatar @user\` — Avatar\n` +
-      `🏠 \`${PREFIX}serverinfo\` — Server info\n` +
-      `📢 \`${PREFIX}shout [msg]\` — Shout\n` +
-      `🤐 \`${PREFIX}spoiler [msg]\` — Spoiler\n` +
-      `📣 \`${PREFIX}say [msg]\` — Echo\n` +
-      `✉️ \`${PREFIX}send <channelID> <message>\` — Send to another server/channel`;
-    return message.channel.send(helpText2);
-  }
+  `🧑‍💼 \`${PREFIX}userinfo\` — User info\n` +
+  `🖼️ \`${PREFIX}avatar @user\` — Avatar\n` +
+  `🏠 \`${PREFIX}serverinfo\` — Server info\n` +
+  `📢 \`${PREFIX}shout [msg]\` — Shout\n` +
+  `🤐 \`${PREFIX}spoiler [msg]\` — Spoiler\n` +
+  `📣 \`${PREFIX}say [msg]\` — Echo\n` +
+  `✉️ \`${PREFIX}send <channelID> <message>\` — Send to another server/channel\n\n` +
+  `★ **Google Gemini AI**: \`${PREFIX}<prompt>\` — Ask Gemini AI a prompt\n` +
+  `☆ **OpenRouter AI**: \`@bot <prompt>\` — Ask OpenRouter AI a prompt`;
+
+return message.channel.send(helpText2);
 
   // ---- Utility Commands ----
   else if (command === 'ping') {
