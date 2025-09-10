@@ -37,7 +37,7 @@ const spookyMessages = [
 ];
 
 // ---- Truth Questions ----
-const truthQuestions = [
+const spicyTruths = [
   "What’s your most embarrassing moment?",
   "Who was your first crush?",
   "Have you ever lied to get out of trouble?",
