@@ -15,6 +15,7 @@ const client = new Client({
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildMembers,
   ],
 });
 
@@ -383,11 +384,64 @@ function startAllQotd() {
   });
 }
 
+// --- Welcome & Leave Messages Data ---
+const welcomeFile = './welcomeMessages.json';
+const leaveFile = './leaveMessages.json';
+let welcomeMessages = {};
+let leaveMessages = {};
+
+if (fs.existsSync(welcomeFile)) {
+  welcomeMessages = JSON.parse(fs.readFileSync(welcomeFile, 'utf8'));
+}
+
+if (fs.existsSync(leaveFile)) {
+  leaveMessages = JSON.parse(fs.readFileSync(leaveFile, 'utf8'));
+}
+
+function saveWelcomeMessages() {
+  fs.writeFileSync(welcomeFile, JSON.stringify(welcomeMessages, null, 2));
+}
+
+function saveLeaveMessages() {
+  fs.writeFileSync(leaveFile, JSON.stringify(leaveMessages, null, 2));
+}
+
+
 // ---- Ready ----
 client.once('ready', () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
   startAllQotd(); // Start all QOTD channels from the saved state
 });
+
+// --- Welcome & Leave Event Handlers ---
+client.on('guildMemberAdd', member => {
+  const welcomeData = welcomeMessages[member.guild.id];
+  if (welcomeData) {
+    const channel = member.guild.channels.cache.get(welcomeData.channelId);
+    if (channel) {
+      const message = welcomeData.message
+        .replace(/{user}/g, `<@${member.user.id}>`)
+        .replace(/{server}/g, member.guild.name)
+        .replace(/{membercount}/g, member.guild.memberCount);
+      channel.send(message);
+    }
+  }
+});
+
+client.on('guildMemberRemove', member => {
+  const leaveData = leaveMessages[member.guild.id];
+  if (leaveData) {
+    const channel = member.guild.channels.cache.get(leaveData.channelId);
+    if (channel) {
+      const message = leaveData.message
+        .replace(/{user}/g, member.user.tag)
+        .replace(/{server}/g, member.guild.name)
+        .replace(/{membercount}/g, member.guild.memberCount);
+      channel.send(message);
+    }
+  }
+});
+
 
 const PREFIX = '$';
 client.on('messageCreate', async (message) => {
@@ -414,7 +468,9 @@ if (command === 'help') {
     `📊 \`${PREFIX}stats\` — Server member stats\n` +
     `⏱️ \`${PREFIX}uptime\` — Bot active time\n` +
     `🤖 \`${PREFIX}botinfo\` — Info about the bot\n` +
-    `🔗 \`${PREFIX}invite\` — Get bot invite link\n\n` +
+    `🔗 \`${PREFIX}invite\` — Get bot invite link\n` +
+    `👋 \`${PREFIX}setwelcome\` / \`${PREFIX}clearwelcome\` — Set/clear welcome message\n` +
+    `🚪 \`${PREFIX}setleave\` / \`${PREFIX}clearleave\` — Set/clear leave message\n\n` +
     `📖 **Fun & Games**\n\n` +
     `🪙 \`${PREFIX}flip\` — Flip a coin\n` +
     `🎱 \`${PREFIX}8ball [question]\` — Magic 8-ball\n` +
@@ -852,6 +908,53 @@ Created: ${guild.createdAt.toDateString()}`);
       message.reply('❌ Usage: `$qotd on` or `$qotd off`.');
     }
   }
+
+  // --- Welcome & Leave Commands ---
+  else if (command === 'setwelcome') {
+    if (!checkPermission(PermissionsBitField.Flags.ManageGuild)) return;
+    const channel = message.mentions.channels.first() || message.channel;
+    const welcomeMessage = args.slice(1).join(' ');
+    if (!welcomeMessage) return message.reply('❌ Please provide a message. Example: `$setwelcome #general Welcome, {user}!`');
+
+    welcomeMessages[message.guild.id] = {
+      channelId: channel.id,
+      message: welcomeMessage
+    };
+    saveWelcomeMessages();
+    message.reply(`✅ Welcome message set for ${channel}. Use \`{user}\` to tag the user, \`{server}\` for the server name, and \`{membercount}\` for the member count.`);
+  }
+  else if (command === 'clearwelcome') {
+    if (!checkPermission(PermissionsBitField.Flags.ManageGuild)) return;
+    if (!welcomeMessages[message.guild.id]) {
+      return message.reply('❌ No welcome message is currently set for this server.');
+    }
+    delete welcomeMessages[message.guild.id];
+    saveWelcomeMessages();
+    message.reply('✅ Welcome message has been cleared for this server.');
+  }
+  else if (command === 'setleave') {
+    if (!checkPermission(PermissionsBitField.Flags.ManageGuild)) return;
+    const channel = message.mentions.channels.first() || message.channel;
+    const leaveMessage = args.slice(1).join(' ');
+    if (!leaveMessage) return message.reply('❌ Please provide a message. Example: `$setleave #general {user} has left the server.`');
+
+    leaveMessages[message.guild.id] = {
+      channelId: channel.id,
+      message: leaveMessage
+    };
+    saveLeaveMessages();
+    message.reply(`✅ Leave message set for ${channel}. Use \`{user}\` for the user's tag, \`{server}\` for the server name, and \`{membercount}\` for the member count.`);
+  }
+  else if (command === 'clearleave') {
+    if (!checkPermission(PermissionsBitField.Flags.ManageGuild)) return;
+    if (!leaveMessages[message.guild.id]) {
+      return message.reply('❌ No leave message is currently set for this server.');
+    }
+    delete leaveMessages[message.guild.id];
+    saveLeaveMessages();
+    message.reply('✅ Leave message has been cleared for this server.');
+  }
+
   // ---- Unknown command ----
   else {
     if (message.content.startsWith('$')) {
