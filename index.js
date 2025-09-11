@@ -342,57 +342,57 @@ const qotdQuestions = [
   "If you could travel anywhere, where would you go?",
 ];
 
-// ---- Persistent QOTD State ----
+// ---- Persistent QOTD State (Updated) ----
 const qotdFile = './qotd.json';
-let qotdState = { channelId: null, isRunning: false };
+let activeQotdChannels = new Set();
+const qotdIntervals = new Map(); // A Map to store the intervals
 
 if (fs.existsSync(qotdFile)) {
-  qotdState = JSON.parse(fs.readFileSync(qotdFile, 'utf8'));
+  const channelArray = JSON.parse(fs.readFileSync(qotdFile, 'utf8'));
+  activeQotdChannels = new Set(channelArray);
 }
 
 function saveQotdState() {
-  fs.writeFileSync(qotdFile, JSON.stringify(qotdState, null, 2));
+  fs.writeFileSync(qotdFile, JSON.stringify(Array.from(activeQotdChannels), null, 2));
 }
 
-// ---- QOTD Scheduling Logic ----
-function startQotd() {
-  if (!qotdState.isRunning || !qotdState.channelId) {
-    console.log("QOTD is not enabled or channel is not set.");
+// ---- QOTD Scheduling Logic (Updated) ----
+function startAllQotd() {
+  if (activeQotdChannels.size === 0) {
+    console.log("No QOTD channels to start.");
     return;
   }
 
-  const channel = client.channels.cache.get(qotdState.channelId);
-  if (!channel) {
-    console.error(`QOTD channel not found: ${qotdState.channelId}`);
-    qotdState.isRunning = false;
-    qotdState.channelId = null;
-    saveQotdState();
-    return;
-  }
+  activeQotdChannels.forEach(channelId => {
+    const channel = client.channels.cache.get(channelId);
+    if (!channel) {
+      console.error(`QOTD channel not found, removing: ${channelId}`);
+      activeQotdChannels.delete(channelId);
+      saveQotdState();
+      return;
+    }
 
-  const sendQuestion = () => {
-    const question = qotdQuestions[Math.floor(Math.random() * qotdQuestions.length)];
-    channel.send(`**❓ Question of the Day:** ${question}`);
-  };
+    const sendQuestion = () => {
+      const question = qotdQuestions[Math.floor(Math.random() * qotdQuestions.length)];
+      channel.send(`**❓ Question of the Day:** ${question}`);
+    };
 
-  // Run immediately, then schedule to run every 24 hours.
-  sendQuestion();
-  setInterval(sendQuestion, 24 * 60 * 60 * 1000);
+    sendQuestion(); // Send the first question immediately
+    const interval = setInterval(sendQuestion, 24 * 60 * 60 * 1000);
+    qotdIntervals.set(channelId, interval); // Store the interval
+  });
 }
-
 
 // ---- Ready ----
 client.once('ready', () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
-  // Start the QOTD scheduler if it was active
-  if (qotdState.isRunning) {
-    startQotd();
-  }
+  startAllQotd(); // Start all QOTD channels from the saved state
 });
+
 const PREFIX = '$';
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
-  if (!message.content.startsWith(PREFIX) && !message.mentions.users.has(client.user.id)) return; // ✅ Allow prefix OR mention
+  if (!message.content.startsWith(PREFIX) && !message.mentions.users.has(client.user.id)) return;
 
   const args = message.content.slice(PREFIX.length).trim().split(/ +/);
   const command = message.content.startsWith(PREFIX) ? args.shift().toLowerCase() : null;
@@ -474,7 +474,7 @@ if (command === 'help') {
   } else if (command === 'invite') {
     message.channel.send(`🔗 Invite me: https://discord.com/api/oauth2/authorize?client_id=${client.user.id}&permissions=8&scope=bot%20applications.commands`);
   } else if (command === 'prefix') {
-    message.channel.send(`📌 The current prefix is: \`${PREFIX}\``);
+    message.channel.send(`📌 The current prefix is: \`${PREFIX}\` `);
   }
 
   // ---- Fun & Games Commands ----
@@ -583,7 +583,8 @@ if (command === 'help') {
     else result += `🤝 It’s a tie!`;
     blackjackGames.delete(message.author.id);
     message.channel.send(result);
-      }
+  }
+
 // ---- AI Chat with OpenRouter (Bot Mention) ----
 else if (!command && message.mentions.users.has(client.user.id)) {
   const prompt = message.content.replace(new RegExp(`<@!?${client.user.id}>`, 'g'), '').trim();
@@ -599,14 +600,13 @@ else if (!command && message.mentions.users.has(client.user.id)) {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "openai/gpt-3.5-turbo", // 🔧 Fixed model for now
+        model: "openai/gpt-3.5-turbo",
         messages: [{ role: "user", content: prompt }]
       })
     });
 
     const data = await response.json();
 
-    // 🔎 Error handling
     if (data.error) {
       return message.reply(`🚫 OpenRouter Error: ${data.error.message}`);
     }
@@ -636,7 +636,6 @@ else if (command === 'ai') {
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     const result = await model.generateContent(prompt);
 
-    // 🔎 Check if Gemini returned text
     let reply = result.response?.text?.();
     if (!reply || reply.trim().length === 0) {
       console.warn("⚠️ Gemini refusal details:", JSON.stringify(result.response, null, 2));
@@ -812,28 +811,43 @@ Created: ${guild.createdAt.toDateString()}`);
     }
   }
 
-  // ---- QOTD Command ----
+  // ---- QOTD Command (Updated) ----
   else if (command === 'qotd') {
     if (!checkPermission(PermissionsBitField.Flags.ManageChannels)) return;
     const subcommand = args[0];
+    const channelId = message.channel.id;
+
     if (subcommand === 'on') {
-      if (qotdState.isRunning) {
-        return message.reply(`❓ QOTD is already active in <#${qotdState.channelId}>.`);
+      if (activeQotdChannels.has(channelId)) {
+        return message.reply('❓ QOTD is already active in this channel.');
       }
-      qotdState.channelId = message.channel.id;
-      qotdState.isRunning = true;
+      
+      activeQotdChannels.add(channelId);
       saveQotdState();
       message.reply('✅ Question of the Day has been enabled in this channel!');
-      startQotd();
+      
+      const channel = message.channel;
+      const sendQuestion = () => {
+        const question = qotdQuestions[Math.floor(Math.random() * qotdQuestions.length)];
+        channel.send(`**❓ Question of the Day:** ${question}`);
+      };
+      sendQuestion();
+      const interval = setInterval(sendQuestion, 24 * 60 * 60 * 1000);
+      qotdIntervals.set(channelId, interval);
+
     } else if (subcommand === 'off') {
-      if (!qotdState.isRunning) {
-        return message.reply('❌ QOTD is not currently active.');
+      if (!activeQotdChannels.has(channelId)) {
+        return message.reply('❌ QOTD is not currently active in this channel.');
       }
-      qotdState.channelId = null;
-      qotdState.isRunning = false;
+      
+      activeQotdChannels.delete(channelId);
       saveQotdState();
-      message.reply('✅ Question of the Day has been disabled.');
-      // The startQotd function will now exit gracefully.
+      message.reply('✅ Question of the Day has been disabled in this channel.');
+      
+      if (qotdIntervals.has(channelId)) {
+        clearInterval(qotdIntervals.get(channelId));
+        qotdIntervals.delete(channelId);
+      }
     } else {
       message.reply('❌ Usage: `$qotd on` or `$qotd off`.');
     }
