@@ -407,14 +407,32 @@ function saveLeaveMessages() {
 }
 
 
-// ---- Ready ----
-client.once('ready', () => {
-  console.log(`✅ Logged in as ${client.user.tag}`);
-  startAllQotd(); // Start all QOTD channels from the saved state
-});
+// ---- Log Channel Storage ----
+const logChannelsFile = './logChannels.json';
+const masterLogFile = './masterLog.json';
+let logChannels = {};
+let masterLog = { channelId: null, enabled: false };
+
+// Load existing log channels and master log channel.
+if (fs.existsSync(logChannelsFile)) {
+  logChannels = JSON.parse(fs.readFileSync(logChannelsFile, 'utf8'));
+}
+if (fs.existsSync(masterLogFile)) {
+  masterLog = JSON.parse(fs.readFileSync(masterLogFile, 'utf8'));
+}
+
+// Function to save the log channels.
+function saveLogChannels() {
+  fs.writeFileSync(logChannelsFile, JSON.stringify(logChannels, null, 2));
+}
+
+// Function to save the master log channel.
+function saveMasterLog() {
+  fs.writeFileSync(masterLogFile, JSON.stringify(masterLog, null, 2));
+}
 
 // --- Welcome & Leave Event Handlers ---
-client.on('guildMemberAdd', member => {
+client.on('guildMemberAdd', async member => {
   const welcomeData = welcomeMessages[member.guild.id];
   if (welcomeData) {
     const channel = member.guild.channels.cache.get(welcomeData.channelId);
@@ -426,9 +444,10 @@ client.on('guildMemberAdd', member => {
       channel.send(message);
     }
   }
+  await sendLog(member.guild.id, `\`[JOIN]\` **${member.user.tag}** (${member.user.id}) joined the server.`);
 });
 
-client.on('guildMemberRemove', member => {
+client.on('guildMemberRemove', async member => {
   const leaveData = leaveMessages[member.guild.id];
   if (leaveData) {
     const channel = member.guild.channels.cache.get(leaveData.channelId);
@@ -440,8 +459,71 @@ client.on('guildMemberRemove', member => {
       channel.send(message);
     }
   }
+  await sendLog(member.guild.id, `\`[LEAVE]\` **${member.user.tag}** (${member.user.id}) left the server.`);
 });
 
+
+// ---- Log Message Helper Function ----
+async function sendLog(guildId, messageContent) {
+  // Send to the local server log channel.
+  if (logChannels[guildId]?.enabled && logChannels[guildId]?.channelId) {
+    const channel = client.channels.cache.get(logChannels[guildId].channelId);
+    if (channel) {
+      await channel.send(messageContent).catch(console.error);
+    }
+  }
+
+  // Send to the master log channel.
+  if (masterLog.enabled && masterLog.channelId) {
+    const channel = client.channels.cache.get(masterLog.channelId);
+    if (channel) {
+      const serverName = client.guilds.cache.get(guildId)?.name || 'Unknown Server';
+      await channel.send(`[${serverName}] ${messageContent}`).catch(console.error);
+    }
+  }
+}
+
+// ---- Ready ----
+client.once('ready', () => {
+  console.log(`✅ Logged in as ${client.user.tag}`);
+  startAllQotd(); // Start all QOTD channels from the saved state
+});
+
+// ---- Log message updates and deletions ----
+client.on('messageUpdate', async (oldMessage, newMessage) => {
+  if (oldMessage.author.bot) return;
+  if (oldMessage.content === newMessage.content) return;
+
+  const logMessage = `\`[EDITED]\` **${oldMessage.author.tag}** edited their message in <#${oldMessage.channel.id}>.
+**Before:** \`\`\`${oldMessage.content}\`\`\`
+**After:** \`\`\`${newMessage.content}\`\`\``;
+
+  await sendLog(oldMessage.guild.id, logMessage);
+});
+
+client.on('messageDelete', async message => {
+  if (message.author?.bot) return;
+
+  const logMessage = `\`[DELETED]\` A message by **${message.author?.tag || 'Unknown User'}** was deleted in <#${message.channel.id}>.
+**Content:** \`\`\`${message.content || 'N/A'}\`\`\``;
+
+  await sendLog(message.guild.id, logMessage);
+});
+
+client.on('channelUpdate', async (oldChannel, newChannel) => {
+  let changes = [];
+  if (oldChannel.name !== newChannel.name) {
+    changes.push(`Name: \`\`${oldChannel.name}\`\` -> \`\`${newChannel.name}\`\``);
+  }
+  if (oldChannel.topic !== newChannel.topic) {
+    changes.push(`Topic: \`\`${oldChannel.topic || 'N/A'}\`\` -> \`\`${newChannel.topic || 'N/A'}\`\``);
+  }
+  if (changes.length > 0) {
+    const logMessage = `\`[CHANNEL UPDATE]\` Channel **#${newChannel.name}** was updated.
+${changes.join('\n')}`;
+    await sendLog(newChannel.guild.id, logMessage);
+  }
+});
 
 const PREFIX = '$';
 client.on('messageCreate', async (message) => {
@@ -450,6 +532,11 @@ client.on('messageCreate', async (message) => {
 
   const args = message.content.slice(PREFIX.length).trim().split(/ +/);
   const command = message.content.startsWith(PREFIX) ? args.shift().toLowerCase() : null;
+
+  // Log commands
+  if (message.content.startsWith(PREFIX)) {
+    await sendLog(message.guild.id, `\`[COMMAND]\` **${message.author.tag}** used command \`\`${message.content}\`\``);
+  }
 
   // ---- Moderation Permissions Helper ----
   function checkPermission(permission) {
@@ -461,60 +548,119 @@ client.on('messageCreate', async (message) => {
   }
 
   // ---- Help Command ----
-if (command === 'help') {
-  const helpText1 = `📖 **Bot Commands — Utility**\n\n` +
-    `📌 \`${PREFIX}prefix\` — Show the bot prefix\n` +
-    `🏓 \`${PREFIX}ping\` — Check bot response time\n` +
-    `📊 \`${PREFIX}stats\` — Server member stats\n` +
-    `⏱️ \`${PREFIX}uptime\` — Bot active time\n` +
-    `🤖 \`${PREFIX}botinfo\` — Info about the bot\n` +
-    `🔗 \`${PREFIX}invite\` — Get bot invite link\n` +
-    `👋 \`${PREFIX}setwelcome\` / \`${PREFIX}clearwelcome\` — Set/clear welcome message\n` +
-    `🚪 \`${PREFIX}setleave\` / \`${PREFIX}clearleave\` — Set/clear leave message\n\n` +
-    `📖 **Fun & Games**\n\n` +
-    `🪙 \`${PREFIX}flip\` — Flip a coin\n` +
-    `🎱 \`${PREFIX}8ball [question]\` — Magic 8-ball\n` +
-    `🎲 \`${PREFIX}dice\` — Roll a die\n` +
-    `🎯 \`${PREFIX}rate @user\` — Rate someone\n` +
-    `🌈 \`${PREFIX}howgay @user\` — Gay meter\n` +
-    `🕵️ \`${PREFIX}sus @user\` — Sus meter\n` +
-    `💬 \`${PREFIX}truth\` — Truth question\n` +
-    `😈 \`${PREFIX}dare\` — Dare\n` +
-    `🔥 \`${PREFIX}roast @user\` — Roast\n` +
-    `💖 \`${PREFIX}compliment @user\` — Compliment\n` +
-    `👻 \`${PREFIX}haunt\` / \`${PREFIX}unhaunt\` — Haunting\n` +
-    `🃏 \`${PREFIX}blackjack\`, \`${PREFIX}hit\`, \`${PREFIX}stand\` — Play Blackjack\n` +
-    `❓ \`${PREFIX}qotd on\` / \`${PREFIX}qotd off\` — Manage Question of the Day\n\n` +
-    `📖 **Moderation Commands**\n\n` +
-    `🔨 \`${PREFIX}kick @user [reason]\` — Kick a user\n` +
-    `🚫 \`${PREFIX}ban @user [reason]\` — Ban a user\n` +
-    `🤐 \`${PREFIX}mute @user [time]\` — Mute a user\n` +
-    `🔊 \`${PREFIX}unmute @user\` — Unmute a user\n` +
-    `⚠️ \`${PREFIX}warn @user [reason]\` — Warn a user\n` +
-    `📄 \`${PREFIX}warnings @user\` — Show warnings\n` +
-    `🧹 \`${PREFIX}clear [number]\` — Delete messages\n` +
-    `🔒 \`${PREFIX}lock\` — Lock channel\n` +
-    `🔓 \`${PREFIX}unlock\` — Unlock channel\n` +
-    `🐌 \`${PREFIX}slowmode [seconds]\` — Set slowmode\n` +
-    `🏷️ \`${PREFIX}role add @user <role>\` — Add role\n` +
-    `🏷️ \`${PREFIX}role remove @user <role>\` — Remove role\n` +
-    `❌ \`${PREFIX}unauthorized\` — Unauthorized response`;
+  if (command === 'help') {
+    const helpText1 = `📖 **Bot Commands — Utility**\n\n` +
+      `📌 \`${PREFIX}prefix\` — Show the bot prefix\n` +
+      `🏓 \`${PREFIX}ping\` — Check bot response time\n` +
+      `📊 \`${PREFIX}stats\` — Server member stats\n` +
+      `⏱️ \`${PREFIX}uptime\` — Bot active time\n` +
+      `🤖 \`${PREFIX}botinfo\` — Info about the bot\n` +
+      `🔗 \`${PREFIX}invite\` — Get bot invite link\n` +
+      `👋 \`${PREFIX}setwelcome\` / \`${PREFIX}clearwelcome\` — Set/clear welcome message\n` +
+      `🚪 \`${PREFIX}setleave\` / \`${PREFIX}clearleave\` — Set/clear leave message\n\n` +
+      `📖 **Fun & Games**\n\n` +
+      `🪙 \`${PREFIX}flip\` — Flip a coin\n` +
+      `🎱 \`${PREFIX}8ball [question]\` — Magic 8-ball\n` +
+      `🎲 \`${PREFIX}dice\` — Roll a die\n` +
+      `🎯 \`${PREFIX}rate @user\` — Rate someone\n` +
+      `🌈 \`${PREFIX}howgay @user\` — Gay meter\n` +
+      `🕵️ \`${PREFIX}sus @user\` — Sus meter\n` +
+      `💬 \`${PREFIX}truth\` — Truth question\n` +
+      `😈 \`${PREFIX}dare\` — Dare\n` +
+      `🔥 \`${PREFIX}roast @user\` — Roast\n` +
+      `💖 \`${PREFIX}compliment @user\` — Compliment\n` +
+      `👻 \`${PREFIX}haunt\` / \`${PREFIX}unhaunt\` — Haunting\n` +
+      `🃏 \`${PREFIX}blackjack\`, \`${PREFIX}hit\`, \`${PREFIX}stand\` — Play Blackjack\n` +
+      `❓ \`${PREFIX}qotd on\` / \`${PREFIX}qotd off\` — Manage Question of the Day\n\n` +
+      `📖 **Moderation Commands**\n\n` +
+      `🔨 \`${PREFIX}kick @user [reason]\` — Kick a user\n` +
+      `🚫 \`${PREFIX}ban @user [reason]\` — Ban a user\n` +
+      `🤐 \`${PREFIX}mute @user [time]\` — Mute a user\n` +
+      `🔊 \`${PREFIX}unmute @user\` — Unmute a user\n` +
+      `⚠️ \`${PREFIX}warn @user [reason]\` — Warn a user\n` +
+      `📄 \`${PREFIX}warnings @user\` — Show warnings\n` +
+      `🧹 \`${PREFIX}clear [number]\` — Delete messages\n` +
+      `🔒 \`${PREFIX}lock\` — Lock channel\n` +
+      `🔓 \`${PREFIX}unlock\` — Unlock channel\n` +
+      `🐌 \`${PREFIX}slowmode [seconds]\` — Set slowmode\n` +
+      `🏷️ \`${PREFIX}role add @user <role>\` — Add role\n` +
+      `🏷️ \`${PREFIX}role remove @user <role>\` — Remove role\n` +
+      `❌ \`${PREFIX}unauthorized\` — Unauthorized response`;
 
-  await message.channel.send(helpText1);
+    await message.channel.send(helpText1);
 
-  const helpText2 = `📖 **Info & Tools**\n\n` +
-    `🧑‍💼 \`${PREFIX}userinfo\` — User info\n` +
-    `🖼️ \`${PREFIX}avatar @user\` — Avatar\n` +
-    `🏠 \`${PREFIX}serverinfo\` — Server info\n` +
-    `📢 \`${PREFIX}shout [msg]\` — Shout\n` +
-    `🤐 \`${PREFIX}spoiler [msg]\` — Spoiler\n` +
-    `📣 \`${PREFIX}say [msg]\` — Echo\n` +
-    `✉️ \`${PREFIX}send <channelID> <message>\` — Send to another server/channel\n\n` +
-    `★ **Google Gemini AI**: \`${PREFIX}<prompt>\` — Ask Gemini AI a prompt\n` +
-    `☆ **OpenRouter AI**: \`@bot <prompt>\` — Ask OpenRouter AI a prompt`;
+    const helpText2 = `📖 **Info & Tools**\n\n` +
+      `🧑‍💼 \`${PREFIX}userinfo\` — User info\n` +
+      `🖼️ \`${PREFIX}avatar @user\` — Avatar\n` +
+      `🏠 \`${PREFIX}serverinfo\` — Server info\n` +
+      `📢 \`${PREFIX}shout [msg]\` — Shout\n` +
+      `🤐 \`${PREFIX}spoiler [msg]\` — Spoiler\n` +
+      `📣 \`${PREFIX}say [msg]\` — Echo\n` +
+      `✉️ \`${PREFIX}send <channelID> <message>\` — Send to another server/channel\n\n` +
+      `★ **Google Gemini AI**: \`${PREFIX}<prompt>\` — Ask Gemini AI a prompt\n` +
+      `☆ **OpenRouter AI**: \`@bot <prompt>\` — Ask OpenRouter AI a prompt`;
 
-  await message.channel.send(helpText2);
-}
+    await message.channel.send(helpText2);
+  }
+
+  // ---- Log Mode Commands ----
+  else if (command === 'logmode') {
+    if (!checkPermission(PermissionsBitField.Flags.ManageGuild)) return;
+    const subcommand = args[0];
+    const channel = message.mentions.channels.first() || message.channel;
+
+    if (subcommand === 'on') {
+      logChannels[message.guild.id] = { channelId: channel.id, enabled: true };
+      saveLogChannels();
+      message.reply(`✅ Log mode has been **enabled** in ${channel}.`);
+    } else if (subcommand === 'off') {
+      if (!logChannels[message.guild.id]) {
+        return message.reply('❌ Log mode is not enabled in this server.');
+      }
+      logChannels[message.guild.id].enabled = false;
+      saveLogChannels();
+      message.reply('✅ Log mode has been **disabled** for this server.');
+    } else if (subcommand === 'setmaster') {
+      if (message.author.id !== OWNER_ID) {
+        return message.reply('❌ Only the bot owner can set the master log channel.');
+      }
+      const masterChannelId = args[1];
+      if (!masterChannelId) {
+        return message.reply('❌ Please provide the master log channel ID.');
+      }
+
+      const masterChannel = client.channels.cache.get(masterChannelId);
+      if (!masterChannel || !masterChannel.isTextBased()) {
+        return message.reply('❌ Invalid channel ID or I cannot access it.');
+      }
+
+      masterLog.channelId = masterChannelId;
+      saveMasterLog();
+      message.reply(`✅ Master log channel has been set to ${masterChannel}.`);
+    } else if (subcommand === 'masteron') {
+      if (message.author.id !== OWNER_ID) {
+        return message.reply('❌ Only the bot owner can manage the master log.');
+      }
+      if (!masterLog.channelId) {
+        return message.reply('❌ Master log channel is not set. Use `$logmode setmaster <channelID>`.');
+      }
+      masterLog.enabled = true;
+      saveMasterLog();
+      message.reply('✅ Master log has been **enabled**.');
+    } else if (subcommand === 'masteroff') {
+      if (message.author.id !== OWNER_ID) {
+        return message.reply('❌ Only the bot owner can manage the master log.');
+      }
+      if (!masterLog.channelId) {
+        return message.reply('❌ Master log channel is not set.');
+      }
+      masterLog.enabled = false;
+      saveMasterLog();
+      message.reply('✅ Master log has been **disabled**.');
+    } else {
+      message.reply('❌ Usage: `$logmode on [#channel]` or `$logmode off` or `$logmode setmaster <channelID>` or `$logmode masteron` or `$logmode masteroff`.');
+    }
+  }
 
   // ---- Utility Commands ----
   else if (command === 'ping') {
@@ -641,74 +787,74 @@ if (command === 'help') {
     message.channel.send(result);
   }
 
-// ---- AI Chat with OpenRouter (Bot Mention) ----
-else if (!command && message.mentions.users.has(client.user.id)) {
-  const prompt = message.content.replace(new RegExp(`<@!?${client.user.id}>`, 'g'), '').trim();
-  if (!prompt) return message.reply('❓ What would you like to ask?');
+  // ---- AI Chat with OpenRouter (Bot Mention) ----
+  else if (!command && message.mentions.users.has(client.user.id)) {
+    const prompt = message.content.replace(new RegExp(`<@!?${client.user.id}>`, 'g'), '').trim();
+    if (!prompt) return message.reply('❓ What would you like to ask?');
 
-  try {
-    await message.channel.sendTyping();
+    try {
+      await message.channel.sendTyping();
 
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: "openai/gpt-3.5-turbo",
-        messages: [{ role: "user", content: prompt }]
-      })
-    });
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: "openai/gpt-3.5-turbo",
+          messages: [{ role: "user", content: prompt }]
+        })
+      });
 
-    const data = await response.json();
+      const data = await response.json();
 
-    if (data.error) {
-      return message.reply(`🚫 OpenRouter Error: ${data.error.message}`);
+      if (data.error) {
+        return message.reply(`🚫 OpenRouter Error: ${data.error.message}`);
+      }
+
+      const reply = data.choices?.[0]?.message?.content || "⚠️ Sorry, I couldn’t generate a reply.";
+
+      if (reply.length > 2000) {
+        await message.reply(reply.slice(0, 1997) + '...');
+      } else {
+        await message.reply(reply);
+      }
+
+    } catch (err) {
+      console.error('❌ OpenRouter request failed:', err);
+      await message.reply('🚫 Error talking to the AI. Try again later.');
     }
-
-    const reply = data.choices?.[0]?.message?.content || "⚠️ Sorry, I couldn’t generate a reply.";
-
-    if (reply.length > 2000) {
-      await message.reply(reply.slice(0, 1997) + '...');
-    } else {
-      await message.reply(reply);
-    }
-
-  } catch (err) {
-    console.error('❌ OpenRouter request failed:', err);
-    await message.reply('🚫 Error talking to the AI. Try again later.');
   }
-}
 
-// ---- AI Chat with Google Gemini ----
-else if (command === 'ai') {
-  const prompt = args.join(' ');
-  if (!prompt) return message.reply('❓ Please provide a prompt. Example: `$ai tell me a story`');
+  // ---- AI Chat with Google Gemini ----
+  else if (command === 'ai') {
+    const prompt = args.join(' ');
+    if (!prompt) return message.reply('❓ Please provide a prompt. Example: `$ai tell me a story`');
 
-  try {
-    await message.channel.sendTyping();
+    try {
+      await message.channel.sendTyping();
 
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-    const result = await model.generateContent(prompt);
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      const result = await model.generateContent(prompt);
 
-    let reply = result.response?.text?.();
-    if (!reply || reply.trim().length === 0) {
-      console.warn("⚠️ Gemini refusal details:", JSON.stringify(result.response, null, 2));
-      reply = "⚠️ Gemini couldn’t answer that. Try rephrasing your question.";
+      let reply = result.response?.text?.();
+      if (!reply || reply.trim().length === 0) {
+        console.warn("⚠️ Gemini refusal details:", JSON.stringify(result.response, null, 2));
+        reply = "⚠️ Gemini couldn’t answer that. Try rephrasing your question.";
+      }
+
+      if (reply.length > 2000) {
+        await message.reply(reply.slice(0, 1997) + '...');
+      } else {
+        await message.reply(reply);
+      }
+
+    } catch (err) {
+      console.error('❌ Gemini AI request failed:', err);
+      await message.reply('🚫 Error talking to the AI. Try again later.');
     }
-
-    if (reply.length > 2000) {
-      await message.reply(reply.slice(0, 1997) + '...');
-    } else {
-      await message.reply(reply);
-    }
-
-  } catch (err) {
-    console.error('❌ Gemini AI request failed:', err);
-    await message.reply('🚫 Error talking to the AI. Try again later.');
   }
-}
 
   // ---- Moderation Commands ----
   else if (command === 'kick') {
@@ -877,11 +1023,11 @@ Created: ${guild.createdAt.toDateString()}`);
       if (activeQotdChannels.has(channelId)) {
         return message.reply('❓ QOTD is already active in this channel.');
       }
-      
+
       activeQotdChannels.add(channelId);
       saveQotdState();
       message.reply('✅ Question of the Day has been enabled in this channel!');
-      
+
       const channel = message.channel;
       const sendQuestion = () => {
         const question = qotdQuestions[Math.floor(Math.random() * qotdQuestions.length)];
@@ -895,11 +1041,11 @@ Created: ${guild.createdAt.toDateString()}`);
       if (!activeQotdChannels.has(channelId)) {
         return message.reply('❌ QOTD is not currently active in this channel.');
       }
-      
+
       activeQotdChannels.delete(channelId);
       saveQotdState();
       message.reply('✅ Question of the Day has been disabled in this channel.');
-      
+
       if (qotdIntervals.has(channelId)) {
         clearInterval(qotdIntervals.get(channelId));
         qotdIntervals.delete(channelId);
