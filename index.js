@@ -1,4 +1,4 @@
-require('dotenv').config();
+Require('dotenv').config();
 const { Client, GatewayIntentBits, PermissionsBitField } = require('discord.js');
 const fetch = require('node-fetch');
 const fs = require('fs');
@@ -326,9 +326,68 @@ function formatHand(hand) {
   return hand.map(c => `${c.value}${c.suit}`).join(' ');
 }
 
+// ---- Question of the Day ----
+const qotdQuestions = [
+  "What's the best movie you've seen recently?",
+  "If you could have any superpower, what would it be?",
+  "What's your favorite food and why?",
+  "What's a hobby you've always wanted to try?",
+  "What's the most beautiful place you've ever visited?",
+  "What's a book you think everyone should read?",
+  "What's your go-to comfort meal?",
+  "What's a skill you'd like to learn?",
+  "What's the funniest thing that's happened to you this week?",
+  "What's your favorite season and why?",
+  "What's a small thing that makes you happy?",
+  "If you could travel anywhere, where would you go?",
+];
+
+// ---- Persistent QOTD State ----
+const qotdFile = './qotd.json';
+let qotdState = { channelId: null, isRunning: false };
+
+if (fs.existsSync(qotdFile)) {
+  qotdState = JSON.parse(fs.readFileSync(qotdFile, 'utf8'));
+}
+
+function saveQotdState() {
+  fs.writeFileSync(qotdFile, JSON.stringify(qotdState, null, 2));
+}
+
+// ---- QOTD Scheduling Logic ----
+function startQotd() {
+  if (!qotdState.isRunning || !qotdState.channelId) {
+    console.log("QOTD is not enabled or channel is not set.");
+    return;
+  }
+
+  const channel = client.channels.cache.get(qotdState.channelId);
+  if (!channel) {
+    console.error(`QOTD channel not found: ${qotdState.channelId}`);
+    qotdState.isRunning = false;
+    qotdState.channelId = null;
+    saveQotdState();
+    return;
+  }
+
+  const sendQuestion = () => {
+    const question = qotdQuestions[Math.floor(Math.random() * qotdQuestions.length)];
+    channel.send(`**❓ Question of the Day:** ${question}`);
+  };
+
+  // Run immediately, then schedule to run every 24 hours.
+  sendQuestion();
+  setInterval(sendQuestion, 24 * 60 * 60 * 1000);
+}
+
+
 // ---- Ready ----
 client.once('ready', () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
+  // Start the QOTD scheduler if it was active
+  if (qotdState.isRunning) {
+    startQotd();
+  }
 });
 const PREFIX = '$';
 client.on('messageCreate', async (message) => {
@@ -368,7 +427,8 @@ if (command === 'help') {
     `🔥 \`${PREFIX}roast @user\` — Roast\n` +
     `💖 \`${PREFIX}compliment @user\` — Compliment\n` +
     `👻 \`${PREFIX}haunt\` / \`${PREFIX}unhaunt\` — Haunting\n` +
-    `🃏 \`${PREFIX}blackjack\`, \`${PREFIX}hit\`, \`${PREFIX}stand\` — Play Blackjack\n\n` +
+    `🃏 \`${PREFIX}blackjack\`, \`${PREFIX}hit\`, \`${PREFIX}stand\` — Play Blackjack\n` +
+    `❓ \`${PREFIX}qotd on\` / \`${PREFIX}qotd off\` — Manage Question of the Day\n\n` +
     `📖 **Moderation Commands**\n\n` +
     `🔨 \`${PREFIX}kick @user [reason]\` — Kick a user\n` +
     `🚫 \`${PREFIX}ban @user [reason]\` — Ban a user\n` +
@@ -481,7 +541,7 @@ if (command === 'help') {
 
   // ---- Blackjack ----
   else if (command === 'blackjack') {
-    if (blackjackGames.has(message.author.id)) return message.reply('⚠️ You already have a game! Use `$hit` or `$stand`.');
+    if (blackjackGames.has(message.author.id)) return message.reply('⚠️ You already have a game! Use `$hit` or `$stand`');
     const playerHand = [drawCard(), drawCard()];
     const dealerHand = [drawCard(), drawCard()];
     blackjackGames.set(message.author.id, { playerHand, dealerHand });
@@ -493,7 +553,7 @@ if (command === 'help') {
     message.channel.send(msg);
   } else if (command === 'hit') {
     const game = blackjackGames.get(message.author.id);
-    if (!game) return message.reply('⚠️ No active game. Start one with `$blackjack`.');
+    if (!game) return message.reply('⚠️ No active game. Start one with `$blackjack`');
     game.playerHand.push(drawCard());
     const playerTotal = handValue(game.playerHand);
     let msg = `**Your hand:** ${formatHand(game.playerHand)} (Total: ${playerTotal})`;
@@ -506,7 +566,7 @@ if (command === 'help') {
     message.channel.send(msg);
   } else if (command === 'stand') {
     const game = blackjackGames.get(message.author.id);
-    if (!game) return message.reply('⚠️ No active game. Start one with `$blackjack`.');
+    if (!game) return message.reply('⚠️ No active game. Start one with `$blackjack`');
     const dealerHand = game.dealerHand;
     let dealerTotal = handValue(dealerHand);
     while (dealerTotal < 17) {
@@ -752,6 +812,32 @@ Created: ${guild.createdAt.toDateString()}`);
     }
   }
 
+  // ---- QOTD Command ----
+  else if (command === 'qotd') {
+    if (!checkPermission(PermissionsBitField.Flags.ManageChannels)) return;
+    const subcommand = args[0];
+    if (subcommand === 'on') {
+      if (qotdState.isRunning) {
+        return message.reply(`❓ QOTD is already active in <#${qotdState.channelId}>.`);
+      }
+      qotdState.channelId = message.channel.id;
+      qotdState.isRunning = true;
+      saveQotdState();
+      message.reply('✅ Question of the Day has been enabled in this channel!');
+      startQotd();
+    } else if (subcommand === 'off') {
+      if (!qotdState.isRunning) {
+        return message.reply('❌ QOTD is not currently active.');
+      }
+      qotdState.channelId = null;
+      qotdState.isRunning = false;
+      saveQotdState();
+      message.reply('✅ Question of the Day has been disabled.');
+      // The startQotd function will now exit gracefully.
+    } else {
+      message.reply('❌ Usage: `$qotd on` or `$qotd off`.');
+    }
+  }
   // ---- Unknown command ----
   else {
     if (message.content.startsWith('$')) {
@@ -762,3 +848,4 @@ Created: ${guild.createdAt.toDateString()}`);
 }); // ---- End of messageCreate ----
 
 client.login(process.env.BOT_TOKEN);
+
