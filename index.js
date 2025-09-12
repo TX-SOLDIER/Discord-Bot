@@ -817,7 +817,7 @@ End Transmission.`);
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          model: "google/gemma-7b-it", // <-- Model changed to gemma-7b-it
+          model: "deepseek/deepseek-chat-v3.1:free", // <-- Updated AI Model
           messages: [{ role: "user", content: prompt }]
         })
       });
@@ -1186,4 +1186,3 @@ Created: ${guild.createdAt.toDateString()}`);
 }); // ---- End of messageCreate ----
 
 client.login(process.env.BOT_TOKEN);
-
