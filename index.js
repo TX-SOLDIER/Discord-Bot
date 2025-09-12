@@ -803,6 +803,9 @@ End Transmission.`);
   else if (!command && message.mentions.users.has(client.user.id)) {
     const prompt = message.content.replace(new RegExp(`<@!?${client.user.id}>`, 'g'), '').trim();
     if (!prompt) return message.reply('❓ What would you like to ask?');
+    if (prompt.length > 300) { // Added character limit
+      return message.reply('❌ Your question is too long. Please keep it under 300 characters.');
+    }
 
     try {
       await message.channel.sendTyping();
@@ -814,7 +817,7 @@ End Transmission.`);
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          model: "openai/gpt-3.5-turbo",
+          model: "google/gemma-7b-it", // <-- Model changed to gemma-7b-it
           messages: [{ role: "user", content: prompt }]
         })
       });
