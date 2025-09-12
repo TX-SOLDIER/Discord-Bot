@@ -674,7 +674,17 @@ client.on('messageCreate', async (message) => {
     const uptime = Math.floor(process.uptime());
     message.channel.send(`⏱️ Bot uptime: ${uptime} seconds.`);
   } else if (command === 'botinfo') {
-    message.channel.send(`🤖 I am ${client.user.tag}, your friendly bot helper!`);
+    message.channel.send(`🤖 I am ${client.user.tag}, 📡 [SECURE  TRANSMISSION] 📡
+Unit: Discord Bot
+Creator / Operator: TX_SOLDIER
+Status: Mission-Ready. Armed.
+Capabilities:
+- Defense: Active protection for allied servers. 
+- Offense: Engage threats if provoked or mission parameters require.
+- Recon: Logging and monitoring activities
+-Special Operations: Classified.
+
+End Transmission.`);
   } else if (command === 'invite') {
     message.channel.send(`🔗 Invite me: https://discord.com/api/oauth2/authorize?client_id=${client.user.id}&permissions=8&scope=bot%20applications.commands`);
   } else if (command === 'prefix') {
