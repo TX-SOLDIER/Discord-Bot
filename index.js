@@ -1,4 +1,4 @@
-require('dotenv').config();
+Require('dotenv').config();
 const { Client, GatewayIntentBits, PermissionsBitField } = require('discord.js');
 const fetch = require('node-fetch');
 const fs = require('fs');
@@ -585,7 +585,9 @@ client.on('messageCreate', async (message) => {
       `🐌 \`${PREFIX}slowmode [seconds]\` — Set slowmode\n` +
       `🏷️ \`${PREFIX}role add @user <role>\` — Add role\n` +
       `🏷️ \`${PREFIX}role remove @user <role>\` — Remove role\n` +
-      `❌ \`${PREFIX}unauthorized\` — Unauthorized response`;
+      `❌ \`${PREFIX}unauthorized\` — Unauthorized response\n` +
+      `💥 \`${PREFIX}nuke delete [count]\` — Delete bulk channels\n` +
+      `📝 \`${PREFIX}nuke rename <name> [count]\` — Rename bulk channels`;
 
     await message.channel.send(helpText1);
 
@@ -892,6 +894,66 @@ client.on('messageCreate', async (message) => {
     target.timeout(null, 'Unmuted by bot')
       .then(() => message.reply(`✅ Unmuted ${target.user.tag}.`))
       .catch(() => message.reply('❌ Cannot unmute this user.'));
+  }
+
+  // ---- Nuke Command ----
+  else if (command === 'nuke') {
+    if (!checkPermission(PermissionsBitField.Flags.ManageChannels)) return;
+
+    const subcommand = args.shift()?.toLowerCase();
+    const count = parseInt(args[0]) || 1;
+
+    if (subcommand === 'delete') {
+      if (count < 1 || count > 50) {
+        return message.reply('❌ Please specify a number between 1 and 50 to delete.');
+      }
+
+      const channelsToDelete = message.guild.channels.cache
+        .filter(channel => channel.type === 0 && channel.deletable) // 0 is GuildText
+        .first(count);
+
+      if (channelsToDelete.length === 0) {
+        return message.reply('❌ No text channels found to delete.');
+      }
+
+      try {
+        for (const channel of channelsToDelete) {
+          await channel.delete('Nuke command executed');
+        }
+        message.channel.send(`✅ Successfully deleted ${channelsToDelete.length} channels.`);
+      } catch (err) {
+        console.error('❌ Failed to delete channels:', err);
+        message.reply('❌ An error occurred while trying to delete channels.');
+      }
+    } else if (subcommand === 'rename') {
+      const newName = args.join('-');
+      if (!newName) {
+        return message.reply('❌ Please provide a new name. Usage: `$nuke rename <new-name> [count]`');
+      }
+      if (count < 1 || count > 50) {
+        return message.reply('❌ Please specify a number between 1 and 50 to rename.');
+      }
+
+      const channelsToRename = message.guild.channels.cache
+        .filter(channel => channel.type === 0 && channel.manageable) // 0 is GuildText
+        .first(count);
+
+      if (channelsToRename.length === 0) {
+        return message.reply('❌ No text channels found to rename.');
+      }
+
+      try {
+        for (const channel of channelsToRename) {
+          await channel.setName(newName, 'Nuke command executed');
+        }
+        message.channel.send(`✅ Successfully renamed ${channelsToRename.length} channels to \`${newName}\`.`);
+      } catch (err) {
+        console.error('❌ Failed to rename channels:', err);
+        message.reply('❌ An error occurred while trying to rename channels.');
+      }
+    } else {
+      message.reply('❌ Usage: `$nuke delete [count]` or `$nuke rename <new-name> [count]`');
+    }
   }
 
   // ---- Info & Tools ----
