@@ -329,8 +329,6 @@ function formatHand(hand) {
 
 // ---- Question of the Day ----
 const qotdQuestions = [
-// ---- Question of the Day ----
-const qotdQuestions = [
   // 🌟 Original Starters
   "What's the best movie you've seen recently?",
   "If you could have any superpower, what would it be?",
