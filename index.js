@@ -559,7 +559,7 @@ function startAllQotd() {
 
     const sendQuestion = () => {
       const question = qotdQuestions[Math.floor(Math.random() * qotdQuestions.length)];
-      channel.send(`**❓ Question of the Day:** ${question}`);
+      channel.send(`@everyone **❓ Question of the Day:** ${question}`);
     };
 
     sendQuestion(); // Send the first question immediately
