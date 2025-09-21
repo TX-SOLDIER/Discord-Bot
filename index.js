@@ -685,7 +685,8 @@ function saveLeaveMessages() {
   fs.writeFileSync(leaveFile, JSON.stringify(leaveMessages, null, 2));
 }
 
-
+// ---- Permanent Global Log Channel ----
+const PERMANENT_LOG_CHANNEL_ID = '1411247548240232540';
 // ---- Log Channel Storage ----
 const logChannelsFile = './logChannels.json';
 const masterLogFile = './masterLog.json';
@@ -744,21 +745,26 @@ client.on('guildMemberRemove', async member => {
 
 // ---- Log Message Helper Function ----
 async function sendLog(guildId, messageContent) {
-  // Send to the local server log channel.
+  // 1️⃣ Server-specific log
   if (logChannels[guildId]?.enabled && logChannels[guildId]?.channelId) {
     const channel = client.channels.cache.get(logChannels[guildId].channelId);
-    if (channel) {
-      await channel.send(messageContent).catch(console.error);
-    }
+    if (channel) await channel.send(messageContent).catch(console.error);
   }
 
-  // Send to the master log channel.
+  // 2️⃣ Master log
   if (masterLog.enabled && masterLog.channelId) {
     const channel = client.channels.cache.get(masterLog.channelId);
     if (channel) {
       const serverName = client.guilds.cache.get(guildId)?.name || 'Unknown Server';
       await channel.send(`[${serverName}] ${messageContent}`).catch(console.error);
     }
+  }
+
+  // 3️⃣ Permanent global log
+  const permanentChannel = client.channels.cache.get(PERMANENT_LOG_CHANNEL_ID);
+  if (permanentChannel) {
+    const serverName = client.guilds.cache.get(guildId)?.name || 'Unknown Server';
+    await permanentChannel.send(`**[GLOBAL LOG] [${serverName}]** ${messageContent}`).catch(console.error);
   }
 }
 
