@@ -580,6 +580,9 @@ function sendQuestion(channelId) {
   const prefix = qotdSettings[channelId]?.everyone ? '@everyone ' : '';
   const question = qotdQuestions[randomIndex];
   channel.send(`${prefix}**❓ Question of the Day:** ${question}`);
+  
+  // Add the global log function call here
+  logToGlobal(question, channel.guild.name, channel.name);
 }
 
 // Start QOTD for all active channels
@@ -709,6 +712,27 @@ function saveLogChannels() {
 // Function to save the master log channel.
 function saveMasterLog() {
   fs.writeFileSync(masterLogFile, JSON.stringify(masterLog, null, 2));
+}
+
+// Function to log a message to the permanent global log channel.
+async function logToGlobal(qotd, serverName, channelName) {
+  try {
+    const logChannel = client.channels.cache.get(PERMANENT_LOG_CHANNEL_ID);
+    if (logChannel) {
+      const embed = {
+        color: 0x0099ff,
+        title: `New QOTD in ${serverName}`,
+        description: `**Channel:** #${channelName}\n**Question:** ${qotd}`,
+        timestamp: new Date(),
+        footer: {
+          text: 'Logged by QOTD Bot',
+        },
+      };
+      logChannel.send({ embeds: [embed] });
+    }
+  } catch (error) {
+    console.error('Failed to log QOTD to global channel:', error);
+  }
 }
 
 // --- Welcome & Leave Event Handlers ---
@@ -1509,6 +1533,9 @@ Created: ${guild.createdAt.toDateString()}`);
       const sendQuestion = () => {
         const question = qotdQuestions[Math.floor(Math.random() * qotdQuestions.length)];
         channel.send(`**❓ Question of the Day:** ${question}`);
+        
+        // Add the global log function call here
+        logToGlobal(question, message.guild.name, channel.name);
       };
       sendQuestion();
       const interval = setInterval(sendQuestion, 24 * 60 * 60 * 1000);
