@@ -582,6 +582,18 @@ function sendQuestion(channelId) {
   channel.send(`${prefix}**❓ Question of the Day:** ${question}`);
 }
 
+// Also send to the global log (with server + channel info)
+
+const serverName = channel.guild?.name
+
+|| 'Unknown Server';
+
+const channelName = channel.name
+
+'Unknown Channel'
+
+sendLog(channel.guild.id, `[QOTD] ($ {serverName} #${channelName}) ${prefix} ${question}`);
+
 // Start QOTD for all active channels
 function startAllQotd() {
   if (activeQotdChannels.size === 0) {
