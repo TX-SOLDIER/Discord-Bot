@@ -527,21 +527,64 @@ const qotdQuestions = [
   "Do you prefer big parties or small hangouts?"
 ];
 
-// ---- Persistent QOTD State (Updated) ----
-const qotdFile = './qotd.json';
-let activeQotdChannels = new Set();
-const qotdIntervals = new Map(); // A Map to store the intervals
+const fs = require('fs');
 
+const qotdFile = './qotd.json';
+const qotdSettingsFile = './qotdSettings.json';
+
+let activeQotdChannels = new Set();
+let qotdIntervals = new Map(); // channelId -> setInterval
+let qotdSettings = {}; // { channelId: { everyone: true/false } }
+let sentQuestions = {}; // { channelId: [indices of sent questions] }
+
+// Load active channels
 if (fs.existsSync(qotdFile)) {
   const channelArray = JSON.parse(fs.readFileSync(qotdFile, 'utf8'));
   activeQotdChannels = new Set(channelArray);
 }
 
+// Load settings
+if (fs.existsSync(qotdSettingsFile)) {
+  qotdSettings = JSON.parse(fs.readFileSync(qotdSettingsFile, 'utf8'));
+}
+
+// Save functions
 function saveQotdState() {
   fs.writeFileSync(qotdFile, JSON.stringify(Array.from(activeQotdChannels), null, 2));
 }
 
-// ---- QOTD Scheduling Logic (Updated) ----
+function saveQotdSettings() {
+  fs.writeFileSync(qotdSettingsFile, JSON.stringify(qotdSettings, null, 2));
+}
+
+// Send a QOTD to a channel without repeating until all questions are used
+function sendQuestion(channelId) {
+  const channel = client.channels.cache.get(channelId);
+  if (!channel) return;
+
+  if (!sentQuestions[channelId]) sentQuestions[channelId] = [];
+
+  // Filter unused questions
+  const unusedIndices = qotdQuestions
+    .map((_, i) => i)
+    .filter(i => !sentQuestions[channelId].includes(i));
+
+  // Reset if all questions have been sent
+  if (unusedIndices.length === 0) {
+    sentQuestions[channelId] = [];
+    unusedIndices.push(...qotdQuestions.map((_, i) => i));
+  }
+
+  // Pick random unused question
+  const randomIndex = unusedIndices[Math.floor(Math.random() * unusedIndices.length)];
+  sentQuestions[channelId].push(randomIndex);
+
+  const prefix = qotdSettings[channelId]?.everyone ? '@everyone ' : '';
+  const question = qotdQuestions[randomIndex];
+  channel.send(`${prefix}**❓ Question of the Day:** ${question}`);
+}
+
+// Start QOTD for all active channels
 function startAllQotd() {
   if (activeQotdChannels.size === 0) {
     console.log("No QOTD channels to start.");
@@ -549,25 +592,79 @@ function startAllQotd() {
   }
 
   activeQotdChannels.forEach(channelId => {
-    const channel = client.channels.cache.get(channelId);
-    if (!channel) {
-      console.error(`QOTD channel not found, removing: ${channelId}`);
-      activeQotdChannels.delete(channelId);
-      saveQotdState();
-      return;
-    }
+    if (qotdIntervals.has(channelId)) return; // already running
 
-    const sendQuestion = () => {
-      const question = qotdQuestions[Math.floor(Math.random() * qotdQuestions.length)];
-      channel.send(`@everyone **❓ Question of the Day:** ${question}`);
-    };
+    sendQuestion(channelId); // first question immediately
 
-    sendQuestion(); // Send the first question immediately
-    const interval = setInterval(sendQuestion, 24 * 60 * 60 * 1000);
-    qotdIntervals.set(channelId, interval); // Store the interval
+    const interval = setInterval(() => sendQuestion(channelId), 24 * 60 * 60 * 1000); // every 24h
+    qotdIntervals.set(channelId, interval);
   });
 }
 
+// Stop QOTD in a channel
+function stopQotd(channelId) {
+  if (!activeQotdChannels.has(channelId)) return;
+
+  const interval = qotdIntervals.get(channelId);
+  if (interval) clearInterval(interval);
+  qotdIntervals.delete(channelId);
+
+  activeQotdChannels.delete(channelId);
+  saveQotdState();
+
+  if (qotdSettings[channelId]) {
+    delete qotdSettings[channelId];
+    saveQotdSettings();
+  }
+
+  if (sentQuestions[channelId]) delete sentQuestions[channelId];
+}
+
+// Command handling
+client.on('messageCreate', async (message) => {
+  if (!message.content.startsWith('$qotd')) return;
+
+  const args = message.content.split(' ');
+  const subcommand = args[1]?.toLowerCase();
+
+  // Start QOTD
+  if (subcommand === 'on') {
+    if (!activeQotdChannels.has(message.channel.id)) {
+      activeQotdChannels.add(message.channel.id);
+      saveQotdState();
+      startAllQotd();
+      return message.reply('✅ QOTD has been turned ON in this channel.');
+    } else {
+      return message.reply('QOTD is already active in this channel.');
+    }
+  }
+
+  // Stop QOTD
+  if (subcommand === 'off') {
+    stopQotd(message.channel.id);
+    return message.reply('✅ QOTD has been turned OFF in this channel.');
+  }
+
+  // Toggle @everyone
+  if (subcommand === 'everyone') {
+    const option = args[2]?.toLowerCase();
+    if (!activeQotdChannels.has(message.channel.id)) {
+      return message.reply('QOTD is not active in this channel.');
+    }
+
+    if (option === 'on') {
+      qotdSettings[message.channel.id] = { everyone: true };
+      saveQotdSettings();
+      return message.reply('✅ QOTD will now ping @everyone.');
+    } else if (option === 'off') {
+      qotdSettings[message.channel.id] = { everyone: false };
+      saveQotdSettings();
+      return message.reply('✅ QOTD will no longer ping @everyone.');
+    } else {
+      return message.reply('Usage: $qotd everyone on/off');
+    }
+  }
+});
 // --- Welcome & Leave Messages Data ---
 const welcomeFile = './welcomeMessages.json';
 const leaveFile = './leaveMessages.json';
