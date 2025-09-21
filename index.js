@@ -32,6 +32,11 @@ function isImmune(user) {
 const hauntedChannels = new Set();
 const hauntIntervals = new Map();
 
+// ---- ANTI-RAID DATA ----
+const antiRaidActive = new Set();
+const originalVerificationLevels = new Map();
+const joinTimestamps = new Map(); // NEW: For auto-trigger
+
 const spookyMessages = [
   '👻 Boo...', '💀 I see you...', '🩸 The shadows are watching...',
   '🔪 Behind you...', '🕷️ Something crawled across your screen...',
@@ -735,21 +740,128 @@ async function logToGlobal(qotd, serverName, channelName) {
   }
 }
 
+// --- ANTI-RAID HELPER FUNCTIONS (NEW) ---
+
+async function engageAntiRaid(guild, alertChannel, author = null) {
+    if (antiRaidActive.has(guild.id)) return false; // Already active
+
+    antiRaidActive.add(guild.id);
+    originalVerificationLevels.set(guild.id, guild.verificationLevel);
+
+    try {
+        await guild.setVerificationLevel(4); // Highest
+
+        guild.channels.cache.forEach(async (channel) => {
+            if (channel.isTextBased() && channel.permissionsFor(guild.roles.everyone).has(PermissionsBitField.Flags.SendMessages)) {
+                await channel.permissionOverwrites.edit(guild.roles.everyone, {
+                    SendMessages: false
+                }).catch(err => console.error(`Failed to lock channel ${channel.name}:`, err));
+            }
+        });
+
+        if (author) { // Manual trigger
+            await sendLog(guild.id, `\`[SECURITY]\` **${author.tag}** has engaged ANTI-RAID mode.`);
+            if (alertChannel) {
+                await alertChannel.send("🚨ANTI-RAID PROTOCOL - ENGAGED THIS IS NOT A DRILL. All security measures are live. Unauthorized accounts will be IDENTIFIED and REMOVED. Channels are locked, posting is restricted, and verification is mandatory. Attempts to bypass will result in immediate bans and permanent removal from the server. Follow moderator directives now.🚨");
+            }
+        } else { // Automatic trigger
+             await sendLog(guild.id, `\`[SECURITY]\` **AUTOMATIC ANTI-RAID** has been engaged due to rapid joins.`);
+            if (alertChannel) {
+                await alertChannel.send("🚨**AUTO-TRIGGER**🚨\nANTI-RAID PROTOCOL - ENGAGED THIS IS NOT A DRILL. All security measures are live. Unauthorized accounts will be IDENTIFIED and REMOVED. Channels are locked, posting is restricted, and verification is mandatory. Attempts to bypass will result in immediate bans and permanent removal from the server. Follow moderator directives now.🚨");
+            }
+        }
+        return true;
+    } catch (err) {
+        console.error("Anti-Raid ON Error:", err);
+        antiRaidActive.delete(guild.id); // Revert state if failed
+        return false;
+    }
+}
+
+async function disengageAntiRaid(guild, replyChannel) {
+    if (!antiRaidActive.has(guild.id)) {
+        if (replyChannel) await replyChannel.reply('✅ Anti-raid mode is not currently active.');
+        return false;
+    }
+
+    antiRaidActive.delete(guild.id);
+    const originalLevel = originalVerificationLevels.get(guild.id) || 0; // Default to 'None'
+    originalVerificationLevels.delete(guild.id);
+
+    try {
+        await guild.setVerificationLevel(originalLevel);
+
+        guild.channels.cache.forEach(async (channel) => {
+            if (channel.isTextBased()) {
+                await channel.permissionOverwrites.edit(guild.roles.everyone, {
+                    SendMessages: null // Resets permission to default
+                }).catch(err => console.error(`Failed to unlock channel ${channel.name}:`, err));
+            }
+        });
+
+        if (replyChannel) {
+            await replyChannel.reply('✅ Anti-raid mode has been disengaged. All systems back to normal.');
+        }
+        return true;
+    } catch (err) {
+        console.error("Anti-Raid OFF Error:", err);
+        if (replyChannel) {
+            await replyChannel.reply("❌ Failed to fully disengage anti-raid mode. I might be missing permissions. Please check channels manually.");
+        }
+        return false;
+    }
+}
+
+
 // --- Welcome & Leave Event Handlers ---
 client.on('guildMemberAdd', async member => {
-  const welcomeData = welcomeMessages[member.guild.id];
-  if (welcomeData) {
-    const channel = member.guild.channels.cache.get(welcomeData.channelId);
-    if (channel) {
-      const message = welcomeData.message
-        .replace(/{user}/g, `<@${member.user.id}>`)
-        .replace(/{server}/g, member.guild.name)
-        .replace(/{membercount}/g, member.guild.memberCount);
-      channel.send(message);
+    // --- AUTO ANTI-RAID TRIGGER (NEW) ---
+    if (!antiRaidActive.has(member.guild.id)) { // Only check if not already active
+        const now = Date.now();
+        const thirtySecondsAgo = now - 30000;
+
+        const timestamps = joinTimestamps.get(member.guild.id) || [];
+        const recentTimestamps = timestamps.filter(ts => ts > thirtySecondsAgo);
+
+        recentTimestamps.push(now);
+        joinTimestamps.set(member.guild.id, recentTimestamps);
+
+        if (recentTimestamps.length >= 10) {
+            console.log(`[Anti-Raid Trigger] Detected ${recentTimestamps.length} joins in 30s for guild ${member.guild.name}. Engaging...`);
+            // Find a channel to post the alert: log channel > system channel
+            const logChannelId = logChannels[member.guild.id]?.channelId;
+            const alertChannel = logChannelId ? member.guild.channels.cache.get(logChannelId) : member.guild.systemChannel;
+            
+            await engageAntiRaid(member.guild, alertChannel); // Auto-trigger, no author
+        }
     }
-  }
-  await sendLog(member.guild.id, `\`[JOIN]\` **${member.user.tag}** (${member.user.id}) joined the server.`);
+    
+    // --- ANTI-RAID KICK ---
+    if (antiRaidActive.has(member.guild.id)) {
+        try {
+            await member.send('You were unable to join the server because it is currently in anti-raid mode. Please try again later.');
+        } catch (error) {
+            console.error(`Could not DM user ${member.user.tag}.`);
+        }
+        await member.kick('Kicked by anti-raid system.');
+        await sendLog(member.guild.id, `\`[ANTI-RAID]\` Kicked new member **${member.user.tag}**.`);
+        return; // Stop further processing (like welcome messages)
+    }
+
+    const welcomeData = welcomeMessages[member.guild.id];
+    if (welcomeData) {
+        const channel = member.guild.channels.cache.get(welcomeData.channelId);
+        if (channel) {
+            const message = welcomeData.message
+                .replace(/{user}/g, `<@${member.user.id}>`)
+                .replace(/{server}/g, member.guild.name)
+                .replace(/{membercount}/g, member.guild.memberCount);
+            channel.send(message);
+        }
+    }
+    await sendLog(member.guild.id, `\`[JOIN]\` **${member.user.tag}** (${member.user.id}) joined the server.`);
 });
+
 
 client.on('guildMemberRemove', async member => {
   const leaveData = leaveMessages[member.guild.id];
@@ -890,6 +1002,7 @@ if (command === 'help') {
     `🧹 \`${PREFIX}clear [number]\` — Delete messages\n` +
     `🔒 \`${PREFIX}lock\` — Lock channel\n` +
     `🔓 \`${PREFIX}unlock\` — Unlock channel\n` +
+    `🛡️ \`${PREFIX}antiraid on\` / \`${PREFIX}antiraid off\` — Engage/disengage server lockdown\n` +
     `🐌 \`${PREFIX}slowmode [seconds]\` — Set slowmode\n` +
     `🏷️ \`${PREFIX}role add @user <role>\` — Add role\n` +
     `🏷️ \`${PREFIX}role remove @user <role>\` — Remove role\n` +
@@ -1333,6 +1446,30 @@ End Transmission.`);
     target.timeout(null, 'Unmuted by bot')
       .then(() => message.reply(`✅ Unmuted ${target.user.tag}.`))
       .catch(() => message.reply('❌ Cannot unmute this user.'));
+  }
+
+  // ---- ANTI-RAID COMMAND (REFACTORED) ----
+  else if (command === 'antiraid') {
+      if (!checkPermission(PermissionsBitField.Flags.ManageGuild)) return;
+      const subcommand = args[0]?.toLowerCase();
+
+      if (subcommand === 'on') {
+          const success = await engageAntiRaid(message.guild, message.channel, message.author);
+          if (!success) {
+              if (antiRaidActive.has(message.guild.id)) {
+                  message.reply('🚨 Anti-raid mode is already engaged.');
+              } else {
+                  message.reply("❌ Failed to engage anti-raid mode. I might be missing permissions.");
+              }
+          }
+      } else if (subcommand === 'off') {
+          const success = await disengageAntiRaid(message.guild, message.channel);
+          if (success) {
+              await sendLog(message.guild.id, `\`[SECURITY]\` **${message.author.tag}** has disengaged ANTI-RAID mode.`);
+          }
+      } else {
+          message.reply('❌ Usage: `$antiraid on` or `$antiraid off`.');
+      }
   }
 
   // ---- Nuke Command ----
