@@ -884,7 +884,7 @@ if (command === 'help') {
     `📣 \`${PREFIX}say [msg]\` — Echo\n` +
     `✉️ \`${PREFIX}send <channelID> <message>\` — Send to another server/channel\n\n` +
     `❓ \`${PREFIX}qotd on\` / \`${PREFIX}qotd off\` — Turn Question of the Day ON/OFF\n` +
-    `❓ \`${PREFIX}qotd everyone on\` / \`${PREFIX}qotd everyone off\` — Toggle @everyone ping for QOTD\n\n` +
+    `❓ \`${PREFIX}qotd everyone on\` / \`${PREFIX}qotd everyone off\` — Toggle everyone ping for QOTD\n\n` +
     `★ **Google Gemini AI**: \`${PREFIX}<ai>prompt>\` — Ask Gemini AI a prompt\n` +
     `☆ **OpenRouter AI**: \`@bot <prompt>\` — Ask OpenRouter AI a prompt`;
 
