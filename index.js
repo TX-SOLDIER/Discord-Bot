@@ -762,12 +762,12 @@ async function engageAntiRaid(guild, alertChannel, author = null) {
         if (author) { // Manual trigger
             await sendLog(guild.id, `\`[SECURITY]\` **${author.tag}** has engaged ANTI-RAID mode.`);
             if (alertChannel) {
-                await alertChannel.send("🚨ANTI-RAID PROTOCOL - ENGAGED THIS IS NOT A DRILL. All security measures are live. Unauthorized accounts will be IDENTIFIED and REMOVED. Channels are locked, posting is restricted, and verification is mandatory. Attempts to bypass will result in immediate bans and permanent removal from the server. Follow moderator directives now.🚨");
+                await alertChannel.send("🚨ANTI-RAID PROTOCOL  ENGAGED🚨THIS IS NOT A DRILL. All security measures are live. Unauthorized accounts will be IDENTIFIED, TRACKED and ELIMINATED. Channels are locked, posting is restricted, and verification is mandatory. Attempts to bypass will result in immediate bans and permanent removal from the server. Moderators: Engage intruders.");
             }
         } else { // Automatic trigger
              await sendLog(guild.id, `\`[SECURITY]\` **AUTOMATIC ANTI-RAID** has been engaged due to rapid joins.`);
             if (alertChannel) {
-                await alertChannel.send("🚨**AUTO-TRIGGER**🚨\nANTI-RAID PROTOCOL - ENGAGED THIS IS NOT A DRILL. All security measures are live. Unauthorized accounts will be IDENTIFIED and REMOVED. Channels are locked, posting is restricted, and verification is mandatory. Attempts to bypass will result in immediate bans and permanent removal from the server. Follow moderator directives now.🚨");
+                await alertChannel.send("🚨**AUTO-TRIGGER**🚨ANTI-RAID PROTOCOL  ENGAGED🚨THIS IS NOT A DRILL. All security measures are live. Unauthorized accounts will be IDENTIFIED, TRACKED and ELIMINATED. Channels are locked, posting is restricted, and verification is mandatory. Attempts to bypass will result in immediate bans and permanent removal from the server. Moderators: Engage intruders.");
             }
         }
         return true;
