@@ -527,8 +527,6 @@ const qotdQuestions = [
   "Do you prefer big parties or small hangouts?"
 ];
 
-const fs = require('fs');
-
 const qotdFile = './qotd.json';
 const qotdSettingsFile = './qotdSettings.json';
 
