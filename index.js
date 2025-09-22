@@ -22,10 +22,25 @@ const client = new Client({
 // ---- Google Gemini AI Setup ----
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
 
-// ---- Owner Immunity ----
+// ---- Immunity System ----
 const OWNER_ID = '782155864134909952';
+const IMMUNITY_RANKS = ['2LT', '1LT', 'CPT', 'MAJ', 'LTC', 'COL', 'BG', 'MG', 'LTG', 'GEN'];
+const immunityFile = './immunity.json';
+let immuneUsers = {};
+
+if (fs.existsSync(immunityFile)) {
+  immuneUsers = JSON.parse(fs.readFileSync(immunityFile, 'utf8'));
+}
+
+function saveImmunity() {
+  fs.writeFileSync(immunityFile, JSON.stringify(immuneUsers, null, 2));
+}
+
 function isImmune(user) {
-  return user.id === OWNER_ID;
+  // The owner is always immune.
+  if (user.id === OWNER_ID) return true;
+  // Check if the user is in the immunity list.
+  return !!immuneUsers[user.id];
 }
 
 // ---- Data ----
@@ -1028,8 +1043,13 @@ if (command === 'help') {
     `✉️ \`${PREFIX}send <channelID> <message>\` — Send to another server/channel\n\n` +
     `❓ \`${PREFIX}qotd on\` / \`${PREFIX}qotd off\` — Turn Question of the Day ON/OFF\n` +
     `❓ \`${PREFIX}qotd everyone on\` / \`${PREFIX}qotd everyone off\` — Toggle everyone ping for QOTD\n\n` +
-    `★ **Google Gemini AI**: \`${PREFIX}<ai>prompt>\` — Ask Gemini AI a prompt\n` +
-    `☆ **OpenRouter AI**: \`@bot <prompt>\` — Ask OpenRouter AI a prompt`;
+    `★ **Google Gemini AI**: \`${PREFIX}ai <prompt>\` — Ask Gemini AI a prompt\n` +
+    `☆ **OpenRouter AI**: \`@bot <prompt>\` — Ask OpenRouter AI a prompt\n\n` +
+    `👑 **Owner & Immune Commands**\n\n` +
+    `🎖️ \`${PREFIX}promote @user <rank>\` — Grant a user immunity with a rank (Owner only)\n` +
+    `👎 \`${PREFIX}demote @user\` — Revoke a user's immunity (Owner only)\n` +
+    `📋 \`${PREFIX}serverlist\` — List all servers the bot is in (Immune only)`;
+
 
   await message.channel.send(helpText2);
 }
@@ -1092,6 +1112,81 @@ if (command === 'help') {
       message.reply('❌ Usage: `$logmode on [#channel]` or `$logmode off` or `$logmode setmaster <channelID>` or `$logmode masteron` or `$logmode masteroff`.');
     }
   }
+
+  // ---- Owner & Immune Commands ----
+  else if (command === 'promote') {
+    if (message.author.id !== OWNER_ID) {
+        return message.reply('❌ You do not have permission to use this command.');
+    }
+
+    const target = message.mentions.users.first();
+    const rank = args[1]?.toUpperCase();
+
+    if (!target) {
+        return message.reply('❌ Please mention a user to promote.');
+    }
+    if (target.id === OWNER_ID) {
+        return message.reply('❌ The owner cannot be promoted.');
+    }
+    if (!rank || !IMMUNITY_RANKS.includes(rank)) {
+        return message.reply(`❌ Invalid rank. Please use one of: ${IMMUNITY_RANKS.join(', ')}`);
+    }
+
+    immuneUsers[target.id] = rank;
+    saveImmunity();
+
+    target.send(`🎉 You have been promoted to **${rank}**. You now have immunity.`).catch(err => {
+        console.error(`Could not DM user ${target.tag}:`, err);
+        message.channel.send(`⚠️ Could not DM ${target.tag}, but their promotion is successful.`);
+    });
+
+    message.reply(`✅ **${target.tag}** has been promoted to **${rank}** and now has immunity.`);
+  }
+  else if (command === 'demote') {
+    if (message.author.id !== OWNER_ID) {
+        return message.reply('❌ You do not have permission to use this command.');
+    }
+
+    const target = message.mentions.users.first();
+    if (!target) {
+        return message.reply('❌ Please mention a user to demote.');
+    }
+    if (target.id === OWNER_ID) {
+        return message.reply('❌ The owner cannot be demoted.');
+    }
+
+    if (immuneUsers[target.id]) {
+        delete immuneUsers[target.id];
+        saveImmunity();
+        message.reply(`✅ **${target.tag}** has been demoted and no longer has immunity.`);
+        target.send(`ℹ️ Your immunity status has been revoked.`).catch(err => {
+          console.error(`Could not DM user ${target.tag}:`, err);
+        });
+    } else {
+        message.reply(`❌ **${target.tag}** is not an immune user.`);
+    }
+  }
+  else if (command === 'serverlist') {
+    if (!isImmune(message.author)) {
+        return message.reply('❌ You do not have permission to use this command.');
+    }
+
+    let serverList = '📜 **Server List**\n\n';
+    client.guilds.cache.forEach(guild => {
+        serverList += `**${guild.name}** - ${guild.memberCount} members (ID: ${guild.id})\n`;
+    });
+
+    // Handle potential message length limit
+    if (serverList.length > 2000) {
+        const chunks = serverList.match(/[\s\S]{1,1990}/g) || [];
+        for (const chunk of chunks) {
+            message.channel.send(chunk);
+        }
+    } else {
+        message.channel.send(serverList);
+    }
+  }
+
 
   // ---- Utility Commands ----
   else if (command === 'ping') {
