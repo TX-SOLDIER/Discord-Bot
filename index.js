@@ -1005,6 +1005,7 @@ if (command === 'help') {
     `😈 \`${PREFIX}dare\` — Dare\n` +
     `🔥 \`${PREFIX}roast @user\` — Roast\n` +
     `💖 \`${PREFIX}compliment @user\` — Compliment\n` +
+    `🖼️ \`${PREFIX}meme\` — Get a random meme\n` +
     `👻 \`${PREFIX}haunt\` / \`${PREFIX}unhaunt\` — Haunting\n` +
     `🃏 \`${PREFIX}blackjack\`, \`${PREFIX}hit\`, \`${PREFIX}stand\` — Play Blackjack\n\n` +
     `📖 **Moderation Commands**\n\n` +
@@ -1384,6 +1385,37 @@ End Transmission.`);
     const user = message.mentions.users.first();
     if (!user) return message.reply('💖 Tag someone to compliment.');
     message.channel.send(`💖 ${user.username}, ${compliments[Math.floor(Math.random() * compliments.length)]}`);
+  }
+
+  // ---- Meme Command (NEW) ----
+  else if (command === 'meme') {
+    try {
+        await message.channel.sendTyping();
+        const response = await fetch('https://meme-api.com/gimme');
+        const data = await response.json();
+
+        if (!data.url) {
+            return message.reply('❌ Could not fetch a meme. Please try again.');
+        }
+
+        const embed = {
+          color: 0xFF5733, // A fun color
+          title: data.title,
+          url: data.postLink,
+          image: {
+            url: data.url,
+          },
+          footer: {
+            text: `From r/${data.subreddit} | 👍 ${data.ups}`,
+          },
+        };
+
+        await message.channel.send({ embeds: [embed] });
+
+    } catch (error) {
+        console.error('Meme command error:', error);
+        message.reply('❌ An error occurred while fetching a meme.');
+    }
   }
 
   // ---- Haunt ----
