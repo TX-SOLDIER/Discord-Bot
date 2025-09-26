@@ -1006,6 +1006,7 @@ if (command === 'help') {
     `🔥 \`${PREFIX}roast @user\` — Roast\n` +
     `💖 \`${PREFIX}compliment @user\` — Compliment\n` +
     `🖼️ \`${PREFIX}meme\` — Get a random meme\n` +
+    `🔞 \`${PREFIX}nsfw-meme\` — Get a random NSFW meme (NSFW channels only)\n` + // ---- ADDED LINE ----
     `👻 \`${PREFIX}haunt\` / \`${PREFIX}unhaunt\` — Haunting\n` +
     `🃏 \`${PREFIX}blackjack\`, \`${PREFIX}hit\`, \`${PREFIX}stand\` — Play Blackjack\n\n` +
     `📖 **Moderation Commands**\n\n` +
@@ -1415,6 +1416,43 @@ End Transmission.`);
     } catch (error) {
         console.error('Meme command error:', error);
         message.reply('❌ An error occurred while fetching a meme.');
+    }
+  }
+
+  // ---- ADDED BLOCK: NSFW Meme Command ----
+  else if (command === 'nsfw-meme') {
+    // First, check if the channel is marked as NSFW
+    if (!message.channel.nsfw) {
+        return message.reply('❌ This command can only be used in NSFW channels.');
+    }
+
+    try {
+        await message.channel.sendTyping();
+        // Fetch from a specific NSFW subreddit, e.g., 'nsfwmemes'
+        const response = await fetch('https://meme-api.com/gimme/nsfwmemes');
+        const data = await response.json();
+
+        if (!data.url) {
+            return message.reply('❌ Could not fetch an NSFW meme. The subreddit might be private or unavailable.');
+        }
+
+        const embed = {
+          color: 0xFF0000, // Red for NSFW
+          title: data.title,
+          url: data.postLink,
+          image: {
+            url: data.url,
+          },
+          footer: {
+            text: `From r/${data.subreddit} | 👍 ${data.ups}`,
+          },
+        };
+
+        await message.channel.send({ embeds: [embed] });
+
+    } catch (error) {
+        console.error('NSFW Meme command error:', error);
+        message.reply('❌ An error occurred while fetching an NSFW meme.');
     }
   }
 
