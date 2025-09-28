@@ -1003,9 +1003,6 @@ if (command === 'help') {
     `🔞 \`${PREFIX}nsfw-meme\` — Get a random NSFW meme (NSFW channels only)\n` +
     `👻 \`${PREFIX}haunt\` / \`${PREFIX}unhaunt\` — Haunting\n` +
     `🃏 \`${PREFIX}blackjack\`, \`${PREFIX}hit\`, \`${PREFIX}stand\` — Play Blackjack\n` +
-    `🔢 \`${PREFIX}counting set [#channel]\` — Set the counting channel.\n` +
-    `🔢 \`${PREFIX}counting off\` — Disable the counting game.\n` +
-    `🔢 \`${PREFIX}counting leaderboard\` — Show the global counting leaderboard.\n\n` +
     `📖 **Moderation Commands**\n\n` +
     `🎉 \`${PREFIX}giveaway <duration> <prize>\` — Start a giveaway (e.g., 10m Prize)\n` +
     `🔨 \`${PREFIX}kick @user [reason]\` — Kick a user\n` +
@@ -1045,6 +1042,9 @@ if (command === 'help') {
     `❓ \`${PREFIX}qotd everyone on\` / \`${PREFIX}qotd everyone off\` — Toggle everyone ping for QOTD\n\n` +
     `★ **Google Gemini AI**: \`${PREFIX}ai <prompt>\` — Ask Gemini AI a prompt\n` +
     `☆ **OpenRouter AI**: \`@bot <prompt>\` — Ask OpenRouter AI a prompt\n\n` +
+    `🔢 \`${PREFIX}counting set [#channel]\` — Set the counting channel.\n` +
+    `🔢 \`${PREFIX}counting off\` — Disable the counting game.\n` +
+    `🔢 \`${PREFIX}counting leaderboard\` — Show the global counting leaderboard.\n\n` +
     `👑 **Owner & Immune Commands**\n\n` +
     `🎖️ \`${PREFIX}promote @user <rank>\` — Grant a user immunity with a rank (Owner only)\n` +
     `👎 \`${PREFIX}demote @user\` — Revoke a user's immunity (Owner only)\n` +
