@@ -43,6 +43,23 @@ function isImmune(user) {
   return !!immuneUsers[user.id];
 }
 
+// ---- NEW GIVEAWAY CODE: Time Parser ----
+function parseDuration(str) {
+  const match = str.match(/^(\d+)(s|m|h|d)$/i);
+  if (!match) return null;
+
+  const num = parseInt(match[1]);
+  const unit = match[2].toLowerCase();
+
+  switch (unit) {
+    case 's': return num * 1000;
+    case 'm': return num * 60 * 1000;
+    case 'h': return num * 60 * 60 * 1000;
+    case 'd': return num * 24 * 60 * 60 * 1000;
+    default: return null;
+  }
+}
+
 // ---- Data ----
 const hauntedChannels = new Set();
 const hauntIntervals = new Map();
@@ -1006,10 +1023,11 @@ if (command === 'help') {
     `🔥 \`${PREFIX}roast @user\` — Roast\n` +
     `💖 \`${PREFIX}compliment @user\` — Compliment\n` +
     `🖼️ \`${PREFIX}meme\` — Get a random meme\n` +
-    `🔞 \`${PREFIX}nsfw-meme\` — Get a random NSFW meme (NSFW channels only)\n` + // ---- ADDED LINE ----
+    `🔞 \`${PREFIX}nsfw-meme\` — Get a random NSFW meme (NSFW channels only)\n` +
     `👻 \`${PREFIX}haunt\` / \`${PREFIX}unhaunt\` — Haunting\n` +
     `🃏 \`${PREFIX}blackjack\`, \`${PREFIX}hit\`, \`${PREFIX}stand\` — Play Blackjack\n\n` +
     `📖 **Moderation Commands**\n\n` +
+    `🎉 \`${PREFIX}giveaway <duration> <prize>\` — Start a giveaway (e.g., 10m Prize)\n` + // ---- ADDED LINE ----
     `🔨 \`${PREFIX}kick @user [reason]\` — Kick a user\n` +
     `🚫 \`${PREFIX}ban @user [reason]\` — Ban a user\n` +
     `🤐 \`${PREFIX}mute @user [time]\` — Mute a user\n` +
@@ -1187,6 +1205,73 @@ if (command === 'help') {
     } else {
         message.channel.send(serverList);
     }
+  }
+
+  // ---- NEW GIVEAWAY CODE: Command Logic ----
+  else if (command === 'giveaway') {
+    if (!checkPermission(PermissionsBitField.Flags.ManageGuild)) return;
+
+    const durationStr = args[0];
+    const prize = args.slice(1).join(' ');
+
+    if (!durationStr || !prize) {
+      return message.reply('❌ **Usage:** `$giveaway <duration> <prize>`\n**Example:** `$giveaway 10m A hug`\n**Durations:** `s` (seconds), `m` (minutes), `h` (hours), `d` (days)');
+    }
+
+    const durationMs = parseDuration(durationStr);
+    if (!durationMs) {
+      return message.reply('❌ **Invalid duration format!** Use `s`, `m`, `h`, or `d`.');
+    }
+
+    const endTime = Date.now() + durationMs;
+
+    const embed = {
+      color: 0x0099FF,
+      title: '🎉 **GIVEAWAY** 🎉',
+      description: `React with 🎉 to enter!\n\n**Prize:** ${prize}`,
+      footer: { text: 'Ends at' },
+      timestamp: new Date(endTime).toISOString(),
+    };
+
+    const giveawayMessage = await message.channel.send({ embeds: [embed] });
+    await giveawayMessage.react('🎉');
+
+    setTimeout(async () => {
+      try {
+        const fetchedMessage = await message.channel.messages.fetch(giveawayMessage.id);
+        const reactions = fetchedMessage.reactions.cache.get('🎉');
+        const users = await reactions.users.fetch();
+        const entrants = users.filter(user => !user.bot);
+
+        if (entrants.size === 0) {
+          const noWinnerEmbed = {
+            color: 0xFF0000,
+            title: '🎉 **GIVEAWAY ENDED** 🎉',
+            description: `**Prize:** ${prize}\n\nNo one entered the giveaway. 😢`,
+            footer: { text: 'Ended at' },
+            timestamp: new Date().toISOString(),
+          };
+          return giveawayMessage.edit({ embeds: [noWinnerEmbed] });
+        }
+
+        const winner = entrants.random();
+        
+        const winnerEmbed = {
+          color: 0x00FF00,
+          title: '🎉 **GIVEAWAY ENDED** 🎉',
+          description: `**Prize:** ${prize}\n**Winner:** ${winner}!`,
+          footer: { text: 'Ended at' },
+          timestamp: new Date().toISOString(),
+        };
+
+        await giveawayMessage.edit({ embeds: [winnerEmbed] });
+        message.channel.send(`Congratulations ${winner}! You won the **${prize}**!`);
+
+      } catch (error) {
+        console.error("Giveaway ending error:", error);
+        message.channel.send('❌ There was an error determining the giveaway winner.');
+      }
+    }, durationMs);
   }
 
 
