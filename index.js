@@ -936,8 +936,8 @@ client.on('messageCreate', async (message) => {
             if (number !== guildCountingData.currentCount + 1 || message.author.id === guildCountingData.lastUserId) {
                 const correctNextNumber = guildCountingData.currentCount + 1;
                 const reason = number !== correctNextNumber 
-                    ? `Wrong number! The next number was **${correctNextNumber}**.` 
-                    : `You can't count twice in a row!`;
+                    ? `Wrong number noob! The next number was **${correctNextNumber}**.` 
+                    : `You can't count twice in a row you smh. Pay fkn attention !`;
 
                 await message.react('❌');
                 await message.channel.send(`**Count Reset!** ${message.author} ruined it at **${guildCountingData.currentCount}**. ${reason} The count starts back at **1**.`);
