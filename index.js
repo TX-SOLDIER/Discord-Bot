@@ -83,6 +83,43 @@ function saveCountingData() {
     fs.writeFileSync(countingFile, JSON.stringify(countingData, null, 2));
 }
 
+// ---- [NEW] ECONOMY/CURRENCY DATA ----
+const economyFile = './economy.json';
+let economyData = {};
+
+// Cooldowns to prevent spam earning
+const messageCooldowns = new Map();
+const commandCooldowns = new Map();
+const MESSAGE_COOLDOWN = 60 * 1000; // 60 seconds
+const COMMAND_COOLDOWN = 30 * 1000; // 30 seconds
+
+function loadEconomyData() {
+    if (fs.existsSync(economyFile)) {
+        try {
+            economyData = JSON.parse(fs.readFileSync(economyFile, 'utf8'));
+        } catch (e) {
+            console.error("Error parsing economy.json:", e);
+        }
+    }
+}
+
+function saveEconomyData() {
+    fs.writeFileSync(economyFile, JSON.stringify(economyData, null, 2));
+}
+
+function getBalance(userId) {
+    return economyData[userId] || 0;
+}
+
+function updateBalance(userId, amount) {
+    const currentBalance = getBalance(userId);
+    economyData[userId] = currentBalance + amount;
+    return economyData[userId];
+}
+
+// Load economy data on startup
+loadEconomyData();
+
 
 const spookyMessages = [
   '👻 Boo...', '💀 I see you...', '🩸 The shadows are watching...',
@@ -950,6 +987,18 @@ const PREFIX = '$';
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
+    // ---- [NEW] ECONOMY - EARN FOR CHATTING ----
+    if (!message.content.startsWith(PREFIX)) {
+        const now = Date.now();
+        const lastMessage = messageCooldowns.get(message.author.id);
+        if (!lastMessage || now - lastMessage > MESSAGE_COOLDOWN) {
+            updateBalance(message.author.id, 1); // Award 1 Gold Coin
+            messageCooldowns.set(message.author.id, now);
+            saveEconomyData();
+        }
+    }
+
+
     // ---- COUNTING GAME LOGIC ----
     const guildCountingData = countingData[message.guild.id];
     if (guildCountingData && message.channel.id === guildCountingData.channelId) {
@@ -978,14 +1027,16 @@ client.on('messageCreate', async (message) => {
                 guildCountingData.currentCount++;
                 guildCountingData.lastUserId = message.author.id;
                 
-                // --- [NEW] HIGH SCORE LOGIC ---
                 if (guildCountingData.currentCount > (guildCountingData.highScore || 0)) {
                     guildCountingData.highScore = guildCountingData.currentCount;
                 }
-                // --- END NEW CODE ---
 
                 const userId = message.author.id;
                 guildCountingData.leaderboard[userId] = (guildCountingData.leaderboard[userId] || 0) + 1;
+                
+                // [NEW] ECONOMY - EARN FOR COUNTING
+                updateBalance(message.author.id, 5); // Award 5 Gold Coins
+                saveEconomyData();
 
                 await message.react('✅');
             }
@@ -1000,7 +1051,16 @@ client.on('messageCreate', async (message) => {
     const args = message.content.slice(PREFIX.length).trim().split(/ +/);
     const command = message.content.startsWith(PREFIX) ? args.shift().toLowerCase() : null;
 
-    if (message.content.startsWith(PREFIX)) {
+    if (command) {
+        // ---- [NEW] ECONOMY - EARN FOR USING COMMANDS ----
+        const now = Date.now();
+        const lastCommand = commandCooldowns.get(message.author.id);
+        if (!lastCommand || now - lastCommand > COMMAND_COOLDOWN) {
+            updateBalance(message.author.id, 2); // Award 2 Gold Coins
+            commandCooldowns.set(message.author.id, now);
+            saveEconomyData();
+        }
+
         await sendLog(message.guild.id, `\`[COMMAND]\` **${message.author.tag}** used command \`\`${message.content}\`\``);
     }
 
@@ -1080,6 +1140,10 @@ if (command === 'help') {
     `🔢 \`${PREFIX}counting set [#channel]\` — Set the counting channel.\n` +
     `🔢 \`${PREFIX}counting off\` — Disable the counting game.\n` +
     `🔢 \`${PREFIX}counting leaderboard\` — Show the global high score leaderboard.\n\n` +
+    `💰 **Economy Commands**\n\n` +
+    `🪙 \`${PREFIX}balance [@user]\` — Check your or another user's Gold Coin balance.\n` +
+    `➕ \`${PREFIX}give @user <amount>\` — Give Gold Coins to a user (Immune only).\n` +
+    `➖ \`${PREFIX}take @user <amount>\` — Take Gold Coins from a user (Immune only).\n\n` +
     `👑 **Owner & Immune Commands**\n\n` +
     `🎖️ \`${PREFIX}promote @user <rank>\` — Grant a user immunity with a rank (Owner only)\n` +
     `👎 \`${PREFIX}demote @user\` — Revoke a user's immunity (Owner only)\n` +
@@ -1120,7 +1184,6 @@ else if (command === 'counting' || command === 'c') {
     }
 
     if (subcommand === 'leaderboard' || subcommand === 'lb') {
-        // --- [NEW] GLOBAL HIGH SCORE LEADERBOARD ---
         const serverHighScores = [];
 
         for (const [guildId, guildData] of Object.entries(countingData)) {
@@ -1155,10 +1218,54 @@ else if (command === 'counting' || command === 'c') {
         };
 
         return message.channel.send({ embeds: [leaderboardEmbed] });
-        // --- END NEW CODE ---
     }
 
     return message.reply('❌ Invalid subcommand. Use `$counting set`, `$counting off`, or `$counting leaderboard`.');
+}
+
+// ---- [NEW] ECONOMY COMMANDS ----
+else if (command === 'balance' || command === 'bal') {
+    const target = message.mentions.users.first() || message.author;
+    const balance = getBalance(target.id);
+    message.reply(`🪙 **${target.username}** has **${balance}** Gold Coins.`);
+}
+else if (command === 'give' || command === 'add') {
+    if (!isImmune(message.author)) {
+        return message.reply('❌ You do not have permission to use this command.');
+    }
+    const target = message.mentions.users.first();
+    const amount = parseInt(args[1]);
+
+    if (!target) return message.reply('❌ Please mention a user.');
+    if (isNaN(amount) || amount <= 0) return message.reply('❌ Please provide a valid positive amount of Gold Coins.');
+    
+    // Protect the owner's balance
+    if (target.id === OWNER_ID) {
+        return message.reply('❌ You cannot modify the owner\'s balance.');
+    }
+
+    updateBalance(target.id, amount);
+    saveEconomyData();
+    message.reply(`✅ Gave **${amount}** Gold Coins to **${target.username}**.`);
+}
+else if (['take', 'remove', 'subtract'].includes(command)) {
+    if (!isImmune(message.author)) {
+        return message.reply('❌ You do not have permission to use this command.');
+    }
+    const target = message.mentions.users.first();
+    const amount = parseInt(args[1]);
+
+    if (!target) return message.reply('❌ Please mention a user.');
+    if (isNaN(amount) || amount <= 0) return message.reply('❌ Please provide a valid positive amount of Gold Coins.');
+
+    // Protect the owner's balance
+    if (target.id === OWNER_ID && message.author.id !== OWNER_ID) {
+        return message.reply('❌ You cannot modify the owner\'s balance.');
+    }
+
+    updateBalance(target.id, -amount);
+    saveEconomyData();
+    message.reply(`✅ Took **${amount}** Gold Coins from **${target.username}**.`);
 }
 
   // ---- Log Mode Commands ----
@@ -1669,11 +1776,21 @@ End Transmission.`);
     const playerTotal = handValue(game.playerHand);
     let result = `**Your hand:** ${formatHand(game.playerHand)} (Total: ${playerTotal})\n` +
       `**Dealer’s hand:** ${formatHand(dealerHand)} (Total: ${dealerTotal})\n\n`;
-    if (playerTotal > 21) result += `💥 You busted! Dealer wins.`;
-    else if (dealerTotal > 21) result += `🎉 Dealer busted! You win!`;
-    else if (playerTotal > dealerTotal) result += `🎉 You win!`;
-    else if (playerTotal < dealerTotal) result += `😢 Dealer wins.`;
-    else result += `🤝 It’s a tie!`;
+    if (playerTotal > 21) {
+        result += `💥 You busted! Dealer wins.`;
+    } else if (dealerTotal > 21) {
+        result += `🎉 Dealer busted! You win! You earned **25** Gold Coins.`;
+        updateBalance(message.author.id, 25);
+        saveEconomyData();
+    } else if (playerTotal > dealerTotal) {
+        result += `🎉 You win! You earned **25** Gold Coins.`;
+        updateBalance(message.author.id, 25);
+        saveEconomyData();
+    } else if (playerTotal < dealerTotal) {
+        result += `😢 Dealer wins.`;
+    } else {
+        result += `🤝 It’s a tie!`;
+    }
     blackjackGames.delete(message.author.id);
     message.channel.send(result);
   }
@@ -2084,7 +2201,7 @@ Created: ${guild.createdAt.toDateString()}`);
 
   // ---- Unknown command ----
   else {
-    if (message.content.startsWith('$')) {
+    if (message.content.startsWith('$') && command) { // Check if it was a command attempt
       message.reply('❌ Unknown command or you do not have permission.');
     }
   }
