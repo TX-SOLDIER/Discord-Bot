@@ -886,6 +886,20 @@ client.on('messageUpdate', async (oldMessage, newMessage) => {
   if (oldMessage.author.bot) return;
   if (oldMessage.content === newMessage.content) return;
 
+  // --- [NEW] COUNTING GAME EDIT DETECTION ---
+  const guildCountingData = countingData[newMessage.guild.id];
+  if (guildCountingData && newMessage.channel.id === guildCountingData.channelId) {
+    const nextNumber = guildCountingData.currentCount + 1;
+    const alertMessage = `⚠️ **EDIT DETECTED!**
+**User:** ${oldMessage.author}
+**Original Message:** \`${oldMessage.content}\`
+**Edited To:** \`${newMessage.content}\`
+
+To avoid confusion, the next number is still **${nextNumber}**.`;
+    await newMessage.channel.send(alertMessage);
+  }
+  // --- END NEW CODE ---
+
   const logMessage = `\`[EDITED]\` **${oldMessage.author.tag}** edited their message in <#${oldMessage.channel.id}>.
 **Before:** \`\`\`${oldMessage.content}\`\`\`
 **After:** \`\`\`${newMessage.content}\`\`\``;
@@ -895,6 +909,21 @@ client.on('messageUpdate', async (oldMessage, newMessage) => {
 
 client.on('messageDelete', async message => {
   if (message.author?.bot) return;
+
+  // --- [NEW] COUNTING GAME DELETE DETECTION ---
+  if (message.guild) { // Ensure guild context exists
+    const guildCountingData = countingData[message.guild.id];
+    if (guildCountingData && message.channel.id === guildCountingData.channelId) {
+        const nextNumber = guildCountingData.currentCount + 1;
+        const alertMessage = `⚠️ **DELETE DETECTED!**
+**User:** ${message.author || 'An unknown user'}
+**Deleted Message:** \`${message.content || '(Message content not available)'}\`
+
+To avoid confusion, the next number is **${nextNumber}**.`;
+        await message.channel.send(alertMessage);
+    }
+  }
+  // --- END NEW CODE ---
 
   const logMessage = `\`[DELETED]\` A message by **${message.author?.tag || 'Unknown User'}** was deleted in <#${message.channel.id}>.
 **Content:** \`\`\`${message.content || 'N/A'}\`\`\``;
@@ -949,6 +978,12 @@ client.on('messageCreate', async (message) => {
                 guildCountingData.currentCount++;
                 guildCountingData.lastUserId = message.author.id;
                 
+                // --- [NEW] HIGH SCORE LOGIC ---
+                if (guildCountingData.currentCount > (guildCountingData.highScore || 0)) {
+                    guildCountingData.highScore = guildCountingData.currentCount;
+                }
+                // --- END NEW CODE ---
+
                 const userId = message.author.id;
                 guildCountingData.leaderboard[userId] = (guildCountingData.leaderboard[userId] || 0) + 1;
 
@@ -1044,7 +1079,7 @@ if (command === 'help') {
     `☆ **OpenRouter AI**: \`@bot <prompt>\` — Ask OpenRouter AI a prompt\n\n` +
     `🔢 \`${PREFIX}counting set [#channel]\` — Set the counting channel.\n` +
     `🔢 \`${PREFIX}counting off\` — Disable the counting game.\n` +
-    `🔢 \`${PREFIX}counting leaderboard\` — Show the global counting leaderboard.\n\n` +
+    `🔢 \`${PREFIX}counting leaderboard\` — Show the global high score leaderboard.\n\n` +
     `👑 **Owner & Immune Commands**\n\n` +
     `🎖️ \`${PREFIX}promote @user <rank>\` — Grant a user immunity with a rank (Owner only)\n` +
     `👎 \`${PREFIX}demote @user\` — Revoke a user's immunity (Owner only)\n` +
@@ -1066,7 +1101,8 @@ else if (command === 'counting' || command === 'c') {
             channelId: channel.id,
             currentCount: 0,
             lastUserId: null,
-            leaderboard: countingData[message.guild.id]?.leaderboard || {} // Preserve leaderboard on re-set
+            highScore: countingData[message.guild.id]?.highScore || 0, // Preserve high score on re-set
+            leaderboard: countingData[message.guild.id]?.leaderboard || {} // Preserve user score leaderboard on re-set
         };
         saveCountingData();
         return message.reply(`✅ Counting channel has been set to ${channel}. The next number is **1**.`);
@@ -1077,43 +1113,49 @@ else if (command === 'counting' || command === 'c') {
         if (!countingData[message.guild.id]) {
             return message.reply('❌ Counting is not active in this server.');
         }
-        // Keep the leaderboard data but remove the active channel
+        // Keep the data but remove the active channel
         delete countingData[message.guild.id].channelId;
         saveCountingData();
-        return message.reply('✅ Counting game has been disabled for this server. Leaderboard data is saved.');
+        return message.reply('✅ Counting game has been disabled for this server. All data is saved.');
     }
 
     if (subcommand === 'leaderboard' || subcommand === 'lb') {
-        // ---- MODIFIED GLOBAL LEADERBOARD LOGIC ----
-        const globalLeaderboard = {};
+        // --- [NEW] GLOBAL HIGH SCORE LEADERBOARD ---
+        const serverHighScores = [];
 
-        // Aggregate scores from all servers
-        for (const guildData of Object.values(countingData)) {
-            if (guildData.leaderboard) {
-                for (const [userId, score] of Object.entries(guildData.leaderboard)) {
-                    globalLeaderboard[userId] = (globalLeaderboard[userId] || 0) + score;
+        for (const [guildId, guildData] of Object.entries(countingData)) {
+            // Only include servers with a recorded high score
+            if (guildData.highScore && guildData.highScore > 0) {
+                const guild = client.guilds.cache.get(guildId);
+                if (guild) { // Ensure the bot is still in the guild
+                    serverHighScores.push({
+                        name: guild.name,
+                        score: guildData.highScore
+                    });
                 }
             }
         }
 
-        const sortedLeaderboard = Object.entries(globalLeaderboard)
-            .sort(([, a], [, b]) => b - a)
-            .slice(0, 10); // Top 10
-
-        if (sortedLeaderboard.length === 0) {
-            return message.reply('The global leaderboard is empty.');
+        if (serverHighScores.length === 0) {
+            return message.reply('The global leaderboard is empty. No high scores have been set yet!');
         }
+
+        // Sort from highest score to lowest
+        serverHighScores.sort((a, b) => b.score - a.score);
 
         const leaderboardEmbed = {
           color: 0x0099ff,
-          title: '🏆 Global Counting Leaderboard',
-          description: sortedLeaderboard.map(([userId, score], index) => 
-              `${index + 1}. <@${userId}>: **${score}** total counts`
+          title: '🏆 Global High Score Leaderboard',
+          description: serverHighScores
+            .slice(0, 20) // Show top 20 servers
+            .map((entry, index) => 
+              `${index + 1}. **${entry.name}**: ${entry.score}`
           ).join('\n'),
-          footer: { text: 'Scores from all servers combined' }
+          footer: { text: 'Highest number reached in each server' }
         };
 
         return message.channel.send({ embeds: [leaderboardEmbed] });
+        // --- END NEW CODE ---
     }
 
     return message.reply('❌ Invalid subcommand. Use `$counting set`, `$counting off`, or `$counting leaderboard`.');
