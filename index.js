@@ -83,7 +83,7 @@ function saveCountingData() {
     fs.writeFileSync(countingFile, JSON.stringify(countingData, null, 2));
 }
 
-// ---- [NEW] ECONOMY/CURRENCY DATA ----
+// ---- ECONOMY/CURRENCY DATA ----
 const economyFile = './economy.json';
 let economyData = {};
 
@@ -117,8 +117,83 @@ function updateBalance(userId, amount) {
     return economyData[userId];
 }
 
-// Load economy data on startup
+
+// ---- [NEW] STORE/PLAYER DATA ----
+const storeFile = './store.json';
+const playersFile = './players.json';
+let storeData = {};
+let playerData = {};
+
+function loadStoreData() {
+    if (fs.existsSync(storeFile)) {
+        try {
+            storeData = JSON.parse(fs.readFileSync(storeFile, 'utf8'));
+        } catch (e) {
+            console.error("Error parsing store.json:", e);
+        }
+    }
+}
+
+function saveStoreData() {
+    fs.writeFileSync(storeFile, JSON.stringify(storeData, null, 2));
+}
+
+function loadPlayerData() {
+    if (fs.existsSync(playersFile)) {
+        try {
+            playerData = JSON.parse(fs.readFileSync(playersFile, 'utf8'));
+        } catch (e) {
+            console.error("Error parsing players.json:", e);
+        }
+    }
+}
+
+function savePlayerData() {
+    fs.writeFileSync(playersFile, JSON.stringify(playerData, null, 2));
+}
+
+// Helper to get or initialize a player's data
+function getPlayerData(userId) {
+    if (!playerData[userId]) {
+        playerData[userId] = {
+            health: 100,
+            inventory: [], // Array of item IDs
+            loadout: {
+                weapon: null,
+                armor: null,
+                throwable: null,
+            }
+        };
+    }
+    return playerData[userId];
+}
+
+// Helper to find an item in the store by its ID
+function findItem(itemId) {
+    for (const category in storeData) {
+        if (storeData[category][itemId]) {
+            // Return a copy of the item with its ID and category
+            const item = { ...storeData[category][itemId], id: itemId, category };
+            if (category === 'modern_weapons' || category === 'medieval_weapons') {
+                item.type = 'weapon';
+            } else if (category === 'armor') {
+                item.type = 'armor';
+            } else if (category === 'thrown_weapons') {
+                item.type = 'throwable';
+            } else {
+                item.type = 'misc';
+            }
+            return item;
+        }
+    }
+    return null;
+}
+
+
+// Load all data on startup
 loadEconomyData();
+loadStoreData();
+loadPlayerData();
 
 
 const spookyMessages = [
@@ -1143,12 +1218,16 @@ if (command === 'help') {
     `💰 **Economy Commands**\n\n` +
     `🪙 \`${PREFIX}balance [@user]\` — Check your or another user's Gold Coin balance.\n` +
     `➕ \`${PREFIX}give @user <amount>\` — Give Gold Coins to a user (Immune only).\n` +
-    `➖ \`${PREFIX}take @user <amount>\` — Take Gold Coins from a user (Immune only).\n\n` +
+    `➖ \`${PREFIX}take @user <amount>\` — Take Gold Coins from a user (Immune only).\n` +
+    `🏪 \`${PREFIX}store [buy <item_id>]\` — View the item shop or buy an item.\n` +
+    `🛍️ \`${PREFIX}inventory [@user]\` — View your or another user's inventory.\n` +
+    `⚔️ \`${PREFIX}loadout [equip/unequip <item_id>]\` — View or manage your equipped items.\n\n` +
     `👑 **Owner & Immune Commands**\n\n` +
     `🎖️ \`${PREFIX}promote @user <rank>\` — Grant a user immunity with a rank (Owner only)\n` +
     `👎 \`${PREFIX}demote @user\` — Revoke a user's immunity (Owner only)\n` +
-    `📋 \`${PREFIX}serverlist\` — List all servers the bot is in (Immune only)`;
-
+    `📋 \`${PREFIX}serverlist\` — List all servers the bot is in (Immune only)\n` +
+    `➕ \`${PREFIX}store add <category> <item_id> <price> <name>\` — Add item to store.\n` +
+    `➖ \`${PREFIX}store remove <item_id>\` — Remove item from store.`;
 
   await message.channel.send(helpText2);
 }
@@ -1223,7 +1302,7 @@ else if (command === 'counting' || command === 'c') {
     return message.reply('❌ Invalid subcommand. Use `$counting set`, `$counting off`, or `$counting leaderboard`.');
 }
 
-// ---- [NEW] ECONOMY COMMANDS ----
+// ---- ECONOMY COMMANDS ----
 else if (command === 'balance' || command === 'bal') {
     const target = message.mentions.users.first() || message.author;
     const balance = getBalance(target.id);
@@ -1267,6 +1346,185 @@ else if (['take', 'remove', 'subtract'].includes(command)) {
     saveEconomyData();
     message.reply(`✅ Took **${amount}** Gold Coins from **${target.username}**.`);
 }
+
+// ---- [NEW] STORE, INVENTORY, LOADOUT COMMANDS ----
+else if (command === 'store') {
+    const subcommand = args[0]?.toLowerCase();
+
+    // Immune-only commands to manage the store
+    if (subcommand === 'add') {
+        if (!isImmune(message.author)) return message.reply('❌ You are not authorized to manage the store.');
+        
+        const [_, category, itemId, price, ...nameParts] = args;
+        const itemName = nameParts.join(' ');
+        const priceNum = parseInt(price);
+
+        if (!category || !itemId || !price || !itemName) {
+            return message.reply('❌ Usage: `$store add <category> <item_id> <price> <name>`');
+        }
+        if (isNaN(priceNum) || priceNum < 0) return message.reply('❌ Invalid price.');
+        if (!storeData[category]) return message.reply(`❌ Invalid category. Valid categories are: ${Object.keys(storeData).join(', ')}`);
+        if (findItem(itemId)) return message.reply('❌ An item with that ID already exists.');
+
+        storeData[category][itemId] = { name: itemName, price: priceNum, description: "Added via command.", stats: {}, effects: [] };
+        saveStoreData();
+        return message.reply(`✅ Added **${itemName}** (\`${itemId}\`) to the store for **${priceNum}** Gold Coins.`);
+    }
+
+    if (subcommand === 'remove') {
+        if (!isImmune(message.author)) return message.reply('❌ You are not authorized to manage the store.');
+        const itemId = args[1];
+        if (!itemId) return message.reply('❌ Usage: `$store remove <item_id>`');
+
+        const item = findItem(itemId);
+        if (!item) return message.reply('❌ Item not found.');
+
+        delete storeData[item.category][item.id];
+        saveStoreData();
+        return message.reply(`✅ Removed **${item.name}** (\`${itemId}\`) from the store.`);
+    }
+
+    if (subcommand === 'buy') {
+        const itemId = args[1];
+        if (!itemId) return message.reply('❌ Please specify an item ID to buy. Example: `$store buy glock19`');
+
+        const item = findItem(itemId);
+        if (!item) return message.reply('❌ That item does not exist.');
+
+        const balance = getBalance(message.author.id);
+        if (balance < item.price) {
+            return message.reply(`❌ You don't have enough Gold Coins. You need **${item.price}**, but you only have **${balance}**.`);
+        }
+
+        const userPData = getPlayerData(message.author.id);
+        if (userPData.inventory.includes(itemId)) {
+            return message.reply('❌ You already own this item.');
+        }
+
+        updateBalance(message.author.id, -item.price);
+        userPData.inventory.push(itemId);
+        saveEconomyData();
+        savePlayerData();
+
+        return message.reply(`✅ You purchased **${item.name}** for **${item.price}** Gold Coins!`);
+    }
+
+    // Default: View store
+    const storeEmbed = {
+        color: 0x0099ff,
+        title: '🏪 Item Store',
+        description: 'Use `$store buy <item_id>` to purchase an item.',
+        fields: []
+    };
+
+    for (const category in storeData) {
+        const categoryName = category.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        let itemsText = '';
+        for (const itemId in storeData[category]) {
+            const item = storeData[category][itemId];
+            itemsText += `**${item.name}** - ${item.price} 🪙\n*ID: \`${itemId}\`*\n`;
+        }
+        if (itemsText) {
+            storeEmbed.fields.push({ name: `--- ${categoryName} ---`, value: itemsText, inline: false });
+        }
+    }
+    return message.channel.send({ embeds: [storeEmbed] });
+}
+
+else if (command === 'inventory' || command === 'inv') {
+    const target = message.mentions.users.first() || message.author;
+    const userPData = getPlayerData(target.id);
+
+    const invEmbed = {
+        color: 0x34eb6b,
+        title: `🛍️ ${target.username}'s Inventory`,
+        description: ''
+    };
+    
+    if (userPData.inventory.length === 0) {
+        invEmbed.description = 'This inventory is empty.';
+    } else {
+        const categorizedItems = { weapon: [], armor: [], throwable: [], misc: [] };
+
+        userPData.inventory.forEach(itemId => {
+            const item = findItem(itemId);
+            if(item && categorizedItems[item.type]) {
+                categorizedItems[item.type].push(`- **${item.name}** (\`${item.id}\`)`);
+            }
+        });
+        
+        let desc = '';
+        if (categorizedItems.weapon.length > 0) desc += `**Weapons**\n${categorizedItems.weapon.join('\n')}\n\n`;
+        if (categorizedItems.armor.length > 0) desc += `**Armor**\n${categorizedItems.armor.join('\n')}\n\n`;
+        if (categorizedItems.throwable.length > 0) desc += `**Throwables**\n${categorizedItems.throwable.join('\n')}\n\n`;
+        if (categorizedItems.misc.length > 0) desc += `**Miscellaneous**\n${categorizedItems.misc.join('\n')}\n\n`;
+
+        invEmbed.description = desc.trim();
+    }
+
+    return message.channel.send({ embeds: [invEmbed] });
+}
+
+else if (command === 'loadout') {
+    const subcommand = args[0]?.toLowerCase();
+    const itemId = args[1];
+
+    if (subcommand === 'equip') {
+        if (!itemId) return message.reply('❌ Usage: `$loadout equip <item_id>`');
+        
+        const userPData = getPlayerData(message.author.id);
+        if (!userPData.inventory.includes(itemId)) {
+            return message.reply("❌ You don't own that item. Buy it from the store first.");
+        }
+
+        const item = findItem(itemId);
+        if (!item || item.type === 'misc') return message.reply("❌ This item cannot be equipped.");
+
+        userPData.loadout[item.type] = item.id;
+        savePlayerData();
+        return message.reply(`✅ Equipped **${item.name}**.`);
+    }
+
+    if (subcommand === 'unequip') {
+        const slot = args[1]?.toLowerCase();
+        if (!['weapon', 'armor', 'throwable'].includes(slot)) {
+            return message.reply("❌ Usage: `$loadout unequip <weapon|armor|throwable>`");
+        }
+        
+        const userPData = getPlayerData(message.author.id);
+        const equippedItemId = userPData.loadout[slot];
+        if (!equippedItemId) return message.reply(`❌ You don't have a ${slot} equipped.`);
+
+        const item = findItem(equippedItemId);
+        userPData.loadout[slot] = null;
+        savePlayerData();
+        return message.reply(`✅ Unequipped **${item.name}**.`);
+    }
+
+    // Default: View loadout
+    const target = message.mentions.users.first() || message.author;
+    const userPData = getPlayerData(target.id);
+    const loadout = userPData.loadout;
+
+    const weapon = loadout.weapon ? findItem(loadout.weapon) : null;
+    const armor = loadout.armor ? findItem(loadout.armor) : null;
+    const throwable = loadout.throwable ? findItem(loadout.throwable) : null;
+    
+    const loadoutEmbed = {
+        color: 0xf5b042,
+        title: `⚔️ ${target.username}'s Loadout`,
+        fields: [
+            { name: '❤️ Health', value: `${userPData.health}/100`, inline: false },
+            { name: '🔫 Weapon', value: weapon ? `**${weapon.name}** (\`${weapon.id}\`)` : 'None', inline: true },
+            { name: '🛡️ Armor', value: armor ? `**${armor.name}** (\`${armor.id}\`)` : 'None', inline: true },
+            { name: '💣 Throwable', value: throwable ? `**${throwable.name}** (\`${throwable.id}\`)` : 'None', inline: true },
+        ],
+        footer: { text: "Use `$loadout equip <id>` or `$loadout unequip <slot>`" }
+    };
+
+    return message.channel.send({ embeds: [loadoutEmbed] });
+}
+
 
   // ---- Log Mode Commands ----
   else if (command === 'logmode') {
