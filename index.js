@@ -2239,7 +2239,6 @@ else if (command === 'battle' || command === '1v1') {
   };
 
   await sent.edit({ content: "", embeds: [pingEmbed] });
-  }
   } else if (command === 'stats') {
     message.channel.send(`📊 Server has ${message.guild.memberCount} members.`);
   } else if (command === 'uptime') {
