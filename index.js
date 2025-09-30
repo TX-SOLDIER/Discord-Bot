@@ -1607,7 +1607,7 @@ if (command === 'help') {
       `• Normal Users: Can only pay coins`
     )
     .setFooter({ text: 'Use $help for full command list 📖' })
-    .setImage('https://i.imgur.com/lhT8tLM.gif'); // permanent image
+    .setImage('https://i.imgur.com/NAneRS5.gif'); // permanent image
 
   // Send embeds
   await message.channel.send({ embeds: [embed1] });
