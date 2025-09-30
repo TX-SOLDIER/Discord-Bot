@@ -1533,14 +1533,6 @@ if (command === 'help') {
     `🏷️ \`${PREFIX}role add @user <role>\` – Add role\n` +
     `🏷️ \`${PREFIX}role remove @user <role>\` – Remove role\n` +
     `❌ \`${PREFIX}unauthorized\` – Unauthorized response\n` +
-    `☢︎ \`${PREFIX}nuke delete [count]\` – Delete bulk channels\n` +
-    `☢︎ \`${PREFIX}nuke rename <n> [count]\` – Rename bulk channels\n\n` +
-    `🖥️ **Log Mode Commands**\n\n` +
-    `⚡ \`${PREFIX}logmode on [#channel]\` – Enable logging in a channel\n` +
-    `⚡ \`${PREFIX}logmode off\` – Disable logging\n` +
-    `⚡ \`${PREFIX}logmode setmaster <channelID>\` – Set master log channel (Owner only)\n` +
-    `⚡ \`${PREFIX}logmode masteron\` – Enable master log (Owner only)\n` +
-    `⚡ \`${PREFIX}logmode masteroff\` – Disable master log (Owner only)\n\n` +
     `❓ **Question of the Day**\n\n` +
     `❓ \`${PREFIX}qotd on\` – Enable QOTD in current channel\n` +
     `❓ \`${PREFIX}qotd off\` – Disable QOTD in current channel\n` +
@@ -1564,6 +1556,14 @@ if (command === 'help') {
     `🤖 **AI Commands**\n\n` +
     `★ **Google Gemini AI**: \`${PREFIX}ai <prompt>\` – Ask Gemini AI a prompt\n` +
     `☆ **OpenRouter AI**: \`@bot <prompt>\` – Ask OpenRouter AI a prompt\n\n` +
+    `☢︎ \`${PREFIX}nuke delete [count]\` – Delete bulk channels\n` +
+    `☢︎ \`${PREFIX}nuke rename <n> [count]\` – Rename bulk channels\n\n` +
+    `🖥️ **Log Mode Commands**\n\n` +
+    `⚡ \`${PREFIX}logmode on [#channel]\` – Enable logging in a channel\n` +
+    `⚡ \`${PREFIX}logmode off\` – Disable logging\n` +
+    `⚡ \`${PREFIX}logmode setmaster <channelID>\` – Set master log channel (Owner only)\n` +
+    `⚡ \`${PREFIX}logmode masteron\` – Enable master log (Owner only)\n` +
+    `⚡ \`${PREFIX}logmode masteroff\` – Disable master log (Owner only)\n\n` +
     `💰 **Economy Commands**\n\n` +
     `🪙 \`${PREFIX}balance [@user]\` – Check your or another user's Gold Coin balance\n` +
     `💵 \`${PREFIX}pay @user <amount>\` – Pay Gold Coins to another user\n` +
