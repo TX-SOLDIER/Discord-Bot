@@ -1491,86 +1491,112 @@ client.on('messageCreate', async (message) => {
     }
 
 // ---- Help Command ----
+
 if (command === 'help') {
-  const helpText1 = `📖 **Bot Commands — Utility**\n\n` +
-    `📌 \`${PREFIX}prefix\` — Show the bot prefix\n` +
-    `🏓 \`${PREFIX}ping\` — Check bot response time\n` +
-    `📊 \`${PREFIX}stats\` — Server member stats\n` +
-    `⏱️ \`${PREFIX}uptime\` — Bot active time\n` +
-    `🤖 \`${PREFIX}botinfo\` — Info about the bot\n` +
-    `🔗 \`${PREFIX}invite\` — Get bot invite link\n` +
-    `👋 \`${PREFIX}setwelcome\` / \`${PREFIX}clearwelcome\` — Set/clear welcome message\n` +
-    `🚪 \`${PREFIX}setleave\` / \`${PREFIX}clearleave\` — Set/clear leave message\n\n` +
+  const helpText1 = `📖 **Bot Commands – Utility**\n\n` +
+    `📌 \`${PREFIX}prefix\` – Show the bot prefix\n` +
+    `🔍 \`${PREFIX}ping\` – Check bot response time\n` +
+    `📊 \`${PREFIX}stats\` – Server member stats\n` +
+    `⏱️ \`${PREFIX}uptime\` – Bot active time\n` +
+    `🤖 \`${PREFIX}botinfo\` – Info about the bot\n` +
+    `🔗 \`${PREFIX}invite\` – Get bot invite link\n` +
+    `👋 \`${PREFIX}setwelcome\` / \`${PREFIX}clearwelcome\` – Set/clear welcome message\n` +
+    `🚪 \`${PREFIX}setleave\` / \`${PREFIX}clearleave\` – Set/clear leave message\n\n` +
     `📖 **Fun & Games**\n\n` +
-    `🪙 \`${PREFIX}flip\` — Flip a coin\n` +
-    `🎱 \`${PREFIX}8ball [question]\` — Magic 8-ball\n` +
-    `🎲 \`${PREFIX}dice\` — Roll a die\n` +
-    `🎯 \`${PREFIX}rate @user\` — Rate someone\n` +
-    `🌈 \`${PREFIX}howgay @user\` — Gay meter\n` +
-    `🕵️ \`${PREFIX}sus @user\` — Sus meter\n` +
-    `💬 \`${PREFIX}truth\` — Truth question\n` +
-    `😈 \`${PREFIX}dare\` — Dare\n` +
-    `🔥 \`${PREFIX}roast @user\` — Roast\n` +
-    `💖 \`${PREFIX}compliment @user\` — Compliment\n` +
-    `🖼️ \`${PREFIX}meme\` — Get a random meme\n` +
-    `🔞 \`${PREFIX}nsfw-meme\` — Get a random NSFW meme (NSFW channels only)\n` +
-    `👻 \`${PREFIX}haunt\` / \`${PREFIX}unhaunt\` — Haunting\n` +
-    `🃏 \`${PREFIX}blackjack\`, \`${PREFIX}hit\`, \`${PREFIX}stand\` — Play Blackjack\n` +
+    `🪙 \`${PREFIX}flip\` – Flip a coin\n` +
+    `🎱 \`${PREFIX}8ball [question]\` – Magic 8-ball\n` +
+    `🎲 \`${PREFIX}dice\` – Roll a die\n` +
+    `🎯 \`${PREFIX}rate @user\` – Rate someone\n` +
+    `🌈 \`${PREFIX}howgay @user\` – Gay meter\n` +
+    `🕵️ \`${PREFIX}sus @user\` – Sus meter\n` +
+    `💬 \`${PREFIX}truth\` – Truth question\n` +
+    `😈 \`${PREFIX}dare\` – Dare\n` +
+    `🔥 \`${PREFIX}roast @user\` – Roast\n` +
+    `💖 \`${PREFIX}compliment @user\` – Compliment\n` +
+    `🖼️ \`${PREFIX}meme\` – Get a random meme\n` +
+    `🔞 \`${PREFIX}nsfw-meme\` – Get a random NSFW meme (NSFW channels only)\n` +
+    `👻 \`${PREFIX}haunt\` / \`${PREFIX}unhaunt\` – Haunting\n` +
+    `🃏 \`${PREFIX}blackjack\`, \`${PREFIX}hit\`, \`${PREFIX}stand\` – Play Blackjack\n\n` +
     `📖 **Moderation Commands**\n\n` +
-    `🎉 \`${PREFIX}giveaway <duration> <prize>\` — Start a giveaway (e.g., 10m Prize)\n` +
-    `🔨 \`${PREFIX}kick @user [reason]\` — Kick a user\n` +
-    `🚫 \`${PREFIX}ban @user [reason]\` — Ban a user\n` +
-    `🤐 \`${PREFIX}mute @user [time]\` — Mute a user\n` +
-    `🔊 \`${PREFIX}unmute @user\` — Unmute a user\n` +
-    `⚠️ \`${PREFIX}warn @user [reason]\` — Warn a user\n` +
-    `📄 \`${PREFIX}warnings @user\` — Show warnings\n` +
-    `🧹 \`${PREFIX}clear [number]\` — Delete messages\n` +
-    `🔒 \`${PREFIX}lock\` — Lock channel\n` +
-    `🔓 \`${PREFIX}unlock\` — Unlock channel\n` +
-    `🛡️ \`${PREFIX}antiraid on\` / \`${PREFIX}antiraid off\` — Engage/disengage server lockdown\n` +
-    `🐌 \`${PREFIX}slowmode [seconds]\` — Set slowmode\n` +
-    `🏷️ \`${PREFIX}role add @user <role>\` — Add role\n` +
-    `🏷️ \`${PREFIX}role remove @user <role>\` — Remove role\n` +
-    `❌ \`${PREFIX}unauthorized\` — Unauthorized response\n` +
-    `💥 \`${PREFIX}nuke delete [count]\` — Delete bulk channels\n` +
-    `📝 \`${PREFIX}nuke rename <name> [count]\` — Rename bulk channels\n\n` +
-    `🖥️ **Log Mode Commands**\n` +
-    `⚡ \`${PREFIX}logmode on [#channel]\` — Enable logging in a channel\n` +
-    `⚡ \`${PREFIX}logmode off\` — Disable logging\n` +
-    `⚡ \`${PREFIX}logmode setmaster <channelID>\` — Set master log channel (Owner only)\n` +
-    `⚡ \`${PREFIX}logmode masteron\` — Enable master log (Owner only)\n` +
-    `⚡ \`${PREFIX}logmode masteroff\` — Disable master log (Owner only)`;
+    `🎉 \`${PREFIX}giveaway <duration> <prize>\` – Start a giveaway (e.g., 10m Prize)\n` +
+    `🔨 \`${PREFIX}kick @user [reason]\` – Kick a user\n` +
+    `🚫 \`${PREFIX}ban @user [reason]\` – Ban a user\n` +
+    `🤐 \`${PREFIX}mute @user [time]\` – Mute a user\n` +
+    `🔊 \`${PREFIX}unmute @user\` – Unmute a user\n` +
+    `⚠️ \`${PREFIX}warn @user [reason]\` – Warn a user\n` +
+    `📄 \`${PREFIX}warnings @user\` – Show warnings\n` +
+    `🧹 \`${PREFIX}clear [number]\` – Delete messages\n` +
+    `🔒 \`${PREFIX}lock\` – Lock channel\n` +
+    `🔓 \`${PREFIX}unlock\` – Unlock channel\n` +
+    `🛡️ \`${PREFIX}antiraid on\` / \`${PREFIX}antiraid off\` – Engage/disengage server lockdown\n` +
+    `🌐 \`${PREFIX}slowmode [seconds]\` – Set slowmode\n` +
+    `🏷️ \`${PREFIX}role add @user <role>\` – Add role\n` +
+    `🏷️ \`${PREFIX}role remove @user <role>\` – Remove role\n` +
+    `❌ \`${PREFIX}unauthorized\` – Unauthorized response\n` +
+    `☢︎ \`${PREFIX}nuke delete [count]\` – Delete bulk channels\n` +
+    `☢︎ \`${PREFIX}nuke rename <n> [count]\` – Rename bulk channels\n\n` +
+    `🖥️ **Log Mode Commands**\n\n` +
+    `⚡ \`${PREFIX}logmode on [#channel]\` – Enable logging in a channel\n` +
+    `⚡ \`${PREFIX}logmode off\` – Disable logging\n` +
+    `⚡ \`${PREFIX}logmode setmaster <channelID>\` – Set master log channel (Owner only)\n` +
+    `⚡ \`${PREFIX}logmode masteron\` – Enable master log (Owner only)\n` +
+    `⚡ \`${PREFIX}logmode masteroff\` – Disable master log (Owner only)\n\n` +
+    `❓ **Question of the Day**\n\n` +
+    `❓ \`${PREFIX}qotd on\` – Enable QOTD in current channel\n` +
+    `❓ \`${PREFIX}qotd off\` – Disable QOTD in current channel\n` +
+    `❓ \`${PREFIX}qotd everyone on\` – Enable @everyone ping for QOTD\n` +
+    `❓ \`${PREFIX}qotd everyone off\` – Disable @everyone ping for QOTD\n\n` +
+    `🔢 **Counting Game**\n\n` +
+    `🔢 \`${PREFIX}counting set [#channel]\` – Set the counting channel\n` +
+    `🔢 \`${PREFIX}counting off\` – Disable the counting game\n` +
+    `🔢 \`${PREFIX}counting leaderboard\` – Show the global high score leaderboard`;
 
   await message.channel.send(helpText1);
 
   const helpText2 = `📖 **Info & Tools**\n\n` +
-    `🧑‍💼 \`${PREFIX}userinfo\` — User info\n` +
-    `🖼️ \`${PREFIX}avatar @user\` — Avatar\n` +
-    `🏠 \`${PREFIX}serverinfo\` — Server info\n` +
-    `📢 \`${PREFIX}shout [msg]\` — Shout\n` +
-    `🤐 \`${PREFIX}spoiler [msg]\` — Spoiler\n` +
-    `📣 \`${PREFIX}say [msg]\` — Echo\n` +
-    `✉️ \`${PREFIX}send <channelID> <message>\` — Send to another server/channel\n\n` +
-    `❓ \`${PREFIX}qotd on\` / \`${PREFIX}qotd off\` — Turn Question of the Day ON/OFF\n` +
-    `❓ \`${PREFIX}qotd everyone on\` / \`${PREFIX}qotd everyone off\` — Toggle everyone ping for QOTD\n\n` +
-    `★ **Google Gemini AI**: \`${PREFIX}ai <prompt>\` — Ask Gemini AI a prompt\n` +
-    `☆ **OpenRouter AI**: \`@bot <prompt>\` — Ask OpenRouter AI a prompt\n\n` +
-    `🔢 \`${PREFIX}counting set [#channel]\` — Set the counting channel.\n` +
-    `🔢 \`${PREFIX}counting off\` — Disable the counting game.\n` +
-    `🔢 \`${PREFIX}counting leaderboard\` — Show the global high score leaderboard.\n\n` +
+    `🧑‍💼 \`${PREFIX}userinfo\` – User info\n` +
+    `🖼️ \`${PREFIX}avatar @user\` – Avatar\n` +
+    `🏠 \`${PREFIX}serverinfo\` – Server info\n` +
+    `📢 \`${PREFIX}shout [msg]\` – Shout\n` +
+    `🤫 \`${PREFIX}spoiler [msg]\` – Spoiler\n` +
+    `📣 \`${PREFIX}say [msg]\` – Echo\n` +
+    `✉️ \`${PREFIX}send <channelID> <message>\` – Send to another server/channel\n\n` +
+    `🤖 **AI Commands**\n\n` +
+    `★ **Google Gemini AI**: \`${PREFIX}ai <prompt>\` – Ask Gemini AI a prompt\n` +
+    `☆ **OpenRouter AI**: \`@bot <prompt>\` – Ask OpenRouter AI a prompt\n\n` +
     `💰 **Economy Commands**\n\n` +
-    `🪙 \`${PREFIX}balance [@user]\` — Check your or another user's Gold Coin balance.\n` +
-    `➕ \`${PREFIX}give @user <amount>\` — Give Gold Coins to a user (Immune only).\n` +
-    `➖ \`${PREFIX}take @user <amount>\` — Take Gold Coins from a user (Immune only).\n` +
-    `🏪 \`${PREFIX}store [buy <item_id>]\` — View the item shop or buy an item.\n` +
-    `🛍️ \`${PREFIX}inventory [@user]\` — View your or another user's inventory.\n` +
-    `⚔️ \`${PREFIX}loadout [equip/unequip <item_id>]\` — View or manage your equipped items.\n\n` +
+    `🪙 \`${PREFIX}balance [@user]\` – Check your or another user's Gold Coin balance\n` +
+    `💵 \`${PREFIX}pay @user <amount>\` – Pay Gold Coins to another user\n` +
+    `➕ \`${PREFIX}give @user <amount>\` – Give Gold Coins to a user (Owner & Immune only)\n` +
+    `➖ \`${PREFIX}take @user <amount>\` – Take Gold Coins from a user (Owner & Immune only)\n\n` +
+    `**💡 How to Earn Gold Coins:**\n` +
+    `• Chat in any channel: **1 coin** per minute\n` +
+    `• Use bot commands: **2 coins** per 30 seconds\n` +
+    `• Count correctly in counting game: **5 coins** per number\n` +
+    `• Win a battle: **500 coins**\n` +
+    `• Win at blackjack: **25 coins**\n\n` +
+    `🪖 **Battle System**\n\n` +
+    `🏪 \`${PREFIX}store [buy <item_id>]\` – View the item shop or buy an item\n` +
+    `🛍️ \`${PREFIX}inventory [@user]\` – View your or another user's inventory\n` +
+    `⚔️ \`${PREFIX}loadout [equip/unequip <item_id>]\` – View or manage your equipped items\n` +
+    `⚔️ \`${PREFIX}battle @user\` or \`${PREFIX}1v1 @user\` – Challenge someone to a 1v1 battle\n\n` +
+    `**🎮 Battle System Guide:**\n` +
+    `1. Buy weapons, armor, and throwables from the store\n` +
+    `2. Equip items to your loadout\n` +
+    `3. Challenge other players to battle\n` +
+    `4. Winner takes home 500 Gold Coins!\n\n` +
     `👑 **Owner & Immune Commands**\n\n` +
-    `🎖️ \`${PREFIX}promote @user <rank>\` — Grant a user immunity with a rank (Owner only)\n` +
-    `👎 \`${PREFIX}demote @user\` — Revoke a user's immunity (Owner only)\n` +
-    `📋 \`${PREFIX}serverlist\` — List all servers the bot is in (Immune only)\n` +
-    `➕ \`${PREFIX}store add <category> <item_id> <price> <name>\` — Add item to store.\n` +
-    `➖ \`${PREFIX}store remove <item_id>\` — Remove item from store.`;
+    `🎖️ \`${PREFIX}promote @user <rank>\` – Grant a user immunity with a rank (Owner only)\n` +
+    `✖️ \`${PREFIX}demote @user\` – Revoke a user's immunity (Owner only)\n` +
+    `📋 \`${PREFIX}serverlist\` – List all servers the bot is in (Immune only)\n` +
+    `➕ \`${PREFIX}store add <category> <item_id> <price> <n>\` – Add item to store (Immune only)\n` +
+    `➖ \`${PREFIX}store remove <item_id>\` – Remove item from store (Immune only)\n\n` +
+    `**🏅 Immunity Ranks:**\n` +
+    `2LT, 1LT, CPT, MAJ, LTC, COL, BG, MG, LTG, GEN\n\n` +
+    `**💰 Economy Permissions:**\n` +
+    `• **Bot Owner**: Can give/take coins to/from anyone (including self)\n` +
+    `• **Immune Users**: Can give/take coins to/from anyone except the owner\n` +
+    `• **Normal Users**: Can only pay other users using \`${PREFIX}pay\``;
 
   await message.channel.send(helpText2);
 }
@@ -1649,47 +1675,87 @@ else if (command === 'counting' || command === 'c') {
 else if (command === 'balance' || command === 'bal') {
     const target = message.mentions.users.first() || message.author;
     const balance = getBalance(target.id);
-    message.reply(`🪙 **${target.username}** has **${balance}** Gold Coins.`);
+    message.reply(`💰 **${target.username}** has **${balance}** Gold Coins.`);
 }
+
 else if (command === 'give' || command === 'add') {
-    if (!isImmune(message.author)) {
-        return message.reply('❌ You do not have permission to use this command.');
-    }
     const target = message.mentions.users.first();
     const amount = parseInt(args[1]);
 
     if (!target) return message.reply('❌ Please mention a user.');
     if (isNaN(amount) || amount <= 0) return message.reply('❌ Please provide a valid positive amount of Gold Coins.');
     
-    // Protect the owner's balance
-    if (target.id === OWNER_ID) {
-        return message.reply('❌ You cannot modify the owner\'s balance.');
+    // Owner can give to anyone including themselves
+    if (message.author.id === OWNER_ID) {
+        updateBalance(target.id, amount);
+        saveEconomyData();
+        return message.reply(`✅ Gave **${amount}** Gold Coins to **${target.username}**.`);
     }
-
-    updateBalance(target.id, amount);
-    saveEconomyData();
-    message.reply(`✅ Gave **${amount}** Gold Coins to **${target.username}**.`);
+    
+    // Immune users can give to anyone EXCEPT the owner
+    if (isImmune(message.author)) {
+        if (target.id === OWNER_ID) {
+            return message.reply('❌ You cannot modify the owner\'s balance.');
+        }
+        updateBalance(target.id, amount);
+        saveEconomyData();
+        return message.reply(`✅ Gave **${amount}** Gold Coins to **${target.username}**.`);
+    }
+    
+    // Normal users cannot use this command
+    return message.reply('❌ You do not have permission to use this command.');
 }
+
 else if (['take', 'remove', 'subtract'].includes(command)) {
-    if (!isImmune(message.author)) {
-        return message.reply('❌ You do not have permission to use this command.');
-    }
     const target = message.mentions.users.first();
     const amount = parseInt(args[1]);
 
     if (!target) return message.reply('❌ Please mention a user.');
     if (isNaN(amount) || amount <= 0) return message.reply('❌ Please provide a valid positive amount of Gold Coins.');
 
-    // Protect the owner's balance
-    if (target.id === OWNER_ID && message.author.id !== OWNER_ID) {
-        return message.reply('❌ You cannot modify the owner\'s balance.');
+    // Owner can take from anyone including themselves
+    if (message.author.id === OWNER_ID) {
+        updateBalance(target.id, -amount);
+        saveEconomyData();
+        return message.reply(`✅ Took **${amount}** Gold Coins from **${target.username}**.`);
     }
-
-    updateBalance(target.id, -amount);
-    saveEconomyData();
-    message.reply(`✅ Took **${amount}** Gold Coins from **${target.username}**.`);
+    
+    // Immune users can take from anyone EXCEPT the owner
+    if (isImmune(message.author)) {
+        if (target.id === OWNER_ID) {
+            return message.reply('❌ You cannot modify the owner\'s balance.');
+        }
+        updateBalance(target.id, -amount);
+        saveEconomyData();
+        return message.reply(`✅ Took **${amount}** Gold Coins from **${target.username}**.`);
+    }
+    
+    // Normal users cannot use this command
+    return message.reply('❌ You do not have permission to use this command.');
 }
 
+// NEW: Pay command for normal users
+else if (command === 'pay') {
+    const target = message.mentions.users.first();
+    const amount = parseInt(args[1]);
+
+    if (!target) return message.reply('❌ Please mention a user to pay.');
+    if (target.id === message.author.id) return message.reply('❌ You cannot pay yourself.');
+    if (target.bot) return message.reply('❌ You cannot pay bots.');
+    if (isNaN(amount) || amount <= 0) return message.reply('❌ Please provide a valid positive amount.');
+    
+    const senderBalance = getBalance(message.author.id);
+    if (senderBalance < amount) {
+        return message.reply(`❌ You don't have enough Gold Coins. You have **${senderBalance}**, but tried to pay **${amount}**.`);
+    }
+    
+    updateBalance(message.author.id, -amount);
+    updateBalance(target.id, amount);
+    saveEconomyData();
+    
+    message.reply(`✅ You paid **${amount}** Gold Coins to **${target.username}**.`);
+}
+  
 // ---- [NEW] STORE, INVENTORY, LOADOUT COMMANDS ----
 else if (command === 'store') {
     const subcommand = args[0]?.toLowerCase();
