@@ -2244,18 +2244,26 @@ else if (command === 'battle' || command === '1v1') {
   } else if (command === 'uptime') {
     const uptime = Math.floor(process.uptime());
     message.channel.send(`⏱️ Bot uptime: ${uptime} seconds.`);
-  } else if (command === 'botinfo') {
-    message.channel.send(`🤖 I am ${client.user.tag}, 📡 [SECURE  TRANSMISSION] 📡
-Unit: Discord Bot
-Creator / Operator: TX_SOLDIER
-Status: Mission-Ready. Armed.
-Capabilities:
-- Defense: Active protection for allied servers. 
-- Offense: Engage threats if provoked or mission parameters require.
-- Recon: Logging and monitoring activities
--Special Operations: Classified.
+  const { EmbedBuilder } = require('discord.js');
 
-End Transmission.`);
+} else if (command === 'botinfo') {
+  const topGif = "https://i.imgur.com/yourTopGif.gif"; // replace with your top GIF URL
+  const bottomGif = "https://i.imgur.com/yourBottomGif.gif"; // replace with your bottom GIF URL
+
+  const botInfoEmbed = new EmbedBuilder()
+    .setColor(0x00FFFF) // Cyan color, you can change
+    .setTitle(`🤖 ${client.user.tag} — Bot Info`)
+    .setDescription(`📡 [SECURE TRANSMISSION] 📡\n\n**Unit:** Discord Bot\n**Creator / Operator:** TX_SOLDIER\n**Status:** Mission-Ready. Armed.`)
+    .addFields(
+      { name: 'Capabilities', value: 
+        `**Defense:** Active protection for allied servers.\n` +
+        `**Offense:** Engage threats if provoked or mission parameters require.\n` +
+        `**Recon:** Logging and monitoring activities\n` +
+        `**Special Operations:** Classified.` }
+    )
+    .setImage(topGif) // Top GIF
+    .setFooter({ text: 'End Transmission.', iconURL: bottomGif }); // Bottom GIF in footer
+  message.channel.send({ embeds: [botInfoEmbed] });
   } else if (command === 'invite') {
     message.channel.send(`🔗 Invite me: https://discord.com/api/oauth2/authorize?client_id=${client.user.id}&permissions=8&scope=bot%20applications.commands`);
   } else if (command === 'prefix') {
