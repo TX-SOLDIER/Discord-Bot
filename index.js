@@ -16,6 +16,7 @@ const client = new Client({
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildMessageReactions,
   ],
 });
 
@@ -121,8 +122,10 @@ function updateBalance(userId, amount) {
 // ---- [NEW] STORE/PLAYER DATA ----
 const storeFile = './store.json';
 const playersFile = './players.json';
+const battlesFile = './battles.json';
 let storeData = {};
 let playerData = {};
+let activeBattles = {};
 
 function loadStoreData() {
     if (fs.existsSync(storeFile)) {
@@ -152,11 +155,26 @@ function savePlayerData() {
     fs.writeFileSync(playersFile, JSON.stringify(playerData, null, 2));
 }
 
+function loadBattles() {
+    if (fs.existsSync(battlesFile)) {
+        try {
+            activeBattles = JSON.parse(fs.readFileSync(battlesFile, 'utf8'));
+        } catch (e) {
+            console.error("Error parsing battles.json:", e);
+        }
+    }
+}
+
+function saveBattles() {
+    fs.writeFileSync(battlesFile, JSON.stringify(activeBattles, null, 2));
+}
+
 // Helper to get or initialize a player's data
 function getPlayerData(userId) {
     if (!playerData[userId]) {
         playerData[userId] = {
             health: 100,
+            maxHealth: 100,
             inventory: [], // Array of item IDs
             loadout: {
                 weapon: null,
@@ -178,7 +196,7 @@ function findItem(itemId) {
                 item.type = 'weapon';
             } else if (category === 'armor') {
                 item.type = 'armor';
-            } else if (category === 'thrown_weapons') {
+            } else if (category === 'throwables') {
                 item.type = 'throwable';
             } else {
                 item.type = 'misc';
@@ -189,11 +207,97 @@ function findItem(itemId) {
     return null;
 }
 
+function initializeStore() {
+    storeData = {
+        modern_weapons: {
+            glock19: { name: "Glock 19", price: 500, damage: 25, missChance: 10, critChance: 15, headshotChance: 8, description: "Reliable 9mm pistol" },
+            m4a1: { name: "M4A1", price: 1200, damage: 35, missChance: 8, critChance: 18, headshotChance: 12, description: "Standard military rifle" },
+            ak47: { name: "AK-47", price: 1300, damage: 40, missChance: 12, critChance: 16, headshotChance: 10, description: "Powerful assault rifle" },
+            mp5: { name: "MP5", price: 800, damage: 28, missChance: 6, critChance: 20, headshotChance: 9, description: "Fast SMG" },
+            desert_eagle: { name: "Desert Eagle", price: 900, damage: 45, missChance: 15, critChance: 25, headshotChance: 15, description: "High caliber handgun" },
+            m16: { name: "M16", price: 1400, damage: 38, missChance: 7, critChance: 17, headshotChance: 14, description: "Burst fire rifle" },
+            uzi: { name: "Uzi", price: 700, damage: 22, missChance: 9, critChance: 22, headshotChance: 7, description: "Compact machine pistol" },
+            scar_h: { name: "SCAR-H", price: 1600, damage: 42, missChance: 9, critChance: 19, headshotChance: 13, description: "Heavy assault rifle" },
+            p90: { name: "P90", price: 1100, damage: 30, missChance: 5, critChance: 21, headshotChance: 11, description: "High capacity SMG" },
+            barret_m82: { name: "Barrett M82", price: 2500, damage: 75, missChance: 18, critChance: 30, headshotChance: 25, description: "Anti-material rifle" },
+            aug: { name: "AUG", price: 1500, damage: 36, missChance: 8, critChance: 18, headshotChance: 12, description: "Bullpup assault rifle" },
+            famas: { name: "FAMAS", price: 1250, damage: 34, missChance: 10, critChance: 17, headshotChance: 11, description: "French bullpup rifle" },
+            g36c: { name: "G36C", price: 1350, damage: 37, missChance: 7, critChance: 18, headshotChance: 13, description: "German assault rifle" },
+            vector: { name: "Vector", price: 1000, damage: 29, missChance: 6, critChance: 23, headshotChance: 10, description: "Advanced SMG" },
+            m249: { name: "M249 SAW", price: 2000, damage: 50, missChance: 14, critChance: 20, headshotChance: 12, description: "Light machine gun" },
+            hk416: { name: "HK416", price: 1700, damage: 41, missChance: 7, critChance: 19, headshotChance: 14, description: "Elite assault rifle" },
+            aa12: { name: "AA-12", price: 1800, damage: 55, missChance: 12, critChance: 22, headshotChance: 10, description: "Auto shotgun" },
+            fnfal: { name: "FN FAL", price: 1650, damage: 43, missChance: 9, critChance: 18, headshotChance: 13, description: "Battle rifle" },
+            kriss_vector: { name: "Kriss Vector", price: 1450, damage: 33, missChance: 5, critChance: 24, headshotChance: 12, description: "Elite SMG" },
+            mk14_ebr: { name: "MK14 EBR", price: 3000, damage: 80, missChance: 6, critChance: 35, headshotChance: 28, description: "Most powerful modern rifle" },
+        },
+        medieval_weapons: {
+            wooden_sword: { name: "Wooden Sword", price: 100, damage: 15, missChance: 15, critChance: 10, headshotChance: 5, description: "Training sword" },
+            iron_sword: { name: "Iron Sword", price: 300, damage: 25, missChance: 12, critChance: 15, headshotChance: 8, description: "Basic iron blade" },
+            steel_sword: { name: "Steel Sword", price: 600, damage: 35, missChance: 10, critChance: 18, headshotChance: 10, description: "Quality steel blade" },
+            battle_axe: { name: "Battle Axe", price: 700, damage: 40, missChance: 13, critChance: 25, headshotChance: 12, description: "Heavy two-handed axe" },
+            war_hammer: { name: "War Hammer", price: 800, damage: 42, missChance: 14, critChance: 30, headshotChance: 15, description: "Crushing weapon" },
+            mace: { name: "Mace", price: 500, damage: 32, missChance: 11, critChance: 20, headshotChance: 10, description: "Spiked club" },
+            flail: { name: "Flail", price: 650, damage: 36, missChance: 16, critChance: 28, headshotChance: 14, description: "Chain weapon" },
+            halberd: { name: "Halberd", price: 900, damage: 45, missChance: 12, critChance: 22, headshotChance: 13, description: "Polearm weapon" },
+            claymore: { name: "Claymore", price: 1100, damage: 50, missChance: 11, critChance: 24, headshotChance: 14, description: "Scottish greatsword" },
+            katana: { name: "Katana", price: 1300, damage: 48, missChance: 8, critChance: 32, headshotChance: 20, description: "Samurai blade" },
+            rapier: { name: "Rapier", price: 850, damage: 38, missChance: 9, critChance: 26, headshotChance: 18, description: "Dueling sword" },
+            scimitar: { name: "Scimitar", price: 750, damage: 37, missChance: 10, critChance: 23, headshotChance: 12, description: "Curved blade" },
+            longsword: { name: "Longsword", price: 950, damage: 43, missChance: 10, critChance: 21, headshotChance: 13, description: "Versatile sword" },
+            gladius: { name: "Gladius", price: 700, damage: 34, missChance: 9, critChance: 19, headshotChance: 11, description: "Roman short sword" },
+            viking_axe: { name: "Viking Axe", price: 1000, damage: 46, missChance: 12, critChance: 27, headshotChance: 14, description: "Norse weapon" },
+            morning_star: { name: "Morning Star", price: 850, damage: 41, missChance: 13, critChance: 29, headshotChance: 16, description: "Spiked mace" },
+            zweihander: { name: "Zweihander", price: 1400, damage: 52, missChance: 13, critChance: 26, headshotChance: 15, description: "German greatsword" },
+            excalibur: { name: "Excalibur", price: 2200, damage: 65, missChance: 7, critChance: 33, headshotChance: 22, description: "Legendary blade" },
+            crusader_sword: { name: "Crusader Sword", price: 1600, damage: 55, missChance: 9, critChance: 28, headshotChance: 17, description: "Holy blade" },
+            spartan_spear: { name: "Spartan Spear", price: 2800, damage: 75, missChance: 6, critChance: 38, headshotChance: 30, description: "Most powerful ancient weapon" },
+        },
+        armor: {
+            cloth_armor: { name: "Cloth Armor", price: 200, defense: 5, description: "Basic protection" },
+            leather_armor: { name: "Leather Armor", price: 400, defense: 12, description: "Light armor" },
+            chainmail: { name: "Chainmail", price: 700, defense: 20, description: "Medieval armor" },
+            bronze_armor: { name: "Bronze Armor", price: 600, defense: 18, description: "Ancient armor" },
+            iron_armor: { name: "Iron Armor", price: 900, defense: 25, description: "Standard metal armor" },
+            steel_armor: { name: "Steel Armor", price: 1200, defense: 32, description: "Quality armor" },
+            samurai_armor: { name: "Samurai Armor", price: 1800, defense: 40, description: "Japanese warrior armor" },
+            spartan_armor: { name: "Spartan Armor", price: 2000, defense: 45, description: "Greek warrior armor" },
+            roman_legion: { name: "Roman Legion Armor", price: 1900, defense: 42, description: "Roman soldier armor" },
+            knight_armor: { name: "Knight Armor", price: 2200, defense: 48, description: "Full plate armor" },
+            viking_armor: { name: "Viking Armor", price: 1700, defense: 38, description: "Norse warrior armor" },
+            crusader_armor: { name: "Crusader Armor", price: 2100, defense: 46, description: "Holy knight armor" },
+            dragon_scale: { name: "Dragon Scale Armor", price: 2800, defense: 55, description: "Legendary armor" },
+            kevlar_vest: { name: "Kevlar Vest", price: 1500, defense: 35, description: "Bulletproof vest" },
+            tactical_vest: { name: "Tactical Vest", price: 1800, defense: 38, description: "Military vest" },
+            plate_carrier: { name: "Plate Carrier", price: 2200, defense: 47, description: "Ceramic plate armor" },
+            swat_armor: { name: "SWAT Armor", price: 2500, defense: 50, description: "Police tactical armor" },
+            riot_gear: { name: "Riot Gear", price: 2000, defense: 44, description: "Full riot armor" },
+            juggernaut: { name: "Juggernaut Armor", price: 2700, defense: 53, description: "Heavy assault armor" },
+            spec_ops: { name: "Spec Ops Body Armor", price: 3500, defense: 65, description: "Most powerful armor" },
+        },
+        throwables: {
+            smoke_grenade: { name: "Smoke Grenade", price: 300, damage: 0, effect: "blind", effectChance: 80, duration: 2, description: "Blinds enemy, increases miss chance" },
+            flashbang: { name: "Flashbang", price: 350, damage: 5, effect: "stun", effectChance: 75, duration: 1, description: "Stuns enemy" },
+            frag_grenade: { name: "Frag Grenade", price: 600, damage: 60, effect: "death", effectChance: 40, description: "High damage, chance of instant death if hit" },
+            molotov: { name: "Molotov Cocktail", price: 400, damage: 35, effect: "burn", duration: 3, description: "Burns over time" },
+            throwing_knife: { name: "Throwing Knife", price: 250, damage: 25, effect: "bleed", duration: 2, description: "Quick damage" },
+            shuriken: { name: "Shuriken", price: 300, damage: 20, effect: "bleed", duration: 2, description: "Ninja throwing star" },
+            c4: { name: "C4 Explosive", price: 800, damage: 80, effect: "death", effectChance: 50, description: "Massive explosion" },
+            tear_gas: { name: "Tear Gas", price: 400, damage: 10, effect: "blind", effectChance: 90, duration: 3, description: "Heavy blind effect" },
+        }
+    };
+}
+
 
 // Load all data on startup
 loadEconomyData();
 loadStoreData();
+if (Object.keys(storeData).length === 0) {
+    initializeStore();
+    saveStoreData();
+}
 loadPlayerData();
+loadBattles();
 
 
 const spookyMessages = [
@@ -1043,6 +1147,245 @@ To avoid confusion, the next number is **${nextNumber}**.`;
   await sendLog(message.guild.id, logMessage);
 });
 
+// ---- BATTLE SYSTEM: Reaction Handler ----
+client.on('messageReactionAdd', async (reaction, user) => {
+  if (user.bot) return;
+
+  // Handle partial messages
+  if (reaction.partial) {
+    try {
+      await reaction.fetch();
+    } catch (error) {
+      console.error('Error fetching reaction:', error);
+      return;
+    }
+  }
+
+  const battleKey = reaction.message.id;
+  if (activeBattles[battleKey] && activeBattles[battleKey].status === 'pending') {
+    const battle = activeBattles[battleKey];
+    
+    if (user.id === battle.defender && reaction.emoji.name === '⚔️') {
+      battle.status = 'accepted';
+      saveBattles();
+      
+      await reaction.message.channel.send(`⚔️ **${user.username}** has accepted the challenge! The battle begins!`);
+      await startBattle(reaction.message.channel, battle.challenger, battle.defender, battleKey);
+    }
+  }
+});
+
+// ---- BATTLE SYSTEM: Combat Functions ----
+async function startBattle(channel, challengerId, defenderId, battleKey) {
+  const p1Data = getPlayerData(challengerId);
+  const p2Data = getPlayerData(defenderId);
+  
+  p1Data.health = p1Data.maxHealth;
+  p2Data.health = p2Data.maxHealth;
+  
+  const p1Weapon = p1Data.loadout.weapon ? findItem(p1Data.loadout.weapon) : null;
+  const p2Weapon = p2Data.loadout.weapon ? findItem(p2Data.loadout.weapon) : null;
+  const p1Armor = p1Data.loadout.armor ? findItem(p1Data.loadout.armor) : null;
+  const p2Armor = p2Data.loadout.armor ? findItem(p2Data.loadout.armor) : null;
+  const p1Throwable = p1Data.loadout.throwable ? findItem(p1Data.loadout.throwable) : null;
+  const p2Throwable = p2Data.loadout.throwable ? findItem(p2Data.loadout.throwable) : null;
+
+  const challenger = await client.users.fetch(challengerId);
+  const defender = await client.users.fetch(defenderId);
+
+  let battleLog = `⚔️ **BATTLE START** ⚔️\n`;
+  battleLog += `**${challenger.username}** vs **${defender.username}**\n\n`;
+  battleLog += `**${challenger.username}** | HP: ${p1Data.health} | Weapon: ${p1Weapon ? p1Weapon.name : 'Fists'} | Armor: ${p1Armor ? p1Armor.name : 'None'}\n`;
+  battleLog += `**${defender.username}** | HP: ${p2Data.health} | Weapon: ${p2Weapon ? p2Weapon.name : 'Fists'} | Armor: ${p2Armor ? p2Armor.name : 'None'}\n`;
+
+  await channel.send(battleLog);
+
+  let round = 1;
+  let p1Effects = {};
+  let p2Effects = {};
+
+  while (p1Data.health > 0 && p2Data.health > 0 && round <= 20) {
+    let roundLog = `\n**━━━ Round ${round} ━━━**\n`;
+
+    const p1First = Math.random() < 0.5;
+    const fighters = p1First ? 
+      [{id: challengerId, data: p1Data, weapon: p1Weapon, armor: p1Armor, throwable: p1Throwable, user: challenger, effects: p1Effects},
+       {id: defenderId, data: p2Data, weapon: p2Weapon, armor: p2Armor, throwable: p2Throwable, user: defender, effects: p2Effects}] :
+      [{id: defenderId, data: p2Data, weapon: p2Weapon, armor: p2Armor, throwable: p2Throwable, user: defender, effects: p2Effects},
+       {id: challengerId, data: p1Data, weapon: p1Weapon, armor: p1Armor, throwable: p1Throwable, user: challenger, effects: p1Effects}];
+
+    for (let i = 0; i < 2; i++) {
+      if (fighters[0].data.health <= 0 || fighters[1].data.health <= 0) break;
+
+      const attacker = fighters[i];
+      const target = fighters[1 - i];
+
+      // Check if using throwable this round (30% chance)
+      if (attacker.throwable && Math.random() < 0.3) {
+        const throwResult = await executeThrowable(attacker, target, roundLog);
+        roundLog += throwResult.log;
+        if (throwResult.instantDeath) break;
+      } else if (attacker.weapon) {
+        const attackResult = await executeAttack(attacker, target);
+        roundLog += attackResult;
+      } else {
+        const fistDamage = 10;
+        const actualDamage = Math.max(1, fistDamage - (target.armor ? target.armor.defense * 0.3 : 0));
+        target.data.health -= actualDamage;
+        roundLog += `👊 **${attacker.user.username}** punches for ${actualDamage.toFixed(1)} damage!\n`;
+      }
+    }
+
+    // Apply status effects
+    for (let fighter of fighters) {
+      if (fighter.effects.burn && fighter.effects.burn > 0) {
+        const burnDamage = 8;
+        fighter.data.health -= burnDamage;
+        roundLog += `🔥 **${fighter.user.username}** takes ${burnDamage} burn damage!\n`;
+        fighter.effects.burn--;
+      }
+      if (fighter.effects.bleed && fighter.effects.bleed > 0) {
+        const bleedDamage = 5;
+        fighter.data.health -= bleedDamage;
+        roundLog += `🩸 **${fighter.user.username}** takes ${bleedDamage} bleed damage!\n`;
+        fighter.effects.bleed--;
+      }
+      if (fighter.effects.blind && fighter.effects.blind > 0) {
+        fighter.effects.blind--;
+      }
+    }
+
+    roundLog += `\n**${challenger.username}**: ${Math.max(0, p1Data.health).toFixed(0)} HP\n`;
+    roundLog += `**${defender.username}**: ${Math.max(0, p2Data.health).toFixed(0)} HP\n`;
+
+    await channel.send(roundLog);
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    round++;
+  }
+
+  // Determine winner
+  let resultLog = `\n**━━━ BATTLE END ━━━**\n`;
+  let winnerId, winnerName, reward = 500;
+
+  if (p1Data.health > p2Data.health) {
+    winnerId = challengerId;
+    winnerName = challenger.username;
+    resultLog += `🏆 **${challenger.username}** wins with ${p1Data.health.toFixed(0)} HP remaining!\n`;
+  } else if (p2Data.health > p1Data.health) {
+    winnerId = defenderId;
+    winnerName = defender.username;
+    resultLog += `🏆 **${defender.username}** wins with ${p2Data.health.toFixed(0)} HP remaining!\n`;
+  } else {
+    resultLog += `🤝 It's a draw! Both fighters are equally matched!\n`;
+    reward = 250;
+  }
+
+  if (winnerId) {
+    updateBalance(winnerId, reward);
+    saveEconomyData();
+    resultLog += `💰 **${winnerName}** earned ${reward} Gold Coins!\n`;
+  } else {
+    updateBalance(challengerId, reward);
+    updateBalance(defenderId, reward);
+    saveEconomyData();
+    resultLog += `💰 Both fighters earned ${reward} Gold Coins for their effort!\n`;
+  }
+
+  await channel.send(resultLog);
+
+  delete activeBattles[battleKey];
+  saveBattles();
+  savePlayerData();
+}
+
+async function executeAttack(attacker, target) {
+  let log = '';
+  const weapon = attacker.weapon;
+  const baseDamage = weapon.damage || 10;
+
+  // Check for miss
+  let missChance = weapon.missChance || 10;
+  if (attacker.effects.blind && attacker.effects.blind > 0) {
+    missChance += 30;
+  }
+
+  if (Math.random() * 100 < missChance) {
+    log += `❌ **${attacker.user.username}** missed with ${weapon.name}!\n`;
+    return log;
+  }
+
+  // Check for headshot
+  if (Math.random() * 100 < (weapon.headshotChance || 5)) {
+    const headshotDamage = baseDamage * 2;
+    const actualDamage = Math.max(1, headshotDamage - (target.armor ? target.armor.defense * 0.4 : 0));
+    target.data.health -= actualDamage;
+    log += `🎯 **HEADSHOT!** **${attacker.user.username}** hits **${target.user.username}** with ${weapon.name} for ${actualDamage.toFixed(1)} damage!\n`;
+    return log;
+  }
+
+  // Check for critical hit
+  if (Math.random() * 100 < (weapon.critChance || 10)) {
+    const critDamage = baseDamage * 1.5;
+    const actualDamage = Math.max(1, critDamage - (target.armor ? target.armor.defense * 0.5 : 0));
+    target.data.health -= actualDamage;
+    log += `💥 **CRITICAL HIT!** **${attacker.user.username}** strikes **${target.user.username}** with ${weapon.name} for ${actualDamage.toFixed(1)} damage!\n`;
+    return log;
+  }
+
+  // Normal hit
+  const actualDamage = Math.max(1, baseDamage - (target.armor ? target.armor.defense * 0.6 : 0));
+  target.data.health -= actualDamage;
+  log += `⚔️ **${attacker.user.username}** hits **${target.user.username}** with ${weapon.name} for ${actualDamage.toFixed(1)} damage!\n`;
+
+  return log;
+}
+
+async function executeThrowable(attacker, target, currentLog) {
+  const throwable = attacker.throwable;
+  let log = `💣 **${attacker.user.username}** throws ${throwable.name}!\n`;
+  let instantDeath = false;
+
+  // Base damage
+  if (throwable.damage > 0) {
+    const actualDamage = Math.max(1, throwable.damage - (target.armor ? target.armor.defense * 0.3 : 0));
+    target.data.health -= actualDamage;
+    log += `💥 ${throwable.name} deals ${actualDamage.toFixed(1)} damage to **${target.user.username}**!\n`;
+  }
+
+  // Apply effects
+  if (throwable.effect && Math.random() * 100 < (throwable.effectChance || 50)) {
+    switch (throwable.effect) {
+      case 'blind':
+        target.effects.blind = throwable.duration || 2;
+        log += `😵 **${target.user.username}** is blinded! Miss chance increased!\n`;
+        break;
+      case 'stun':
+        log += `⚡ **${target.user.username}** is stunned!\n`;
+        break;
+      case 'burn':
+        target.effects.burn = throwable.duration || 3;
+        log += `🔥 **${target.user.username}** is burning!\n`;
+        break;
+      case 'bleed':
+        target.effects.bleed = throwable.duration || 2;
+        log += `🩸 **${target.user.username}** is bleeding!\n`;
+        break;
+      case 'death':
+        if (Math.random() < 0.7) {
+          target.data.health = 0;
+          instantDeath = true;
+          log += `☠️ **INSTANT DEATH!** **${target.user.username}** was eliminated by ${throwable.name}!\n`;
+        } else {
+          log += `🛡️ **${target.user.username}** took cover and survived the explosion!\n`;
+        }
+        break;
+    }
+  }
+
+  return { log, instantDeath };
+}
+
 client.on('channelUpdate', async (oldChannel, newChannel) => {
   let changes = [];
   if (oldChannel.name !== newChannel.name) {
@@ -1523,6 +1866,82 @@ else if (command === 'loadout') {
     };
 
     return message.channel.send({ embeds: [loadoutEmbed] });
+}
+
+// ---- [NEW] BATTLE COMMAND ----
+else if (command === 'battle' || command === '1v1') {
+    const target = message.mentions.users.first();
+    
+    if (!target) {
+        return message.reply('❌ Please mention someone to battle! Example: `$battle @user`');
+    }
+    
+    if (target.id === message.author.id) {
+        return message.reply('❌ You cannot battle yourself!');
+    }
+    
+    if (target.bot) {
+        return message.reply('❌ You cannot battle a bot!');
+    }
+    
+    // Check if players have weapons equipped
+    const challengerData = getPlayerData(message.author.id);
+    const defenderData = getPlayerData(target.id);
+    
+    if (!challengerData.loadout.weapon) {
+        return message.reply('❌ You need to equip a weapon first! Use `$loadout equip <item_id>`');
+    }
+    
+    if (!defenderData.loadout.weapon) {
+        return message.reply(`❌ ${target.username} doesn't have a weapon equipped!`);
+    }
+    
+    // Create battle challenge
+    const challengeEmbed = {
+        color: 0xff0000,
+        title: '⚔️ BATTLE CHALLENGE ⚔️',
+        description: `**${message.author.username}** has challenged **${target.username}** to a 1v1 battle!\n\n` +
+                     `**${target}**, react with ⚔️ to accept the challenge!\n\n` +
+                     `The battle will begin once accepted. May the best fighter win!`,
+        fields: [
+            { 
+                name: `${message.author.username}'s Loadout`, 
+                value: `🔫 ${challengerData.loadout.weapon ? findItem(challengerData.loadout.weapon).name : 'None'}\n` +
+                       `🛡️ ${challengerData.loadout.armor ? findItem(challengerData.loadout.armor).name : 'None'}\n` +
+                       `💣 ${challengerData.loadout.throwable ? findItem(challengerData.loadout.throwable).name : 'None'}`,
+                inline: true 
+            },
+            { 
+                name: `${target.username}'s Loadout`, 
+                value: `🔫 ${defenderData.loadout.weapon ? findItem(defenderData.loadout.weapon).name : 'None'}\n` +
+                       `🛡️ ${defenderData.loadout.armor ? findItem(defenderData.loadout.armor).name : 'None'}\n` +
+                       `💣 ${defenderData.loadout.throwable ? findItem(defenderData.loadout.throwable).name : 'None'}`,
+                inline: true 
+            },
+        ],
+        footer: { text: 'Challenge expires in 60 seconds' }
+    };
+    
+    const challengeMsg = await message.channel.send({ embeds: [challengeEmbed] });
+    await challengeMsg.react('⚔️');
+    
+    // Store battle data
+    activeBattles[challengeMsg.id] = {
+        challenger: message.author.id,
+        defender: target.id,
+        status: 'pending',
+        timestamp: Date.now()
+    };
+    saveBattles();
+    
+    // Auto-cancel after 60 seconds
+    setTimeout(() => {
+        if (activeBattles[challengeMsg.id] && activeBattles[challengeMsg.id].status === 'pending') {
+            delete activeBattles[challengeMsg.id];
+            saveBattles();
+            message.channel.send(`⏱️ The battle challenge from **${message.author.username}** to **${target.username}** has expired.`);
+        }
+    }, 60000);
 }
 
 
