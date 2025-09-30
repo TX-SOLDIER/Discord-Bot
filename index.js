@@ -2178,7 +2178,7 @@ End Transmission.`);
     const result = Math.random() < 0.5 ? 'Heads' : 'Tails';
     message.channel.send(`🪙 You flipped **${result}**!`);
   } else if (command === '8ball') {
-    const responses = ['Yes.', 'No.', 'Maybe.', 'Ask again later.', 'Definitely!', 'I don’t think so.'];
+    const responses = ['Yes.', 'No.', 'Maybe.', 'Ask again later.', 'Definitely!', 'I dont think so.'];
     if (!args.length) return message.reply('🎱 Ask me a question.');
     message.channel.send(`🎱 ${responses[Math.floor(Math.random() * responses.length)]}`);
   } else if (command === 'dice') {
