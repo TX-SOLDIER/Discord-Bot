@@ -2235,7 +2235,7 @@ else if (command === 'battle' || command === '1v1') {
     color: 0x39FF14,
     title: "🏓 Pong!",
     description: `Latency is **${sent.createdTimestamp - message.createdTimestamp}ms**\nAPI Latency is **${Math.round(client.ws.ping)}ms**`,
-    thumbnail: { url: https://i.imgur.com/Abo2D8x.gif } // shows GIF in corner
+    thumbnail: { url: "https://i.imgur.com/Abo2D8x.gif" } // shows GIF in corner
   };
 
   await sent.edit({ content: "", embeds: [pingEmbed] });
