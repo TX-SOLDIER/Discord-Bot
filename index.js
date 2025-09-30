@@ -3,7 +3,7 @@ const { Client, GatewayIntentBits, PermissionsBitField } = require('discord.js')
 const fetch = require('node-fetch');
 const fs = require('fs');
 const express = require('express');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { GoogleGenerativeAI } = require('@google/generative-ai'); // Gemini AI
 
 const app = express();
 app.get('/', (req, res) => res.send('✅ Bot is running!'));
@@ -20,8 +20,10 @@ const client = new Client({
   ],
 });
 
+// ---- Google Gemini AI Setup ----
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
 
+// ---- Immunity System ----
 const OWNER_ID = '782155864134909952';
 const IMMUNITY_RANKS = ['2LT', '1LT', 'CPT', 'MAJ', 'LTC', 'COL', 'BG', 'MG', 'LTG', 'GEN'];
 const immunityFile = './immunity.json';
@@ -36,15 +38,20 @@ function saveImmunity() {
 }
 
 function isImmune(user) {
+  // The owner is always immune.
   if (user.id === OWNER_ID) return true;
+  // Check if the user is in the immunity list.
   return !!immuneUsers[user.id];
 }
 
+// ---- GIVEAWAY CODE: Time Parser ----
 function parseDuration(str) {
   const match = str.match(/^(\d+)(s|m|h|d)$/i);
   if (!match) return null;
+
   const num = parseInt(match[1]);
   const unit = match[2].toLowerCase();
+
   switch (unit) {
     case 's': return num * 1000;
     case 'm': return num * 60 * 1000;
@@ -54,12 +61,16 @@ function parseDuration(str) {
   }
 }
 
+// ---- Data ----
 const hauntedChannels = new Set();
 const hauntIntervals = new Map();
+
+// ---- ANTI-RAID DATA ----
 const antiRaidActive = new Set();
 const originalVerificationLevels = new Map();
 const joinTimestamps = new Map();
 
+// ---- COUNTING GAME DATA ----
 const countingFile = './counting.json';
 let countingData = {};
 if (fs.existsSync(countingFile)) {
@@ -73,12 +84,15 @@ function saveCountingData() {
     fs.writeFileSync(countingFile, JSON.stringify(countingData, null, 2));
 }
 
+// ---- ECONOMY/CURRENCY DATA ----
 const economyFile = './economy.json';
 let economyData = {};
+
+// Cooldowns to prevent spam earning
 const messageCooldowns = new Map();
 const commandCooldowns = new Map();
-const MESSAGE_COOLDOWN = 60 * 1000;
-const COMMAND_COOLDOWN = 30 * 1000;
+const MESSAGE_COOLDOWN = 60 * 1000; // 60 seconds
+const COMMAND_COOLDOWN = 30 * 1000; // 30 seconds
 
 function loadEconomyData() {
     if (fs.existsSync(economyFile)) {
@@ -104,6 +118,8 @@ function updateBalance(userId, amount) {
     return economyData[userId];
 }
 
+
+// ---- [NEW] STORE/PLAYER DATA ----
 const storeFile = './store.json';
 const playersFile = './players.json';
 const battlesFile = './battles.json';
@@ -118,9 +134,6 @@ function loadStoreData() {
         } catch (e) {
             console.error("Error parsing store.json:", e);
         }
-    } else {
-        initializeStore();
-        saveStoreData();
     }
 }
 
@@ -156,12 +169,13 @@ function saveBattles() {
     fs.writeFileSync(battlesFile, JSON.stringify(activeBattles, null, 2));
 }
 
+// Helper to get or initialize a player's data
 function getPlayerData(userId) {
     if (!playerData[userId]) {
         playerData[userId] = {
             health: 100,
             maxHealth: 100,
-            inventory: [],
+            inventory: [], // Array of item IDs
             loadout: {
                 weapon: null,
                 armor: null,
@@ -172,9 +186,11 @@ function getPlayerData(userId) {
     return playerData[userId];
 }
 
+// Helper to find an item in the store by its ID
 function findItem(itemId) {
     for (const category in storeData) {
         if (storeData[category][itemId]) {
+            // Return a copy of the item with its ID and category
             const item = { ...storeData[category][itemId], id: itemId, category };
             if (category === 'modern_weapons' || category === 'medieval_weapons') {
                 item.type = 'weapon';
@@ -272,40 +288,256 @@ function initializeStore() {
     };
 }
 
+
+// Load all data on startup
 loadEconomyData();
 loadStoreData();
+if (Object.keys(storeData).length === 0) {
+    initializeStore();
+    saveStoreData();
+}
 loadPlayerData();
 loadBattles();
+
 
 const spookyMessages = [
   '👻 Boo...', '💀 I see you...', '🩸 The shadows are watching...',
   '🔪 Behind you...', '🕷️ Something crawled across your screen...',
 ];
 
+// ---- Truth Questions ----
 const spicyTruths = [
-  "What's your most embarrassing moment?",
+  "What’s your most embarrassing moment?",
   "Who was your first crush?",
   "Have you ever lied to get out of trouble?",
-  "What's the most childish thing you still do?",
-  "What's a secret you've never told anyone here?",
+  "What’s the most childish thing you still do?",
+  "What’s a secret you’ve never told anyone here?",
+  "If you could switch lives with someone for a day, who would it be?",
+  "What’s your biggest fear?",
+  "What’s the worst thing you’ve ever eaten?",
+  "Have you ever stolen something?",
+  "What's the most awkward date you've been on?",
+  "Have you ever pretended to like a gift you hated?",
+  "What's the weirdest habit you have?",
+  "Have you ever had a crush on a teacher?",
+  "What's your guilty pleasure TV show or movie?",
+  "Have you ever broken something and blamed someone else?",
+  "What's a lie you told that got out of hand?",
+  "Have you ever had a really embarrassing dream?",
+  "What's something you regret saying?",
+  "What's your weirdest fear?",
+  "Have you ever cried in public?",
+  "What's the most trouble you've gotten into at school or work?",
+  "Have you ever ghosted someone?",
+  "What's something that instantly annoys you?",
+  "What's the most awkward thing you've said to a crush?",
+  "Have you ever pretended to be sick to skip something?",
+  "What's the worst date you've ever been on?",
+  "Have you ever peeked at someone else's messages?",
+  "What's the most embarrassing thing in your search history?",
+  "Have you ever lied about your age?",
+  "What's the dumbest thing you've argued about?",
+  "Have you ever laughed at the wrong moment?",
+  "What's a habit you wish you could quit?",
+  "Have you ever accidentally insulted someone?",
+  "What's the strangest nickname you've had?",
+  "Have you ever cheated in a game or test?",
+  "What's the most awkward text you've sent?",
+  "Have you ever stalked someone online?",
+  "What's your most embarrassing social media post?",
+  "Have you ever cried over a fictional character?",
+  "What's the weirdest dream you've had?",
+  "Have you ever been caught doing something embarrassing?",
+  "What's a secret talent no one knows about?",
+  "Have you ever forgotten someone's name immediately after they told you?",
+  "What's the most childish thing you still enjoy?",
+  "Have you ever blamed someone else for your mistake?",
+  "What's the most embarrassing outfit you've worn?",
+  "Have you ever had a crush on a friend's sibling?",
+  "What's the silliest argument you've had?",
+  "Have you ever sent a message to the wrong person?",
+  "What's a fear you think is irrational?",
+  "Have you ever laughed at a serious situation?",
+  "What's a food you secretly love but are embarrassed to admit?",
+  "Have you ever pretended to understand something you didn’t?",
+  "What's the weirdest habit you have?",
+  "Have you ever cried in public for no reason?",
+  "What's the most embarrassing ringtone or alarm you've had?",
+  "Have you ever pretended to know a celebrity?",
+  "What's a guilty pleasure you’re ashamed to admit?",
+  "Have you ever re-gifted a present?",
+  "What's the most awkward family moment you've experienced?",
+  "Have you ever been caught talking to yourself?",
+  "What's a song you secretly love but wouldn't admit?",
+  "Have you ever been embarrassed by your own laughter?",
+  "What's the weirdest lie you've told to avoid trouble?",
+  "Have you ever tripped or fallen in public?",
+  "What's the most embarrassing thing you've done for money?",
+  "Have you ever accidentally called someone by the wrong name?",
+  "What's the most awkward compliment you've received?",
+  "Have you ever lied about knowing something you didn't?",
+  "What's your most cringe-worthy memory from school?",
+  "Have you ever been scared of a harmless animal?",
+  "What's the weirdest nickname you’ve given someone?",
+  "Have you ever been embarrassed by your own voice?",
+  "What's a secret you've never told anyone?"
 ];
 
+// ---- Spicy Dares ----
 const spicyDares = [
   "Change your nickname to something silly for 10 minutes.",
   "Type your next 3 messages in ALL CAPS.",
   "Send a random emoji in the chat every 10 seconds for 1 minute.",
   "Say something nice about the last person who spoke.",
   "Do 10 pushups (or pretend to and tell us how it went).",
+  "Put your status to 'I love pineapples on pizza' for 1 hour.",
+  "Send a gif that describes your current mood.",
+  "Use only memes to communicate for the next 5 minutes.",
+  "Post a selfie with your funniest face.",
+  "Call a friend and tell them a random joke.",
+  "Change your nickname to a movie character for 30 minutes.",
+  "Do an impression of someone in the chat.",
+  "Send a message only using emojis for the next 5 messages.",
+  "Pretend to be a robot for the next 3 messages.",
+  "Share your most embarrassing photo.",
+  "Act like a celebrity of your choice for 2 minutes.",
+  "Do a silly dance on camera (or describe it in chat).",
+  "Use a funny voice for your next 3 messages.",
+  "Write a short poem about someone in the chat.",
+  "Send the last song you listened to in chat.",
+  "Send a voice note saying 'I love chocolate' in a funny voice.",
+  "Post a random selfie in the chat.",
+  "Pretend to be a celebrity for the next 2 messages.",
+  "Send a random meme in chat right now.",
+  "Act like a robot for the next 3 messages.",
+  "Send a GIF that perfectly represents your mood.",
+  "Change your nickname to a silly phrase for 30 minutes.",
+  "Use only emojis for the next 5 messages.",
+  "Do a silly dance on camera or describe it in chat.",
+  "Call a friend and tell them a funny joke.",
+  "Send a message using only song lyrics.",
+  "Pretend to sing everything you say for 3 messages.",
+  "Draw something silly and post a picture of it.",
+  "Make a funny sound effect for the next 3 messages.",
+  "Act like an animal for the next 5 messages.",
+  "Send a random emoji every 10 seconds for 1 minute.",
+  "Type your next message in a different language.",
+  "Pretend you’re a news reporter and report on the chat.",
+  "Do 5 pushups and post how it went.",
+  "Change your status to something ridiculous for 1 hour.",
+  "Send a selfie making a silly face.",
+  "Pretend to sing everything you say for 3 messages.",
+  "Write a short poem about the last person who spoke.",
+  "Post the first thing that comes to your mind right now.",
+  "Speak like a robot for the next 3 messages.",
+  "Send a GIF that best describes your last meal.",
+  "Post a funny animal picture.",
+  "Type your next message backward.",
+  "Send a message using only your favorite color as emojis.",
+  "Pretend to be a teacher for 2 minutes.",
+  "Do 10 jumping jacks and tell us how it felt.",
+  "Make a silly handshake with the last person who spoke (describe it).",
+  "Pretend to be a character from a movie for 3 messages.",
+  "Send a GIF of your favorite TV show scene.",
+  "Describe your most embarrassing moment in 3 words.",
+  "Send a random fact nobody knows.",
+  "Make your next message a tongue twister.",
+  "Speak like a pirate for the next 3 messages.",
+  "Post a meme describing your last 5 minutes.",
+  "Send a random emoji combination that makes no sense.",
+  "Pretend your keyboard is a piano for the next 2 messages.",
+  "Write a haiku about your favorite snack.",
+  "Describe your current mood using only emojis.",
+  "Send a message like you’re a robot in distress.",
+  "Do a dramatic reading of your last message.",
+  "Pretend to be a cat for the next 3 messages.",
+  "Send a random screenshot from your camera roll.",
+  "Use only abbreviations for the next 3 messages.",
+  "Post a funny photo of your shoes.",
+  "Talk like a news anchor for 2 messages.",
+  "Send a message complimenting someone in the chat."
 ];
 
+// ---- Compliments ----
 const compliments = [
   "You have great taste in music.",
   "Your energy makes the chat better.",
   "You are so damn fine.",
   "If you were a snack id eat u up.",
   "You have an amazing vibe.",
+  "You’re one of the kindest people I’ve seen here.",
+  "I admire how confident you are.",
+  "You always make people feel welcome.",
+  "Your smile is contagious.",
+  "You always know how to cheer people up.",
+  "You have a great sense of humor.",
+  "You're so cute...and yummy.",
+  "Your body is....*bites lip*.",
+  "You make everyone feel comfortable.",
+  "Your positivity is refreshing.",
+  "You're incredibly thoughtful.",
+  "I wish u were mine.",
+  "You have an amazing energy.",
+  "You're genuinely kind-hearted.",
+  "You make people feel valued.",
+  "You have a contagious laugh.",
+  "Your positivity is inspiring.",
+  "You always know the right thing to say.",
+  "You have an amazing sense of humor.",
+  "Your creativity is off the charts.",
+  "You make everyone feel comfortable.",
+  "You’re a great problem solver.",
+  "Your kindness is impressive.",
+  "You have a fantastic smile.",
+  "You are incredibly thoughtful.",
+  "Your energy is uplifting.",
+  "You’re a natural leader.",
+  "You’re always so reliable.",
+  "Your confidence is admirable.",
+  "You make people feel valued.",
+  "You have excellent taste in fashion.",
+  "Your advice is always solid.",
+  "You’re very charming.",
+  "You have a brilliant mind.",
+  "You make everything more fun.",
+  "Your empathy is remarkable.",
+  "You’re an amazing friend.",
+  "You’re so patient with others.",
+  "You have a great perspective on life.",
+  "Your jokes always hit the mark.",
+  "You’re very encouraging.",
+  "You have a beautiful soul.",
+  "You’re incredibly witty.",
+  "You’re always full of surprises.",
+  "You handle challenges gracefully.",
+  "Your enthusiasm is contagious.",
+  "You’re genuinely kind.",
+  "You inspire others effortlessly.",
+  "Your loyalty is admirable.",
+  "You’re incredibly talented.",
+  "You make me crave u. can u be my snack?.",
+  "You bring out the best in people.",
+  "You’re extremely thoughtful.",
+  "You are hawt.",
+  "You always make people feel included.",
+  "You are so yummy.",
+  "You’re a fantastic listener.",
+  "You turn me on.",
+  "You have an amazing vibe.",
+  "You’re sexy af.",
+  "You make the world a better place.",
+  "You have a warm heart.",
+  "You’re very considerate.",
+  "Your presence brightens the room.",
+  "You’re unforgettable.",
+  "You have a dangerously attractive smile.",
+  "There’s something about your voice that makes it impossible to ignore.",
+  "You look absolutely irresistible tonight.",
+  "Your confidence is incredibly sexy.",
+  "You have a presence that makes everyone want to get closer."
 ];
 
+// ---- Persistent Warnings ----
 const warningsFile = './warnings.json';
 let warnings = {};
 
@@ -317,6 +549,7 @@ function saveWarnings() {
   fs.writeFileSync(warningsFile, JSON.stringify(warnings, null, 2));
 }
 
+// ---- Blackjack Game ----
 const blackjackGames = new Map();
 
 function drawCard() {
@@ -348,34 +581,288 @@ function formatHand(hand) {
   return hand.map(c => `${c.value}${c.suit}`).join(' ');
 }
 
+// ---- Question of the Day ----
 const qotdQuestions = [
     "What's the best movie you've seen recently?",
     "If you could have any superpower, what would it be?",
     "What's your favorite food and why?",
+    "What's a hobby you've always wanted to try?",
+    "What's the most beautiful place you've ever visited?",
+    "What's a book you think everyone should read?",
+    "What's your go-to comfort meal?",
+    "What's a skill you'd like to learn?",
+    "What's the funniest thing that's happened to you this week?",
+    "What's your favorite season and why?",
+    "What's a small thing that makes you happy?",
+    "If you could travel anywhere, where would you go?",
+    "What's your all-time favorite song?",
+    "What’s one goal you’re working toward right now?",
+    "What’s the best compliment you’ve ever received?",
+    "What’s a random act of kindness someone did for you?",
+    "What’s the most adventurous thing you’ve ever done?",
+    "What’s your go-to karaoke song?",
+    "What's the first video game you ever played?",
+    "If you could live in any video game world, which would it be?",
+    "Which video game character do you relate to the most?",
+    "What's your all-time favorite multiplayer game?",
+    "If you could erase your memory of one game to play it again fresh, which game would you choose?",
+    "What's the most rage-inducing game you've ever played?",
+    "Do you prefer single-player or multiplayer games?",
+    "What's the most underrated game you've ever played?",
+    "What game had the best storyline in your opinion?",
+    "What game do you think deserves a remake?",
+    "What’s your favorite gaming console of all time?",
+    "If you could only play one game for the rest of your life, which would it be?",
+    "Who’s your favorite video game villain?",
+    "What’s your proudest gaming achievement?",
+    "Do you prefer story-driven games or competitive ones?",
+    "What’s a game you love that most people haven’t heard of?",
+    "Which game soundtrack is your favorite?",
+    "What’s the funniest bug/glitch you’ve seen in a game?",
+    "Would you rather be able to fly or be invisible?",
+    "Would you rather always know when someone is lying or always get away with lying?",
+    "Would you rather fight one horse-sized duck or 100 duck-sized horses?",
+    "Would you rather live in a world without music or a world without video games?",
+    "Would you rather be rich but lonely, or poor but surrounded by amazing friends?",
+    "Would you rather explore space or explore the deep ocean?",
+    "Would you rather teleport anywhere instantly or time travel once a year?",
+    "Would you rather never feel pain or never feel fear?",
+    "Would you rather lose the ability to read or lose the ability to speak?",
+    "Would you rather have unlimited free travel or never need to sleep?",
+    "Would you rather live forever at age 25 or live to 100 with a healthy life?",
+    "Would you rather be able to pause time or rewind time?",
+    "Would you rather always win arguments or always win games?",
+    "Would you rather live without the internet or live without AC/heating?",
+    "Would you rather be famous but hated or unknown but loved by everyone you meet?",
+    "Would you rather know the exact date of your death or the exact cause of your death?",
+    "Would you rather lose all your past memories or never be able to make new ones?",
+    "Would you rather save one loved one or 100 strangers?",
+    "Would you rather always know the truth but never be believed, or always believe lies?",
+    "Would you rather have the power to change the past or see the future but not change it?",
+    "Would you rather live 1,000 years in perfect health or live a normal lifespan but be famous forever?",
+    "Would you rather be feared by all or loved by none?",
+    "Would you rather have the ability to read minds but only bad thoughts, or hear only good lies?",
+    "Would you rather never feel happiness again or never feel sadness again (but also never truly appreciate happiness)?",
+    "Would you rather forget everyone else or have everyone else forget you?",
+    "Would you rather live in a simulation you control or reality you can’t control?",
+    "Would you rather save the world but nobody knows it was you, or get credit but not actually do it?",
+    "Would you rather be trapped in your best day forever or move forward with no good days left?",
+    "Would you rather never dream again or never be awake again?",
+    "Would you rather lose your sight or lose your hearing?",
+    "Would you rather never be able to speak again or never be able to think privately again?",
+    "Would you rather lose your most cherished possession or lose your most cherished memory?",
+    "Would you rather everyone knew your darkest secret or forget the best thing you ever did?",
+    "Would you rather die in 10 years with no regrets, or live 100 years with tons of regrets?",
+    "Would you rather be remembered forever for something bad or forgotten completely?",
+    "Would you rather always know the ending to every story or never know the ending to your own?",
+    "Would you rather betray your best friend or let your best friend betray you?",
+    "Would you rather carry the guilt of one terrible mistake forever or forget it but repeat it again?",
+    "Would you rather live in total safety but extreme boredom, or in danger but constant excitement?",
+    "Would you rather be the smartest person alive but hated, or the dumbest but loved?",
+    "Would you rather always lose everything you own once a year, or never be able to replace anything you own?",
+    "Would you rather find true love but die in 5 years, or never find it and live long?",
+    "Would you rather save your own life or sacrifice yourself to save 10 others?",
+    "Would you rather never be able to lie or never be able to tell the truth?",
+    "Would you rather live in poverty with peace or live rich but in constant war?",
+    "Would you rather forget how to read or forget how to write?",
+    "Would you rather have unlimited money but never be happy, or be poor but always content?",
+    "Would you rather always feel intense pain but never get sick, or never feel pain but always be sick?",
+    "Would you rather never be able to sleep again or never be able to eat again?",
+    "Would you rather know everyone’s future but not your own, or your own but not anyone else’s?",
+    "Would you rather lose your sense of time or your sense of reality?",
+    "Would you rather never be able to forgive or never be forgiven?",
+    "Would you rather be trapped alone in space or trapped with 100 strangers in a bunker?",
+    "Would you rather live forever but everyone you love dies normally, or die normally but everyone you love lives forever?",
+    "Would you rather always feel like you’re being watched or always be completely alone?",
+    "Would you rather change one moment in your past and risk changing everything, or never touch the past at all?",
+    "Would you rather be able to cure any disease but die young, or live long but never help anyone?",
+    "Would you rather lose all technology or lose all human connection?",
+    "Would you rather never be able to learn new things or forget one thing every day?",
+    "Would you rather know the ultimate secret of the universe but never be able to share it, or never know it at all?",
+    "Would you rather have a perfect body but an average mind, or a genius mind but weak body?",
+    "Would you rather never be able to love or never be able to be loved?",
+    "Would you rather live in a world with no crime but no freedom, or total freedom but constant crime?",
+    "Would you rather be invisible but never able to interact, or visible but ignored by everyone?",
+    "Would you rather watch your worst memory on repeat forever or never remember anything again?",
+    "Would you rather make one person happy forever or make millions happy for just a day?",
+    "If you could have any superpower for just 24 hours, what would you pick?",
+    "If you had to give up one of your five senses, which would it be?",
+    "If you were a superhero, what would your hero name be?",
+    "If you could shapeshift into any animal, which would you choose?",
+    "Would you want the ability to read minds if it meant you couldn’t turn it off?",
+    "If you had a time machine, would you go to the past or the future?",
+    "Would you rather be able to breathe underwater or survive in space?",
+    "If you could instantly master one skill, what would it be?",
+    "If you could snap your fingers and change one thing about the world, what would it be?",
+    "If you had a superpower but it only worked once a week, what would it be?",
+    "If you could create your own video game power-up, what would it do?",
+    "If you could talk to animals, what’s the first thing you’d ask them?",
+    "If you could be immortal but couldn’t tell anyone, would you do it?",
+    "If you could swap lives with a fictional character, who would you pick?",
+    "If you could live in any fantasy universe, which one would it be?",
+    "What's the weirdest food combination you secretly enjoy?",
+    "What's a song that instantly puts you in a good mood?",
+    "If you could swap lives with someone for a day, who would it be?",
+    "What's the best advice you've ever received?",
+    "What's one conspiracy theory you secretly think could be true?",
+    "What's something small that instantly annoys you?",
+    "What's a childhood memory that still makes you laugh?",
+    "If you could meet any historical figure, who would it be?",
+    "What's the most random fact you know?",
+    "What's one thing you'd change about the world if you could?",
+    "What's a guilty pleasure show or game you enjoy?",
+    "If aliens visited Earth tomorrow, what would you show them first?",
+    "What's the funniest meme you’ve seen recently?",
+    "What's the scariest movie or game you’ve played?",
+    "What's the most useless talent you have?",
+    "What's something embarrassing you did but still laugh about?",
+    "If you could instantly learn a language, which would you choose?",
+    "What’s your dream vacation spot?",
+    "What’s one invention you wish existed?",
+    "What’s the most trouble you’ve ever gotten into?",
+    "What’s your favorite childhood cartoon?",
+    "If money didn’t matter, what job would you do?",
+    "What's the best concert you've ever been to?",
+    "Who's your favorite music artist or band?",
+    "What's a movie you can watch over and over again?",
+    "What’s your favorite streaming show right now?",
+    "If you could bring back any TV show, what would it be?",
+    "What’s your all-time favorite meme?",
+    "If you could hang out with any celebrity for a day, who would it be?",
+    "What’s your guilty pleasure song?",
+    "Which actor would play you in a movie about your life?",
+    "If you could make a cameo in any movie or show, which one would it be?",
+    "Do you prefer sweet or salty snacks?",
+    "What’s the weirdest thing you’ve ever eaten?",
+    "If you could only eat one meal for the rest of your life, what would it be?",
+    "What’s your favorite fast food place?",
+    "Would you rather never eat pizza again or never eat burgers again?",
+    "What’s your favorite type of dessert?",
+    "Do you prefer coffee, tea, or neither?",
+    "What’s the spiciest thing you’ve ever eaten?",
+    "If you opened a restaurant, what would you serve?",
+    "What’s a food you hated as a kid but love now?",
+    "What’s your survival plan for a zombie apocalypse?",
+    "If you were stranded on a desert island, what three things would you bring?",
+    "If you won the lottery tomorrow, what’s the first thing you’d do?",
+    "If you could time travel but only once, when/where would you go?",
+    "If you woke up invisible, what’s the first thing you’d do?",
+    "If you had to live in a different country, where would you move?",
+    "If you could swap lives with a character from a book, who would it be?",
+    "If you had to give up the internet or TV forever, which would you choose?",
+    "What would you do if you were the last person on Earth?",
+    "If you could live in any time period, past or future, which would you choose?",
+    "If you were an animal, what would you be and why?",
+    "What’s your weirdest habit?",
+    "What’s your biggest pet peeve?",
+    "What’s something you’ve done that you’re really proud of?",
+    "What’s your love language?",
+    "Are you more of a morning person or a night owl?",
+    "What’s your spirit animal?",
+    "What’s the first thing you do when you wake up?",
+    "What’s your favorite holiday and why?",
+    "Do you prefer big parties or small hangouts?"
 ];
 
-const logChannelsFile = './log_channels.json';
-const masterLogFile = './master_log.json';
-const welcomeFile = './welcome_messages.json';
-const leaveFile = './leave_messages.json';
-const qotdFile = './qotd_state.json';
+const qotdFile = './qotd.json';
+const qotdSettingsFile = './qotdSettings.json';
 
-let logChannels = {};
-let masterLog = { channelId: null, enabled: false };
+let activeQotdChannels = new Set();
+let qotdIntervals = new Map(); // channelId -> setInterval
+let qotdSettings = {}; // { channelId: { everyone: true/false } }
+let sentQuestions = {}; // { channelId: [indices of sent questions] }
+
+// Load active channels
+if (fs.existsSync(qotdFile)) {
+  const channelArray = JSON.parse(fs.readFileSync(qotdFile, 'utf8'));
+  activeQotdChannels = new Set(channelArray);
+}
+
+// Load settings
+if (fs.existsSync(qotdSettingsFile)) {
+  qotdSettings = JSON.parse(fs.readFileSync(qotdSettingsFile, 'utf8'));
+}
+
+// Save functions
+function saveQotdState() {
+  fs.writeFileSync(qotdFile, JSON.stringify(Array.from(activeQotdChannels), null, 2));
+}
+
+function saveQotdSettings() {
+  fs.writeFileSync(qotdSettingsFile, JSON.stringify(qotdSettings, null, 2));
+}
+
+// Send a QOTD to a channel without repeating until all questions are used
+function sendQuestion(channelId) {
+  const channel = client.channels.cache.get(channelId);
+  if (!channel) return;
+
+  if (!sentQuestions[channelId]) sentQuestions[channelId] = [];
+
+  // Filter unused questions
+  const unusedIndices = qotdQuestions
+    .map((_, i) => i)
+    .filter(i => !sentQuestions[channelId].includes(i));
+
+  // Reset if all questions have been sent
+  if (unusedIndices.length === 0) {
+    sentQuestions[channelId] = [];
+    unusedIndices.push(...qotdQuestions.map((_, i) => i));
+  }
+
+  // Pick random unused question
+  const randomIndex = unusedIndices[Math.floor(Math.random() * unusedIndices.length)];
+  sentQuestions[channelId].push(randomIndex);
+
+  const prefix = qotdSettings[channelId]?.everyone ? '@everyone ' : '';
+  const question = qotdQuestions[randomIndex];
+  channel.send(`${prefix}**❓ Question of the Day:** ${question}`);
+  
+  // Add the global log function call here
+  logToGlobal(question, channel.guild.name, channel.name);
+}
+
+// Start QOTD for all active channels
+function startAllQotd() {
+  if (activeQotdChannels.size === 0) {
+    console.log("No QOTD channels to start.");
+    return;
+  }
+
+  activeQotdChannels.forEach(channelId => {
+    if (qotdIntervals.has(channelId)) return; // already running
+
+    sendQuestion(channelId); // first question immediately
+
+    const interval = setInterval(() => sendQuestion(channelId), 24 * 60 * 60 * 1000); // every 24h
+    qotdIntervals.set(channelId, interval);
+  });
+}
+
+// Stop QOTD in a channel
+function stopQotd(channelId) {
+  if (!activeQotdChannels.has(channelId)) return;
+
+  const interval = qotdIntervals.get(channelId);
+  if (interval) clearInterval(interval);
+  qotdIntervals.delete(channelId);
+
+  activeQotdChannels.delete(channelId);
+  saveQotdState();
+
+  if (qotdSettings[channelId]) {
+    delete qotdSettings[channelId];
+    saveQotdSettings();
+  }
+
+  if (sentQuestions[channelId]) delete sentQuestions[channelId];
+}
+
+// --- Welcome & Leave Messages Data ---
+const welcomeFile = './welcomeMessages.json';
+const leaveFile = './leaveMessages.json';
 let welcomeMessages = {};
 let leaveMessages = {};
-let activeQotdChannels = new Set();
-const qotdIntervals = new Map();
-
-const PERMANENT_LOG_CHANNEL_ID = '1340123830071050270';
-
-if (fs.existsSync(logChannelsFile)) {
-  logChannels = JSON.parse(fs.readFileSync(logChannelsFile, 'utf8'));
-}
-
-if (fs.existsSync(masterLogFile)) {
-  masterLog = JSON.parse(fs.readFileSync(masterLogFile, 'utf8'));
-}
 
 if (fs.existsSync(welcomeFile)) {
   welcomeMessages = JSON.parse(fs.readFileSync(welcomeFile, 'utf8'));
@@ -383,19 +870,6 @@ if (fs.existsSync(welcomeFile)) {
 
 if (fs.existsSync(leaveFile)) {
   leaveMessages = JSON.parse(fs.readFileSync(leaveFile, 'utf8'));
-}
-
-if (fs.existsSync(qotdFile)) {
-  const qotdState = JSON.parse(fs.readFileSync(qotdFile, 'utf8'));
-  activeQotdChannels = new Set(qotdState.channels || []);
-}
-
-function saveLogChannels() {
-  fs.writeFileSync(logChannelsFile, JSON.stringify(logChannels, null, 2));
-}
-
-function saveMasterLog() {
-  fs.writeFileSync(masterLogFile, JSON.stringify(masterLog, null, 2));
 }
 
 function saveWelcomeMessages() {
@@ -406,132 +880,201 @@ function saveLeaveMessages() {
   fs.writeFileSync(leaveFile, JSON.stringify(leaveMessages, null, 2));
 }
 
-function saveQotdState() {
-  fs.writeFileSync(qotdFile, JSON.stringify({ channels: Array.from(activeQotdChannels) }, null, 2));
+// ---- Permanent Global Log Channel ----
+const PERMANENT_LOG_CHANNEL_ID = '1411247548240232540';
+// ---- Log Channel Storage ----
+const logChannelsFile = './logChannels.json';
+const masterLogFile = './masterLog.json';
+let logChannels = {};
+let masterLog = { channelId: null, enabled: false };
+
+// Load existing log channels and master log channel.
+if (fs.existsSync(logChannelsFile)) {
+  logChannels = JSON.parse(fs.readFileSync(logChannelsFile, 'utf8'));
+}
+if (fs.existsSync(masterLogFile)) {
+  masterLog = JSON.parse(fs.readFileSync(masterLogFile, 'utf8'));
 }
 
-function startAllQotd() {
-  activeQotdChannels.forEach(channelId => {
-    const channel = client.channels.cache.get(channelId);
-    if (channel) {
-      const sendQuestion = () => {
-        const question = qotdQuestions[Math.floor(Math.random() * qotdQuestions.length)];
-        channel.send(`**❓ Question of the Day:** ${question}`);
+// Function to save the log channels.
+function saveLogChannels() {
+  fs.writeFileSync(logChannelsFile, JSON.stringify(logChannels, null, 2));
+}
+
+// Function to save the master log channel.
+function saveMasterLog() {
+  fs.writeFileSync(masterLogFile, JSON.stringify(masterLog, null, 2));
+}
+
+// Function to log a message to the permanent global log channel.
+async function logToGlobal(qotd, serverName, channelName) {
+  try {
+    const logChannel = client.channels.cache.get(PERMANENT_LOG_CHANNEL_ID);
+    if (logChannel) {
+      const embed = {
+        color: 0x0099ff,
+        title: `New QOTD in ${serverName}`,
+        description: `**Channel:** #${channelName}\n**Question:** ${qotd}`,
+        timestamp: new Date(),
+        footer: {
+          text: 'Logged by QOTD Bot',
+        },
       };
-      const interval = setInterval(sendQuestion, 24 * 60 * 60 * 1000);
-      qotdIntervals.set(channelId, interval);
+      logChannel.send({ embeds: [embed] });
     }
-  });
-}
-
-function logToGlobal(question, serverName, channelName) {
-  const permanentChannel = client.channels.cache.get(PERMANENT_LOG_CHANNEL_ID);
-  if (permanentChannel) {
-    permanentChannel.send(`**[QOTD] [${serverName}] #${channelName}:** ${question}`).catch(console.error);
+  } catch (error) {
+    console.error('Failed to log QOTD to global channel:', error);
   }
 }
 
-async function engageAntiRaid(guild, channel, author) {
-  if (antiRaidActive.has(guild.id)) {
-    return false;
-  }
+// --- ANTI-RAID HELPER FUNCTIONS (NEW) ---
 
-  try {
-    const currentLevel = guild.verificationLevel;
-    originalVerificationLevels.set(guild.id, currentLevel);
-    await guild.setVerificationLevel(4, 'Anti-raid mode engaged');
+async function engageAntiRaid(guild, alertChannel, author = null) {
+    if (antiRaidActive.has(guild.id)) return false; // Already active
+
     antiRaidActive.add(guild.id);
-    
-    await channel.send(`🚨 **ANTI-RAID MODE ENGAGED** by ${author}\n\n` +
-      `🔒 Verification level set to **HIGHEST**\n` +
-      `⚠️ New members will face strict verification\n` +
-      `✅ Server is now in lockdown mode`);
+    originalVerificationLevels.set(guild.id, guild.verificationLevel);
 
-    await sendLog(guild.id, `\`[SECURITY]\` **${author.tag}** has engaged ANTI-RAID mode.`);
-    return true;
-  } catch (err) {
-    console.error('Failed to engage anti-raid mode:', err);
-    return false;
-  }
+    try {
+        await guild.setVerificationLevel(4); // Highest
+
+        guild.channels.cache.forEach(async (channel) => {
+            if (channel.isTextBased() && channel.permissionsFor(guild.roles.everyone).has(PermissionsBitField.Flags.SendMessages)) {
+                await channel.permissionOverwrites.edit(guild.roles.everyone, {
+                    SendMessages: false
+                }).catch(err => console.error(`Failed to lock channel ${channel.name}:`, err));
+            }
+        });
+
+        if (author) { // Manual trigger
+            await sendLog(guild.id, `\`[SECURITY]\` **${author.tag}** has engaged ANTI-RAID mode.`);
+            if (alertChannel) {
+                await alertChannel.send("🚨ANTI-RAID PROTOCOL  ENGAGED🚨THIS IS NOT A DRILL. All security measures are live. Unauthorized accounts will be IDENTIFIED, TRACKED and ELIMINATED. Channels are locked, posting is restricted, and verification is mandatory. Attempts to bypass will result in immediate bans and permanent removal from the server. Moderators: Engage intruders.");
+            }
+        } else { // Automatic trigger
+             await sendLog(guild.id, `\`[SECURITY]\` **AUTOMATIC ANTI-RAID** has been engaged due to rapid joins.`);
+            if (alertChannel) {
+                await alertChannel.send("🚨**AUTO-TRIGGER**🚨ANTI-RAID PROTOCOL  ENGAGED🚨THIS IS NOT A DRILL. All security measures are live. Unauthorized accounts will be IDENTIFIED, TRACKED and ELIMINATED. Channels are locked, posting is restricted, and verification is mandatory. Attempts to bypass will result in immediate bans and permanent removal from the server. Moderators: Engage intruders.");
+            }
+        }
+        return true;
+    } catch (err) {
+        console.error("Anti-Raid ON Error:", err);
+        antiRaidActive.delete(guild.id); // Revert state if failed
+        return false;
+    }
 }
 
-async function disengageAntiRaid(guild, channel) {
-  if (!antiRaidActive.has(guild.id)) {
-    channel.send('❌ Anti-raid mode is not currently active.');
-    return false;
-  }
+async function disengageAntiRaid(guild, replyChannel) {
+    if (!antiRaidActive.has(guild.id)) {
+        if (replyChannel) await replyChannel.reply('✅ Anti-raid mode is not currently active.');
+        return false;
+    }
 
-  try {
-    const originalLevel = originalVerificationLevels.get(guild.id) || 0;
-    await guild.setVerificationLevel(originalLevel, 'Anti-raid mode disengaged');
-    
     antiRaidActive.delete(guild.id);
+    const originalLevel = originalVerificationLevels.get(guild.id) || 0; // Default to 'None'
     originalVerificationLevels.delete(guild.id);
-    
-    await channel.send(`✅ **ANTI-RAID MODE DISENGAGED**\n\n` +
-      `🔓 Verification level restored to original setting\n` +
-      `✅ Server security has returned to normal`);
-    
-    return true;
-  } catch (err) {
-    console.error('Failed to disengage anti-raid mode:', err);
-    channel.send('❌ Failed to disengage anti-raid mode. I might be missing permissions.');
-    return false;
-  }
+
+    try {
+        await guild.setVerificationLevel(originalLevel);
+
+        guild.channels.cache.forEach(async (channel) => {
+            if (channel.isTextBased()) {
+                await channel.permissionOverwrites.edit(guild.roles.everyone, {
+                    SendMessages: null // Resets permission to default
+                }).catch(err => console.error(`Failed to unlock channel ${channel.name}:`, err));
+            }
+        });
+
+        if (replyChannel) {
+            await replyChannel.reply('✅ Anti-raid mode has been disengaged. All systems back to normal.');
+        }
+        return true;
+    } catch (err) {
+        console.error("Anti-Raid OFF Error:", err);
+        if (replyChannel) {
+            await replyChannel.reply("❌ Failed to fully disengage anti-raid mode. I might be missing permissions. Please check channels manually.");
+        }
+        return false;
+    }
 }
 
-client.on('guildMemberAdd', async (member) => {
-  const guildId = member.guild.id;
-  
-  if (antiRaidActive.has(guildId)) {
-    const now = Date.now();
-    joinTimestamps.set(member.id, now);
-    
-    const logMsg = `⚠️ **ANTI-RAID ALERT**\n` +
-      `New member joined during lockdown: ${member.user.tag} (${member.id})\n` +
-      `Account created: ${member.user.createdAt.toDateString()}`;
-    
-    await sendLog(guildId, logMsg);
-  }
 
-  const welcomeConfig = welcomeMessages[guildId];
-  if (welcomeConfig) {
-    const channel = member.guild.channels.cache.get(welcomeConfig.channelId);
-    if (channel) {
-      const message = welcomeConfig.message
-        .replace(/\{user\}/g, member.toString())
-        .replace(/\{server\}/g, member.guild.name)
-        .replace(/\{membercount\}/g, member.guild.memberCount.toString());
-      channel.send(message).catch(console.error);
+// --- Welcome & Leave Event Handlers ---
+client.on('guildMemberAdd', async member => {
+    // --- AUTO ANTI-RAID TRIGGER (NEW) ---
+    if (!antiRaidActive.has(member.guild.id)) { // Only check if not already active
+        const now = Date.now();
+        const thirtySecondsAgo = now - 30000;
+
+        const timestamps = joinTimestamps.get(member.guild.id) || [];
+        const recentTimestamps = timestamps.filter(ts => ts > thirtySecondsAgo);
+
+        recentTimestamps.push(now);
+        joinTimestamps.set(member.guild.id, recentTimestamps);
+
+        if (recentTimestamps.length >= 10) {
+            console.log(`[Anti-Raid Trigger] Detected ${recentTimestamps.length} joins in 30s for guild ${member.guild.name}. Engaging...`);
+            // Find a channel to post the alert: log channel > system channel
+            const logChannelId = logChannels[member.guild.id]?.channelId;
+            const alertChannel = logChannelId ? member.guild.channels.cache.get(logChannelId) : member.guild.systemChannel;
+            
+            await engageAntiRaid(member.guild, alertChannel); // Auto-trigger, no author
+        }
     }
-  }
+    
+    // --- ANTI-RAID KICK ---
+    if (antiRaidActive.has(member.guild.id)) {
+        try {
+            await member.send('You were unable to join the server because it is currently in anti-raid mode. Please try again later.');
+        } catch (error) {
+            console.error(`Could not DM user ${member.user.tag}.`);
+        }
+        await member.kick('Kicked by anti-raid system.');
+        await sendLog(member.guild.id, `\`[ANTI-RAID]\` Kicked new member **${member.user.tag}**.`);
+        return; // Stop further processing (like welcome messages)
+    }
+
+    const welcomeData = welcomeMessages[member.guild.id];
+    if (welcomeData) {
+        const channel = member.guild.channels.cache.get(welcomeData.channelId);
+        if (channel) {
+            const message = welcomeData.message
+                .replace(/{user}/g, `<@${member.user.id}>`)
+                .replace(/{server}/g, member.guild.name)
+                .replace(/{membercount}/g, member.guild.memberCount);
+            channel.send(message);
+        }
+    }
+    await sendLog(member.guild.id, `\`[JOIN]\` **${member.user.tag}** (${member.user.id}) joined the server.`);
 });
 
-client.on('guildMemberRemove', async (member) => {
-  const guildId = member.guild.id;
-  const leaveConfig = leaveMessages[guildId];
-  
-  if (leaveConfig) {
-    const channel = member.guild.channels.cache.get(leaveConfig.channelId);
+
+client.on('guildMemberRemove', async member => {
+  const leaveData = leaveMessages[member.guild.id];
+  if (leaveData) {
+    const channel = member.guild.channels.cache.get(leaveData.channelId);
     if (channel) {
-      const message = leaveConfig.message
-        .replace(/\{user\}/g, member.user.tag)
-        .replace(/\{server\}/g, member.guild.name)
-        .replace(/\{membercount\}/g, member.guild.memberCount.toString());
-      channel.send(message).catch(console.error);
+      const message = leaveData.message
+        .replace(/{user}/g, member.user.tag)
+        .replace(/{server}/g, member.guild.name)
+        .replace(/{membercount}/g, member.guild.memberCount);
+      channel.send(message);
     }
   }
+  await sendLog(member.guild.id, `\`[LEAVE]\` **${member.user.tag}** (${member.user.id}) left the server.`);
 });
 
+
+// ---- Log Message Helper Function ----
 async function sendLog(guildId, messageContent) {
-  const guildLog = logChannels[guildId];
-  if (guildLog && guildLog.enabled) {
-    const channel = client.channels.cache.get(guildLog.channelId);
-    if (channel) {
-      await channel.send(messageContent).catch(console.error);
-    }
+  // 1️⃣ Server-specific log
+  if (logChannels[guildId]?.enabled && logChannels[guildId]?.channelId) {
+    const channel = client.channels.cache.get(logChannels[guildId].channelId);
+    if (channel) await channel.send(messageContent).catch(console.error);
   }
 
+  // 2️⃣ Master log
   if (masterLog.enabled && masterLog.channelId) {
     const channel = client.channels.cache.get(masterLog.channelId);
     if (channel) {
@@ -540,6 +1083,7 @@ async function sendLog(guildId, messageContent) {
     }
   }
 
+  // 3️⃣ Permanent global log
   const permanentChannel = client.channels.cache.get(PERMANENT_LOG_CHANNEL_ID);
   if (permanentChannel) {
     const serverName = client.guilds.cache.get(guildId)?.name || 'Unknown Server';
@@ -547,15 +1091,18 @@ async function sendLog(guildId, messageContent) {
   }
 }
 
+// ---- Ready ----
 client.once('ready', () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
-  startAllQotd();
+  startAllQotd(); // Start all QOTD channels from the saved state
 });
 
+// ---- Log message updates and deletions ----
 client.on('messageUpdate', async (oldMessage, newMessage) => {
   if (oldMessage.author.bot) return;
   if (oldMessage.content === newMessage.content) return;
 
+  // --- [NEW] COUNTING GAME EDIT DETECTION ---
   const guildCountingData = countingData[newMessage.guild.id];
   if (guildCountingData && newMessage.channel.id === guildCountingData.channelId) {
     const nextNumber = guildCountingData.currentCount + 1;
@@ -567,6 +1114,7 @@ client.on('messageUpdate', async (oldMessage, newMessage) => {
 To avoid confusion, the next number is still **${nextNumber}**.`;
     await newMessage.channel.send(alertMessage);
   }
+  // --- END NEW CODE ---
 
   const logMessage = `\`[EDITED]\` **${oldMessage.author.tag}** edited their message in <#${oldMessage.channel.id}>.
 **Before:** \`\`\`${oldMessage.content}\`\`\`
@@ -578,7 +1126,8 @@ To avoid confusion, the next number is still **${nextNumber}**.`;
 client.on('messageDelete', async message => {
   if (message.author?.bot) return;
 
-  if (message.guild) {
+  // --- [NEW] COUNTING GAME DELETE DETECTION ---
+  if (message.guild) { // Ensure guild context exists
     const guildCountingData = countingData[message.guild.id];
     if (guildCountingData && message.channel.id === guildCountingData.channelId) {
         const nextNumber = guildCountingData.currentCount + 1;
@@ -590,6 +1139,7 @@ To avoid confusion, the next number is **${nextNumber}**.`;
         await message.channel.send(alertMessage);
     }
   }
+  // --- END NEW CODE ---
 
   const logMessage = `\`[DELETED]\` A message by **${message.author?.tag || 'Unknown User'}** was deleted in <#${message.channel.id}>.
 **Content:** \`\`\`${message.content || 'N/A'}\`\`\``;
@@ -597,23 +1147,19 @@ To avoid confusion, the next number is **${nextNumber}**.`;
   await sendLog(message.guild.id, logMessage);
 });
 
-client.on('channelUpdate', async (oldChannel, newChannel) => {
-  let changes = [];
-  if (oldChannel.name !== newChannel.name) {
-    changes.push(`Name: \`\`${oldChannel.name}\`\` -> \`\`${newChannel.name}\`\``);
-  }
-  if (oldChannel.topic !== newChannel.topic) {
-    changes.push(`Topic: \`\`${oldChannel.topic || 'N/A'}\`\` -> \`\`${newChannel.topic || 'N/A'}\`\``);
-  }
-  if (changes.length > 0) {
-    const logMessage = `\`[CHANNEL UPDATE]\` Channel **#${newChannel.name}** was updated.
-${changes.join('\n')}`;
-    await sendLog(newChannel.guild.id, logMessage);
-  }
-});
-
+// ---- BATTLE SYSTEM: Reaction Handler ----
 client.on('messageReactionAdd', async (reaction, user) => {
   if (user.bot) return;
+
+  // Handle partial messages
+  if (reaction.partial) {
+    try {
+      await reaction.fetch();
+    } catch (error) {
+      console.error('Error fetching reaction:', error);
+      return;
+    }
+  }
 
   const battleKey = reaction.message.id;
   if (activeBattles[battleKey] && activeBattles[battleKey].status === 'pending') {
@@ -629,6 +1175,7 @@ client.on('messageReactionAdd', async (reaction, user) => {
   }
 });
 
+// ---- BATTLE SYSTEM: Combat Functions ----
 async function startBattle(channel, challengerId, defenderId, battleKey) {
   const p1Data = getPlayerData(challengerId);
   const p2Data = getPlayerData(defenderId);
@@ -648,13 +1195,17 @@ async function startBattle(channel, challengerId, defenderId, battleKey) {
 
   let battleLog = `⚔️ **BATTLE START** ⚔️\n`;
   battleLog += `**${challenger.username}** vs **${defender.username}**\n\n`;
+  battleLog += `**${challenger.username}** | HP: ${p1Data.health} | Weapon: ${p1Weapon ? p1Weapon.name : 'Fists'} | Armor: ${p1Armor ? p1Armor.name : 'None'}\n`;
+  battleLog += `**${defender.username}** | HP: ${p2Data.health} | Weapon: ${p2Weapon ? p2Weapon.name : 'Fists'} | Armor: ${p2Armor ? p2Armor.name : 'None'}\n`;
+
+  await channel.send(battleLog);
 
   let round = 1;
   let p1Effects = {};
   let p2Effects = {};
 
   while (p1Data.health > 0 && p2Data.health > 0 && round <= 20) {
-    battleLog += `\n**━━━ Round ${round} ━━━**\n`;
+    let roundLog = `\n**━━━ Round ${round} ━━━**\n`;
 
     const p1First = Math.random() < 0.5;
     const fighters = p1First ? 
@@ -664,134 +1215,214 @@ async function startBattle(channel, challengerId, defenderId, battleKey) {
        {id: challengerId, data: p1Data, weapon: p1Weapon, armor: p1Armor, throwable: p1Throwable, user: challenger, effects: p1Effects}];
 
     for (let i = 0; i < 2; i++) {
+      if (fighters[0].data.health <= 0 || fighters[1].data.health <= 0) break;
+
       const attacker = fighters[i];
       const target = fighters[1 - i];
 
-      if (attacker.data.health <= 0) continue;
-
-      let damage = 0;
-      let attackMsg = '';
-
-      if (round === 1 && attacker.throwable && Math.random() < 0.7) {
-        const throwable = attacker.throwable;
-        attackMsg = `${attacker.user.username} throws ${throwable.name}! `;
-        
-        if (throwable.effect === 'death' && Math.random() * 100 < throwable.effectChance) {
-          if (Math.random() < 0.5) {
-            target.data.health = 0;
-            attackMsg += `💀 INSTANT KILL! ${target.user.username} couldn't take cover in time!`;
-          } else {
-            attackMsg += `${target.user.username} took cover! Avoided instant death but took ${throwable.damage} damage!`;
-            damage = throwable.damage;
-          }
-        } else if (throwable.effect === 'blind' && Math.random() * 100 < throwable.effectChance) {
-          target.effects.blind = throwable.duration || 2;
-          attackMsg += `💨 ${target.user.username} is blinded!`;
-          damage = throwable.damage;
-        } else {
-          damage = throwable.damage;
-          attackMsg += `Hit for ${damage} damage!`;
-        }
+      // Check if using throwable this round (30% chance)
+      if (attacker.throwable && Math.random() < 0.3) {
+        const throwResult = await executeThrowable(attacker, target, roundLog);
+        roundLog += throwResult.log;
+        if (throwResult.instantDeath) break;
       } else if (attacker.weapon) {
-        const weapon = attacker.weapon;
-        attackMsg = `${attacker.user.username} attacks with ${weapon.name}! `;
-
-        let missChance = weapon.missChance;
-        if (target.effects.blind && target.effects.blind > 0) {
-          missChance = Math.min(missChance * 2, 90);
-        }
-
-        if (Math.random() * 100 < missChance) {
-          attackMsg += `❌ MISS!`;
-        } else {
-          damage = weapon.damage;
-          const roll = Math.random() * 100;
-          
-          if (roll < weapon.headshotChance) {
-            damage = Math.floor(damage * 2.5);
-            attackMsg += `🎯 HEADSHOT! ${damage} damage!`;
-          } else if (roll < weapon.headshotChance + weapon.critChance) {
-            damage = Math.floor(damage * 1.8);
-            attackMsg += `💥 CRITICAL HIT! ${damage} damage!`;
-          } else {
-            attackMsg += `Hit for ${damage} damage!`;
-          }
-        }
+        const attackResult = await executeAttack(attacker, target);
+        roundLog += attackResult;
       } else {
-        attackMsg = `${attacker.user.username} punches! `;
-        if (Math.random() < 0.3) {
-          attackMsg += `❌ MISS!`;
-        } else {
-          damage = 10;
-          attackMsg += `Hit for ${damage} damage!`;
-        }
+        const fistDamage = 10;
+        const actualDamage = Math.max(1, fistDamage - (target.armor ? target.armor.defense * 0.3 : 0));
+        target.data.health -= actualDamage;
+        roundLog += `👊 **${attacker.user.username}** punches for ${actualDamage.toFixed(1)} damage!\n`;
       }
-
-      if (damage > 0 && target.armor) {
-        const reduction = Math.floor(damage * (target.armor.defense / 100));
-        damage = Math.max(1, damage - reduction);
-        attackMsg += ` (${target.armor.name} reduced damage)`;
-      }
-
-      target.data.health = Math.max(0, target.data.health - damage);
-      battleLog += attackMsg + `\n`;
-      battleLog += `${target.user.username}: ${target.data.health}/${target.data.maxHealth} HP\n`;
-
-      if (target.effects.blind && target.effects.blind > 0) {
-        target.effects.blind--;
-      }
-
-      if (target.data.health <= 0) break;
     }
+
+    // Apply status effects
+    for (let fighter of fighters) {
+      if (fighter.effects.burn && fighter.effects.burn > 0) {
+        const burnDamage = 8;
+        fighter.data.health -= burnDamage;
+        roundLog += `🔥 **${fighter.user.username}** takes ${burnDamage} burn damage!\n`;
+        fighter.effects.burn--;
+      }
+      if (fighter.effects.bleed && fighter.effects.bleed > 0) {
+        const bleedDamage = 5;
+        fighter.data.health -= bleedDamage;
+        roundLog += `🩸 **${fighter.user.username}** takes ${bleedDamage} bleed damage!\n`;
+        fighter.effects.bleed--;
+      }
+      if (fighter.effects.blind && fighter.effects.blind > 0) {
+        fighter.effects.blind--;
+      }
+    }
+
+    roundLog += `\n**${challenger.username}**: ${Math.max(0, p1Data.health).toFixed(0)} HP\n`;
+    roundLog += `**${defender.username}**: ${Math.max(0, p2Data.health).toFixed(0)} HP\n`;
+
+    await channel.send(roundLog);
+    await new Promise(resolve => setTimeout(resolve, 2000));
 
     round++;
-
-    if (battleLog.length > 1500) {
-      await channel.send(battleLog);
-      battleLog = '';
-    }
   }
 
-  let winner, loser;
-  if (p1Data.health > 0) {
-    winner = challenger;
-    loser = defender;
+  // Determine winner
+  let resultLog = `\n**━━━ BATTLE END ━━━**\n`;
+  let winnerId, winnerName, reward = 500;
+
+  if (p1Data.health > p2Data.health) {
+    winnerId = challengerId;
+    winnerName = challenger.username;
+    resultLog += `🏆 **${challenger.username}** wins with ${p1Data.health.toFixed(0)} HP remaining!\n`;
+  } else if (p2Data.health > p1Data.health) {
+    winnerId = defenderId;
+    winnerName = defender.username;
+    resultLog += `🏆 **${defender.username}** wins with ${p2Data.health.toFixed(0)} HP remaining!\n`;
   } else {
-    winner = defender;
-    loser = challenger;
+    resultLog += `🤝 It's a draw! Both fighters are equally matched!\n`;
+    reward = 250;
   }
 
-  battleLog += `\n🏆 **${winner.username} WINS!** 🏆\n`;
-  battleLog += `Reward: **500** Gold Coins`;
+  if (winnerId) {
+    updateBalance(winnerId, reward);
+    saveEconomyData();
+    resultLog += `💰 **${winnerName}** earned ${reward} Gold Coins!\n`;
+  } else {
+    updateBalance(challengerId, reward);
+    updateBalance(defenderId, reward);
+    saveEconomyData();
+    resultLog += `💰 Both fighters earned ${reward} Gold Coins for their effort!\n`;
+  }
 
-  await channel.send(battleLog);
-
-  updateBalance(winner.id, 500);
-  saveEconomyData();
-  savePlayerData();
+  await channel.send(resultLog);
 
   delete activeBattles[battleKey];
   saveBattles();
+  savePlayerData();
 }
+
+async function executeAttack(attacker, target) {
+  let log = '';
+  const weapon = attacker.weapon;
+  const baseDamage = weapon.damage || 10;
+
+  // Check for miss
+  let missChance = weapon.missChance || 10;
+  if (attacker.effects.blind && attacker.effects.blind > 0) {
+    missChance += 30;
+  }
+
+  if (Math.random() * 100 < missChance) {
+    log += `❌ **${attacker.user.username}** missed with ${weapon.name}!\n`;
+    return log;
+  }
+
+  // Check for headshot
+  if (Math.random() * 100 < (weapon.headshotChance || 5)) {
+    const headshotDamage = baseDamage * 2;
+    const actualDamage = Math.max(1, headshotDamage - (target.armor ? target.armor.defense * 0.4 : 0));
+    target.data.health -= actualDamage;
+    log += `🎯 **HEADSHOT!** **${attacker.user.username}** hits **${target.user.username}** with ${weapon.name} for ${actualDamage.toFixed(1)} damage!\n`;
+    return log;
+  }
+
+  // Check for critical hit
+  if (Math.random() * 100 < (weapon.critChance || 10)) {
+    const critDamage = baseDamage * 1.5;
+    const actualDamage = Math.max(1, critDamage - (target.armor ? target.armor.defense * 0.5 : 0));
+    target.data.health -= actualDamage;
+    log += `💥 **CRITICAL HIT!** **${attacker.user.username}** strikes **${target.user.username}** with ${weapon.name} for ${actualDamage.toFixed(1)} damage!\n`;
+    return log;
+  }
+
+  // Normal hit
+  const actualDamage = Math.max(1, baseDamage - (target.armor ? target.armor.defense * 0.6 : 0));
+  target.data.health -= actualDamage;
+  log += `⚔️ **${attacker.user.username}** hits **${target.user.username}** with ${weapon.name} for ${actualDamage.toFixed(1)} damage!\n`;
+
+  return log;
+}
+
+async function executeThrowable(attacker, target, currentLog) {
+  const throwable = attacker.throwable;
+  let log = `💣 **${attacker.user.username}** throws ${throwable.name}!\n`;
+  let instantDeath = false;
+
+  // Base damage
+  if (throwable.damage > 0) {
+    const actualDamage = Math.max(1, throwable.damage - (target.armor ? target.armor.defense * 0.3 : 0));
+    target.data.health -= actualDamage;
+    log += `💥 ${throwable.name} deals ${actualDamage.toFixed(1)} damage to **${target.user.username}**!\n`;
+  }
+
+  // Apply effects
+  if (throwable.effect && Math.random() * 100 < (throwable.effectChance || 50)) {
+    switch (throwable.effect) {
+      case 'blind':
+        target.effects.blind = throwable.duration || 2;
+        log += `😵 **${target.user.username}** is blinded! Miss chance increased!\n`;
+        break;
+      case 'stun':
+        log += `⚡ **${target.user.username}** is stunned!\n`;
+        break;
+      case 'burn':
+        target.effects.burn = throwable.duration || 3;
+        log += `🔥 **${target.user.username}** is burning!\n`;
+        break;
+      case 'bleed':
+        target.effects.bleed = throwable.duration || 2;
+        log += `🩸 **${target.user.username}** is bleeding!\n`;
+        break;
+      case 'death':
+        if (Math.random() < 0.7) {
+          target.data.health = 0;
+          instantDeath = true;
+          log += `☠️ **INSTANT DEATH!** **${target.user.username}** was eliminated by ${throwable.name}!\n`;
+        } else {
+          log += `🛡️ **${target.user.username}** took cover and survived the explosion!\n`;
+        }
+        break;
+    }
+  }
+
+  return { log, instantDeath };
+}
+
+client.on('channelUpdate', async (oldChannel, newChannel) => {
+  let changes = [];
+  if (oldChannel.name !== newChannel.name) {
+    changes.push(`Name: \`\`${oldChannel.name}\`\` -> \`\`${newChannel.name}\`\``);
+  }
+  if (oldChannel.topic !== newChannel.topic) {
+    changes.push(`Topic: \`\`${oldChannel.topic || 'N/A'}\`\` -> \`\`${newChannel.topic || 'N/A'}\`\``);
+  }
+  if (changes.length > 0) {
+    const logMessage = `\`[CHANNEL UPDATE]\` Channel **#${newChannel.name}** was updated.
+${changes.join('\n')}`;
+    await sendLog(newChannel.guild.id, logMessage);
+  }
+});
 
 const PREFIX = '$';
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
+    // ---- [NEW] ECONOMY - EARN FOR CHATTING ----
     if (!message.content.startsWith(PREFIX)) {
         const now = Date.now();
         const lastMessage = messageCooldowns.get(message.author.id);
         if (!lastMessage || now - lastMessage > MESSAGE_COOLDOWN) {
-            updateBalance(message.author.id, 1);
+            updateBalance(message.author.id, 1); // Award 1 Gold Coin
             messageCooldowns.set(message.author.id, now);
             saveEconomyData();
         }
     }
 
+
+    // ---- COUNTING GAME LOGIC ----
     const guildCountingData = countingData[message.guild.id];
     if (guildCountingData && message.channel.id === guildCountingData.channelId) {
         const number = parseInt(message.content);
 
+        // Ignore non-numeric messages, but allow commands to pass through
         if (isNaN(number) && !message.content.startsWith(PREFIX)) {
             return; 
         }
@@ -821,7 +1452,8 @@ client.on('messageCreate', async (message) => {
                 const userId = message.author.id;
                 guildCountingData.leaderboard[userId] = (guildCountingData.leaderboard[userId] || 0) + 1;
                 
-                updateBalance(message.author.id, 5);
+                // [NEW] ECONOMY - EARN FOR COUNTING
+                updateBalance(message.author.id, 5); // Award 5 Gold Coins
                 saveEconomyData();
 
                 await message.react('✅');
@@ -831,16 +1463,18 @@ client.on('messageCreate', async (message) => {
         }
     }
 
+
     if (!message.content.startsWith(PREFIX) && !message.mentions.users.has(client.user.id)) return;
 
     const args = message.content.slice(PREFIX.length).trim().split(/ +/);
     const command = message.content.startsWith(PREFIX) ? args.shift().toLowerCase() : null;
 
     if (command) {
+        // ---- [NEW] ECONOMY - EARN FOR USING COMMANDS ----
         const now = Date.now();
         const lastCommand = commandCooldowns.get(message.author.id);
         if (!lastCommand || now - lastCommand > COMMAND_COOLDOWN) {
-            updateBalance(message.author.id, 2);
+            updateBalance(message.author.id, 2); // Award 2 Gold Coins
             commandCooldowns.set(message.author.id, now);
             saveEconomyData();
         }
@@ -856,6 +1490,7 @@ client.on('messageCreate', async (message) => {
         return true;
     }
 
+// ---- Help Command ----
 if (command === 'help') {
   const helpText1 = `📖 **Bot Commands — Utility**\n\n` +
     `📌 \`${PREFIX}prefix\` — Show the bot prefix\n` +
@@ -916,7 +1551,8 @@ if (command === 'help') {
     `🤐 \`${PREFIX}spoiler [msg]\` — Spoiler\n` +
     `📣 \`${PREFIX}say [msg]\` — Echo\n` +
     `✉️ \`${PREFIX}send <channelID> <message>\` — Send to another server/channel\n\n` +
-    `❓ \`${PREFIX}qotd on\` / \`${PREFIX}qotd off\` — Turn Question of the Day ON/OFF\n\n` +
+    `❓ \`${PREFIX}qotd on\` / \`${PREFIX}qotd off\` — Turn Question of the Day ON/OFF\n` +
+    `❓ \`${PREFIX}qotd everyone on\` / \`${PREFIX}qotd everyone off\` — Toggle everyone ping for QOTD\n\n` +
     `★ **Google Gemini AI**: \`${PREFIX}ai <prompt>\` — Ask Gemini AI a prompt\n` +
     `☆ **OpenRouter AI**: \`@bot <prompt>\` — Ask OpenRouter AI a prompt\n\n` +
     `🔢 \`${PREFIX}counting set [#channel]\` — Set the counting channel.\n` +
@@ -928,8 +1564,7 @@ if (command === 'help') {
     `➖ \`${PREFIX}take @user <amount>\` — Take Gold Coins from a user (Immune only).\n` +
     `🏪 \`${PREFIX}store [buy <item_id>]\` — View the item shop or buy an item.\n` +
     `🛍️ \`${PREFIX}inventory [@user]\` — View your or another user's inventory.\n` +
-    `⚔️ \`${PREFIX}loadout [equip/unequip <item_id>]\` — View or manage your equipped items.\n` +
-    `🎯 \`${PREFIX}duel @user\` — Challenge another user to a 1v1 battle.\n\n` +
+    `⚔️ \`${PREFIX}loadout [equip/unequip <item_id>]\` — View or manage your equipped items.\n\n` +
     `👑 **Owner & Immune Commands**\n\n` +
     `🎖️ \`${PREFIX}promote @user <rank>\` — Grant a user immunity with a rank (Owner only)\n` +
     `👎 \`${PREFIX}demote @user\` — Revoke a user's immunity (Owner only)\n` +
@@ -940,6 +1575,7 @@ if (command === 'help') {
   await message.channel.send(helpText2);
 }
 
+// ---- COUNTING GAME COMMANDS ----
 else if (command === 'counting' || command === 'c') {
     const subcommand = args[0]?.toLowerCase();
 
@@ -951,8 +1587,8 @@ else if (command === 'counting' || command === 'c') {
             channelId: channel.id,
             currentCount: 0,
             lastUserId: null,
-            highScore: countingData[message.guild.id]?.highScore || 0,
-            leaderboard: countingData[message.guild.id]?.leaderboard || {}
+            highScore: countingData[message.guild.id]?.highScore || 0, // Preserve high score on re-set
+            leaderboard: countingData[message.guild.id]?.leaderboard || {} // Preserve user score leaderboard on re-set
         };
         saveCountingData();
         return message.reply(`✅ Counting channel has been set to ${channel}. The next number is **1**.`);
@@ -963,6 +1599,7 @@ else if (command === 'counting' || command === 'c') {
         if (!countingData[message.guild.id]) {
             return message.reply('❌ Counting is not active in this server.');
         }
+        // Keep the data but remove the active channel
         delete countingData[message.guild.id].channelId;
         saveCountingData();
         return message.reply('✅ Counting game has been disabled for this server. All data is saved.');
@@ -972,9 +1609,10 @@ else if (command === 'counting' || command === 'c') {
         const serverHighScores = [];
 
         for (const [guildId, guildData] of Object.entries(countingData)) {
+            // Only include servers with a recorded high score
             if (guildData.highScore && guildData.highScore > 0) {
                 const guild = client.guilds.cache.get(guildId);
-                if (guild) {
+                if (guild) { // Ensure the bot is still in the guild
                     serverHighScores.push({
                         name: guild.name,
                         score: guildData.highScore
@@ -987,13 +1625,14 @@ else if (command === 'counting' || command === 'c') {
             return message.reply('The global leaderboard is empty. No high scores have been set yet!');
         }
 
+        // Sort from highest score to lowest
         serverHighScores.sort((a, b) => b.score - a.score);
 
         const leaderboardEmbed = {
           color: 0x0099ff,
           title: '🏆 Global High Score Leaderboard',
           description: serverHighScores
-            .slice(0, 20)
+            .slice(0, 20) // Show top 20 servers
             .map((entry, index) => 
               `${index + 1}. **${entry.name}**: ${entry.score}`
           ).join('\n'),
@@ -1006,6 +1645,7 @@ else if (command === 'counting' || command === 'c') {
     return message.reply('❌ Invalid subcommand. Use `$counting set`, `$counting off`, or `$counting leaderboard`.');
 }
 
+// ---- ECONOMY COMMANDS ----
 else if (command === 'balance' || command === 'bal') {
     const target = message.mentions.users.first() || message.author;
     const balance = getBalance(target.id);
@@ -1021,6 +1661,7 @@ else if (command === 'give' || command === 'add') {
     if (!target) return message.reply('❌ Please mention a user.');
     if (isNaN(amount) || amount <= 0) return message.reply('❌ Please provide a valid positive amount of Gold Coins.');
     
+    // Protect the owner's balance
     if (target.id === OWNER_ID) {
         return message.reply('❌ You cannot modify the owner\'s balance.');
     }
@@ -1039,6 +1680,7 @@ else if (['take', 'remove', 'subtract'].includes(command)) {
     if (!target) return message.reply('❌ Please mention a user.');
     if (isNaN(amount) || amount <= 0) return message.reply('❌ Please provide a valid positive amount of Gold Coins.');
 
+    // Protect the owner's balance
     if (target.id === OWNER_ID && message.author.id !== OWNER_ID) {
         return message.reply('❌ You cannot modify the owner\'s balance.');
     }
@@ -1048,9 +1690,11 @@ else if (['take', 'remove', 'subtract'].includes(command)) {
     message.reply(`✅ Took **${amount}** Gold Coins from **${target.username}**.`);
 }
 
+// ---- [NEW] STORE, INVENTORY, LOADOUT COMMANDS ----
 else if (command === 'store') {
     const subcommand = args[0]?.toLowerCase();
 
+    // Immune-only commands to manage the store
     if (subcommand === 'add') {
         if (!isImmune(message.author)) return message.reply('❌ You are not authorized to manage the store.');
         
@@ -1065,7 +1709,7 @@ else if (command === 'store') {
         if (!storeData[category]) return message.reply(`❌ Invalid category. Valid categories are: ${Object.keys(storeData).join(', ')}`);
         if (findItem(itemId)) return message.reply('❌ An item with that ID already exists.');
 
-        storeData[category][itemId] = { name: itemName, price: priceNum, description: "Added via command.", damage: 20, defense: 10 };
+        storeData[category][itemId] = { name: itemName, price: priceNum, description: "Added via command.", stats: {}, effects: [] };
         saveStoreData();
         return message.reply(`✅ Added **${itemName}** (\`${itemId}\`) to the store for **${priceNum}** Gold Coins.`);
     }
@@ -1108,6 +1752,7 @@ else if (command === 'store') {
         return message.reply(`✅ You purchased **${item.name}** for **${item.price}** Gold Coins!`);
     }
 
+    // Default: View store
     const storeEmbed = {
         color: 0x0099ff,
         title: '🏪 Item Store',
@@ -1118,15 +1763,9 @@ else if (command === 'store') {
     for (const category in storeData) {
         const categoryName = category.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
         let itemsText = '';
-        let itemCount = 0;
         for (const itemId in storeData[category]) {
             const item = storeData[category][itemId];
-            itemsText += `**${item.name}** - ${item.price} 🪙 *(\`${itemId}\`)*\n`;
-            itemCount++;
-            if (itemCount >= 10) {
-                itemsText += `*...and ${Object.keys(storeData[category]).length - 10} more*\n`;
-                break;
-            }
+            itemsText += `**${item.name}** - ${item.price} 🪙\n*ID: \`${itemId}\`*\n`;
         }
         if (itemsText) {
             storeEmbed.fields.push({ name: `--- ${categoryName} ---`, value: itemsText, inline: false });
@@ -1205,6 +1844,7 @@ else if (command === 'loadout') {
         return message.reply(`✅ Unequipped **${item.name}**.`);
     }
 
+    // Default: View loadout
     const target = message.mentions.users.first() || message.author;
     const userPData = getPlayerData(target.id);
     const loadout = userPData.loadout;
@@ -1217,7 +1857,7 @@ else if (command === 'loadout') {
         color: 0xf5b042,
         title: `⚔️ ${target.username}'s Loadout`,
         fields: [
-            { name: '❤️ Health', value: `${userPData.health}/${userPData.maxHealth}`, inline: false },
+            { name: '❤️ Health', value: `${userPData.health}/100`, inline: false },
             { name: '🔫 Weapon', value: weapon ? `**${weapon.name}** (\`${weapon.id}\`)` : 'None', inline: true },
             { name: '🛡️ Armor', value: armor ? `**${armor.name}** (\`${armor.id}\`)` : 'None', inline: true },
             { name: '💣 Throwable', value: throwable ? `**${throwable.name}** (\`${throwable.id}\`)` : 'None', inline: true },
@@ -1228,44 +1868,84 @@ else if (command === 'loadout') {
     return message.channel.send({ embeds: [loadoutEmbed] });
 }
 
-else if (command === 'duel') {
+// ---- [NEW] BATTLE COMMAND ----
+else if (command === 'battle' || command === '1v1') {
     const target = message.mentions.users.first();
     
-    if (!target) return message.reply('❌ Please mention a user to challenge.');
-    if (target.id === message.author.id) return message.reply('❌ You cannot challenge yourself!');
-    if (target.bot) return message.reply('❌ You cannot challenge a bot!');
-
+    if (!target) {
+        return message.reply('❌ Please mention someone to battle! Example: `$battle @user`');
+    }
+    
+    if (target.id === message.author.id) {
+        return message.reply('❌ You cannot battle yourself!');
+    }
+    
+    if (target.bot) {
+        return message.reply('❌ You cannot battle a bot!');
+    }
+    
+    // Check if players have weapons equipped
     const challengerData = getPlayerData(message.author.id);
     const defenderData = getPlayerData(target.id);
-
+    
     if (!challengerData.loadout.weapon) {
         return message.reply('❌ You need to equip a weapon first! Use `$loadout equip <item_id>`');
     }
-
-    const duelMsg = await message.channel.send(
-        `⚔️ **${message.author.username}** has challenged **${target.username}** to a duel!\n` +
-        `**${target.username}**, react with ⚔️ to accept the challenge!`
-    );
-
-    await duelMsg.react('⚔️');
-
-    activeBattles[duelMsg.id] = {
+    
+    if (!defenderData.loadout.weapon) {
+        return message.reply(`❌ ${target.username} doesn't have a weapon equipped!`);
+    }
+    
+    // Create battle challenge
+    const challengeEmbed = {
+        color: 0xff0000,
+        title: '⚔️ BATTLE CHALLENGE ⚔️',
+        description: `**${message.author.username}** has challenged **${target.username}** to a 1v1 battle!\n\n` +
+                     `**${target}**, react with ⚔️ to accept the challenge!\n\n` +
+                     `The battle will begin once accepted. May the best fighter win!`,
+        fields: [
+            { 
+                name: `${message.author.username}'s Loadout`, 
+                value: `🔫 ${challengerData.loadout.weapon ? findItem(challengerData.loadout.weapon).name : 'None'}\n` +
+                       `🛡️ ${challengerData.loadout.armor ? findItem(challengerData.loadout.armor).name : 'None'}\n` +
+                       `💣 ${challengerData.loadout.throwable ? findItem(challengerData.loadout.throwable).name : 'None'}`,
+                inline: true 
+            },
+            { 
+                name: `${target.username}'s Loadout`, 
+                value: `🔫 ${defenderData.loadout.weapon ? findItem(defenderData.loadout.weapon).name : 'None'}\n` +
+                       `🛡️ ${defenderData.loadout.armor ? findItem(defenderData.loadout.armor).name : 'None'}\n` +
+                       `💣 ${defenderData.loadout.throwable ? findItem(defenderData.loadout.throwable).name : 'None'}`,
+                inline: true 
+            },
+        ],
+        footer: { text: 'Challenge expires in 60 seconds' }
+    };
+    
+    const challengeMsg = await message.channel.send({ embeds: [challengeEmbed] });
+    await challengeMsg.react('⚔️');
+    
+    // Store battle data
+    activeBattles[challengeMsg.id] = {
         challenger: message.author.id,
         defender: target.id,
         status: 'pending',
         timestamp: Date.now()
     };
     saveBattles();
-
+    
+    // Auto-cancel after 60 seconds
     setTimeout(() => {
-        if (activeBattles[duelMsg.id] && activeBattles[duelMsg.id].status === 'pending') {
-            message.channel.send(`⏱️ The duel challenge expired. **${target.username}** did not accept.`);
-            delete activeBattles[duelMsg.id];
+        if (activeBattles[challengeMsg.id] && activeBattles[challengeMsg.id].status === 'pending') {
+            delete activeBattles[challengeMsg.id];
             saveBattles();
+            message.channel.send(`⏱️ The battle challenge from **${message.author.username}** to **${target.username}** has expired.`);
         }
     }, 60000);
 }
 
+
+  // ---- Log Mode Commands ----
   else if (command === 'logmode') {
     if (!checkPermission(PermissionsBitField.Flags.ManageGuild)) return;
     const subcommand = args[0];
@@ -1324,6 +2004,7 @@ else if (command === 'duel') {
     }
   }
 
+  // ---- Owner & Immune Commands ----
   else if (command === 'promote') {
     if (message.author.id !== OWNER_ID) {
         return message.reply('❌ You do not have permission to use this command.');
@@ -1386,6 +2067,7 @@ else if (command === 'duel') {
         serverList += `**${guild.name}** - ${guild.memberCount} members (ID: ${guild.id})\n`;
     });
 
+    // Handle potential message length limit
     if (serverList.length > 2000) {
         const chunks = serverList.match(/[\s\S]{1,1990}/g) || [];
         for (const chunk of chunks) {
@@ -1396,6 +2078,7 @@ else if (command === 'duel') {
     }
   }
 
+  // ---- GIVEAWAY CODE: Command Logic ----
   else if (command === 'giveaway') {
     if (!checkPermission(PermissionsBitField.Flags.ManageGuild)) return;
 
@@ -1462,6 +2145,8 @@ else if (command === 'duel') {
     }, durationMs);
   }
 
+
+  // ---- Utility Commands ----
   else if (command === 'ping') {
     const sent = await message.channel.send('Pinging...');
     sent.edit(`🏓 Pong! Latency is ${sent.createdTimestamp - message.createdTimestamp}ms`);
@@ -1488,11 +2173,12 @@ End Transmission.`);
     message.channel.send(`📌 The current prefix is: \`${PREFIX}\` `);
   }
 
+  // ---- Fun & Games Commands ----
   else if (command === 'flip') {
     const result = Math.random() < 0.5 ? 'Heads' : 'Tails';
     message.channel.send(`🪙 You flipped **${result}**!`);
   } else if (command === '8ball') {
-    const responses = ['Yes.', 'No.', 'Maybe.', 'Ask again later.', 'Definitely!', 'I don't think so.'];
+    const responses = ['Yes.', 'No.', 'Maybe.', 'Ask again later.', 'Definitely!', 'I don’t think so.'];
     if (!args.length) return message.reply('🎱 Ask me a question.');
     message.channel.send(`🎱 ${responses[Math.floor(Math.random() * responses.length)]}`);
   } else if (command === 'dice') {
@@ -1521,7 +2207,131 @@ End Transmission.`);
       'You bring people joy… by leaving.',
       'You make onions cry out of pity.',
       'You look like a before picture.',
-    ];
+      'Bro thinks he is the main character, but ur not even in the opening credits.',
+      'You have got more filler than a Naruto flashback.',
+      'You talk big, but your aura screams background NPC.',
+      'Ur the type of villain who gets defeated in one episode just to hype the real boss.',
+      'U aim like a stormtrooper on low sensitivity.',
+      'Youre basically the tutorial boss—easy, forgettable, and only there so others can learn the game.',
+      'You die faster than my Wi-Fi when I need it most.',
+      'You camp harder than a free-to-play Fortnite kid with no skins.',
+      'Your KD ratio is a cry for help.',
+      'Youve got more missed messages than actual friends.',
+      'Your mic quality sounds like youre calling in from the Shadow Realm.',
+      'Even Google cant search up who asked.',
+      'Your comebacks load slower than Roblox on a school Chromebook.',
+      'Respawn and try again.',
+      'Alt+F4 your personality.',
+      'Lag is your only excuse.',
+      'Fuck you.',      
+      'Game over. Insert skill to continue.',    
+      'Your secrets are safe with me. I never listen anyway.',
+      'You have something on your face… oh wait, that’s just your face.',
+      'You bring everyone down to your IQ level, and then still lose.',
+      'You’re proof that even evolution makes mistakes.',
+      'You have something most people don’t: a personality no one asked for.',
+      'You’re like a software bug—annoying, pointless, and impossible to remove.',
+      'You’re as useless as a white crayon.',
+      'You bring people closer… to the exit.',
+      'You’re like a phone with no signal—nothing but dead weight.',
+      'You’re proof that not everyone deserves participation trophies.',
+      'You have something in common with a cloud: when you disappear, it’s finally nice outside.',
+      'You’re the human version of a headache.',
+      'You’re like Wi-Fi with one bar—barely functioning and always frustrating.',
+      'You’re proof that birth certificates can be returned.',
+      'You bring disappointment like it’s a full-time job.',
+      'You’re like expired milk—bad smell, worse taste, and no use.',
+      'You bring the kind of energy that makes batteries give up.',
+      'You’re like a broken pencil—pointless, messy, and not worth the effort.',
+      'You’re proof that intelligence skips generations.',
+      'You’re like an alarm clock that doesn’t go off—completely unreliable.',
+      'You bring people together… to laugh at you.',
+      'You’re like dial-up internet—annoying noises and zero speed.',
+      'You’re proof that natural selection sometimes gets lazy.',
+      'You’re like the flu—nobody wants you, and you make everyone feel worse.',
+      'You’re like a video game tutorial—unskippable and hated.',
+      'You bring the vibe of a Monday morning.',
+      'You’re like a printer—always jammed, loud, and nobody misses you when you’re gone.',
+      'You’re proof that not all babies are blessings.',
+      'You’re like an expired coupon—useless and embarrassing to use.',
+      'You’re like a popup ad—loud, desperate, and ignored instantly.',
+      'You’re proof that common sense isn’t common.',
+      'You’re like a math problem with no answer—pointless and irritating.',
+      'You bring nothing to the table but crumbs.',
+      'You’re like a mosquito—small, annoying, and everyone wants to slap you.',
+      'You’re proof that mistakes can walk and talk.',
+      'You’re like a virus—unwanted, contagious, and hard to get rid of.',
+      'You’re like a broken light bulb—dim, fragile, and useless in the dark.',
+      'You’re like the bottom of the barrel—literally what’s left over.',
+      'You’re proof that the gene pool has a shallow end.',
+      'You’re like a bad haircut—embarrassing and hard to ignore.',
+      'You’re like an alarm set for PM instead of AM—completely useless when needed.',
+      'You’re proof that practice doesn’t always make perfect.',
+      'You’re like diet water—fake and pointless.',
+      'You’re the reason warning labels exist.',
+      'You’re like a cloud full of hot air—loud and empty.',
+      'You’re proof that not every story has a happy ending.',
+      'You’re living proof that even trash gets recycled sometimes.',
+      'You’re like a software glitch—nobody asked for you, and everyone hates dealing with you.',
+      'You have two brain cells, and they’re both fighting for third place.',
+      'You’re like a cloud of smoke—bad for everyone around you and gone with a breeze.',
+      'You bring the IQ of the server down just by typing.',
+      'You look like a failed character creation screen.',
+      'You’re like an unpaid bill—everyone avoids you.',
+      'You’re like expired medicine—worthless and possibly dangerous.',
+      'You’re like a parking ticket—unwanted and makes everyone angry.',
+      'You’re living proof that birth control should be free.',
+      'You’re like a broken condom—an accident that nobody wanted.',
+      'You’re like a test nobody studied for—confusing, unwanted, and stressful.',
+      'You’re like a clown without makeup—still a clown.',
+      'You’re the human equivalent of a speed bump—pointless and irritating.',
+      'You’re like a smoke detector with low battery—annoying, loud, and useless.',
+      'You’re like a sequel nobody asked for—worse than the original.',
+      'You’re like a knockoff brand—cheap, fake, and disappointing.',
+      'You’re like a puzzle with missing pieces—frustrating and incomplete.',
+      'You’re proof that not every cry for attention deserves a reply.',
+      'You’re like malware—slow, annoying, and nobody wants you installed.',
+      'You’re like the Titanic—loud, overhyped, and destined to sink.',
+      'You’re like fast food—cheap, greasy, and makes everyone feel sick afterwards.',
+      'You’re like an error message nobody can fix.',
+      'You’re like roadkill—unpleasant to look at and better ignored.',
+      'You’re like a screen crack—ugly, distracting, and makes everything worse.',
+      'You’re like wet socks—disgusting and uncomfortable to be around.',
+      'You’re like a bad tattoo—permanent regret.',
+      'You’re like spoiled meat—bad smell, bad taste, and dangerous to consume.',
+      'You’re like a GPS with no signal—lost and completely useless.',
+      'You’re like homework—nobody wants you, and you ruin free time.',
+      'You’re like mold—grows where it’s not wanted and stinks up the place.',
+      'You’re like an unpaid intern—doing nothing, but somehow still in the way.',
+      'You’re like a prison sentence—nobody wants to deal with you and time feels longer when they do.',
+      'You’re like chewing tinfoil—unpleasant and painful.',
+      'You’re like a scratch on a CD—annoying, repetitive, and ruins everything.',
+      'You’re like a splinter—small but makes everyone hate you.',
+      'You’re like spam calls—relentless, irritating, and better blocked.',
+      'You’re like bad Wi-Fi—every interaction with you is frustrating.',
+      'You’re like a nightmare—nobody wants you, and everyone is relieved when you’re gone.',
+      'You’re like a side quest nobody cares about.',
+      'You’re like a pothole—unexpected, annoying, and ruins the ride.',
+      'You’re like burnt toast—useless and leaves a bad taste.',
+      'You’re like background noise—distracting and unwanted.',
+      'You’re like a rumor—worthless and spreads too easily.',
+      'You’re like a scam call—persistent, fake, and nobody falls for you.',
+      'You’re like rotten fruit—ugly on the outside and worse on the inside.',
+      'You’re like a bad driver—dangerous, clueless, and always in the way.',
+      'You’re like a horror movie sequel—predictable, cheap, and nobody asked for it.',
+      'You’re like sand in shoes—irritating and impossible to get rid of.',
+      'You’re like a bad memory—always there and never wanted.',
+      'You’re proof that dumb fucks can still learn to type.',
+      'You bring the same energy as a broken condom, useless shit.',
+      'You’re like Wi-Fi in hell—slow as fuck and painful to deal with.',
+      'You’re the human version of dog shit—everyone avoids you.',
+      'You’ve got two brain cells left, and one of them is on fucking break.',
+      'You’re like a clown, but somehow less funny and more pathetic as fuck.',
+      'You’re a walking “fuck this” moment.',
+      'You’re like spam mail—annoying as fuck and instantly deleted.',
+      'You’re the kind of idiot who could fuck up a free lunch.',
+      'You’re proof that evolution sometimes takes a giant fucking step backward.'
+];
     message.channel.send(`🔥 ${user.username}, ${roasts[Math.floor(Math.random() * roasts.length)]}`);
   } else if (command === 'compliment') {
     const user = message.mentions.users.first();
@@ -1529,6 +2339,7 @@ End Transmission.`);
     message.channel.send(`💖 ${user.username}, ${compliments[Math.floor(Math.random() * compliments.length)]}`);
   }
 
+  // ---- Meme Command ----
   else if (command === 'meme') {
     try {
         await message.channel.sendTyping();
@@ -1555,6 +2366,7 @@ End Transmission.`);
     }
   }
 
+  // ---- NSFW Meme Command ----
   else if (command === 'nsfw-meme') {
     if (!message.channel.nsfw) {
         return message.reply('❌ This command can only be used in NSFW channels.');
@@ -1585,6 +2397,7 @@ End Transmission.`);
     }
   }
 
+  // ---- Haunt ----
   else if (command === 'haunt') {
     if (hauntedChannels.has(message.channel.id)) return message.channel.send('👻 Already haunting this channel!');
     hauntedChannels.add(message.channel.id);
@@ -1603,6 +2416,7 @@ End Transmission.`);
     message.channel.send('🕯️ The spirits have left...');
   }
 
+  // ---- Blackjack ----
   else if (command === 'blackjack') {
     if (blackjackGames.has(message.author.id)) return message.reply('⚠️ You already have a game! Use `$hit` or `$stand`');
     const playerHand = [drawCard(), drawCard()];
@@ -1611,7 +2425,7 @@ End Transmission.`);
     const playerTotal = handValue(playerHand);
     const msg = `🃏 **Blackjack Started!** 🃏\n\n` +
       `**Your hand:** ${formatHand(playerHand)} (Total: ${playerTotal})\n` +
-      `**Dealer's hand:** ${dealerHand[0].value}${dealerHand[0].suit} ??\n\n` +
+      `**Dealer’s hand:** ${dealerHand[0].value}${dealerHand[0].suit} ??\n\n` +
       `👉 Type \`$hit\` or \`$stand\``;
     message.channel.send(msg);
   } else if (command === 'hit') {
@@ -1638,7 +2452,7 @@ End Transmission.`);
     }
     const playerTotal = handValue(game.playerHand);
     let result = `**Your hand:** ${formatHand(game.playerHand)} (Total: ${playerTotal})\n` +
-      `**Dealer's hand:** ${formatHand(dealerHand)} (Total: ${dealerTotal})\n\n`;
+      `**Dealer’s hand:** ${formatHand(dealerHand)} (Total: ${dealerTotal})\n\n`;
     if (playerTotal > 21) {
         result += `💥 You busted! Dealer wins.`;
     } else if (dealerTotal > 21) {
@@ -1652,12 +2466,13 @@ End Transmission.`);
     } else if (playerTotal < dealerTotal) {
         result += `😢 Dealer wins.`;
     } else {
-        result += `🤝 It's a tie!`;
+        result += `🤝 It’s a tie!`;
     }
     blackjackGames.delete(message.author.id);
     message.channel.send(result);
   }
 
+  // ---- AI Chat with OpenRouter (Bot Mention) ----
   else if (!command && message.mentions.users.has(client.user.id)) {
     const prompt = message.content.replace(new RegExp(`<@!?${client.user.id}>`, 'g'), '').trim();
     if (!prompt) return message.reply('❓ What would you like to ask?');
@@ -1686,7 +2501,7 @@ End Transmission.`);
         return message.reply(`🚫 OpenRouter Error: ${data.error.message}`);
       }
 
-      const reply = data.choices?.[0]?.message?.content || "⚠️ Sorry, I couldn't generate a reply.";
+      const reply = data.choices?.[0]?.message?.content || "⚠️ Sorry, I couldn’t generate a reply.";
 
       if (reply.length > 2000) {
         await message.reply(reply.slice(0, 1997) + '...');
@@ -1700,6 +2515,7 @@ End Transmission.`);
     }
   }
 
+  // ---- AI Chat with Google Gemini ----
   else if (command === 'ai') {
     const prompt = args.join(' ');
     if (!prompt) return message.reply('❓ Please provide a prompt. Example: `$ai tell me a story`');
@@ -1713,7 +2529,7 @@ End Transmission.`);
       let reply = result.response?.text?.();
       if (!reply || reply.trim().length === 0) {
         console.warn("⚠️ Gemini refusal details:", JSON.stringify(result.response, null, 2));
-        reply = "⚠️ Gemini couldn't answer that. Try rephrasing your question.";
+        reply = "⚠️ Gemini couldn’t answer that. Try rephrasing your question.";
       }
 
       if (reply.length > 2000) {
@@ -1728,6 +2544,7 @@ End Transmission.`);
     }
   }
 
+  // ---- Moderation Commands ----
   else if (command === 'kick') {
     const target = message.mentions.members.first();
     if (!target) return message.reply('🔨 Tag a user to kick.');
@@ -1765,6 +2582,7 @@ End Transmission.`);
       .catch(() => message.reply('❌ Cannot unmute this user.'));
   }
 
+  // ---- ANTI-RAID COMMAND (REFACTORED) ----
   else if (command === 'antiraid') {
       if (!checkPermission(PermissionsBitField.Flags.ManageGuild)) return;
       const subcommand = args[0]?.toLowerCase();
@@ -1788,6 +2606,7 @@ End Transmission.`);
       }
   }
 
+  // ---- Nuke Command ----
   else if (command === 'nuke') {
     if (!checkPermission(PermissionsBitField.Flags.ManageChannels)) return;
 
@@ -1800,7 +2619,7 @@ End Transmission.`);
       }
 
       const channelsToDelete = message.guild.channels.cache
-        .filter(channel => channel.type === 0 && channel.deletable)
+        .filter(channel => channel.type === 0 && channel.deletable) // 0 is GuildText
         .first(count);
 
       if (channelsToDelete.length === 0) {
@@ -1826,7 +2645,7 @@ End Transmission.`);
       }
 
       const channelsToRename = message.guild.channels.cache
-        .filter(channel => channel.type === 0 && channel.manageable)
+        .filter(channel => channel.type === 0 && channel.manageable) // 0 is GuildText
         .first(count);
 
       if (channelsToRename.length === 0) {
@@ -1847,6 +2666,7 @@ End Transmission.`);
     }
   }
 
+  // ---- Info & Tools ----
   else if (command === 'userinfo') {
     const user = message.mentions.users.first() || message.author;
     const member = message.guild.members.cache.get(user.id);
@@ -1893,6 +2713,7 @@ Created: ${guild.createdAt.toDateString()}`);
       .catch(err => message.reply(`❌ Failed to send message. Error: ${err.message}`));
   }
 
+  // ---- Persistent Warnings ----
   else if (command === 'warn') {
     const target = message.mentions.members.first();
     if (!target) return message.reply('⚠️ Tag a user to warn.');
@@ -1913,6 +2734,7 @@ Created: ${guild.createdAt.toDateString()}`);
     message.channel.send(text);
   }
 
+  // ---- Clear, Lock, Unlock, Slowmode, Role ----
   else if (command === 'clear') {
     if (!checkPermission(PermissionsBitField.Flags.ManageMessages)) return;
     const count = parseInt(args[0]);
@@ -1963,6 +2785,7 @@ Created: ${guild.createdAt.toDateString()}`);
     }
   }
 
+  // ---- QOTD Command (Updated) ----
   else if (command === 'qotd') {
     if (!checkPermission(PermissionsBitField.Flags.ManageChannels)) return;
     const subcommand = args[0];
@@ -1981,6 +2804,8 @@ Created: ${guild.createdAt.toDateString()}`);
       const sendQuestion = () => {
         const question = qotdQuestions[Math.floor(Math.random() * qotdQuestions.length)];
         channel.send(`**❓ Question of the Day:** ${question}`);
+        
+        // Add the global log function call here
         logToGlobal(question, message.guild.name, channel.name);
       };
       sendQuestion();
@@ -2005,6 +2830,7 @@ Created: ${guild.createdAt.toDateString()}`);
     }
   }
 
+  // --- Welcome & Leave Commands ---
   else if (command === 'setwelcome') {
     if (!checkPermission(PermissionsBitField.Flags.ManageGuild)) return;
     const channel = message.mentions.channels.first() || message.channel;
@@ -2050,12 +2876,13 @@ Created: ${guild.createdAt.toDateString()}`);
     message.reply('✅ Leave message has been cleared for this server.');
   }
 
+  // ---- Unknown command ----
   else {
-    if (message.content.startsWith('$') && command) {
+    if (message.content.startsWith('$') && command) { // Check if it was a command attempt
       message.reply('❌ Unknown command or you do not have permission.');
     }
   }
 
-});
+}); // ---- End of messageCreate ----
 
 client.login(process.env.BOT_TOKEN);
