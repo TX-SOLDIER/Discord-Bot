@@ -1949,62 +1949,54 @@ else if (command === 'loadout') {
 }
 
 // ---- [NEW] BATTLE COMMAND ----
+const { EmbedBuilder } = require('discord.js');
+ 
+// ---- [NEW] BATTLE COMMAND ----
 else if (command === 'battle' || command === '1v1') {
     const target = message.mentions.users.first();
-    
-    if (!target) {
-        return message.reply('❌ Please mention someone to battle! Example: `$battle @user`');
-    }
-    
-    if (target.id === message.author.id) {
-        return message.reply('❌ You cannot battle yourself!');
-    }
-    
-    if (target.bot) {
-        return message.reply('❌ You cannot battle a bot!');
-    }
-    
-    // Check if players have weapons equipped
+
+    if (!target) return message.reply('❌ Please mention someone to battle! Example: `$battle @user`');
+    if (target.id === message.author.id) return message.reply('❌ You cannot battle yourself!');
+    if (target.bot) return message.reply('❌ You cannot battle a bot!');
+
     const challengerData = getPlayerData(message.author.id);
     const defenderData = getPlayerData(target.id);
-    
-    if (!challengerData.loadout.weapon) {
-        return message.reply('❌ You need to equip a weapon first! Use `$loadout equip <item_id>`');
-    }
-    
-    if (!defenderData.loadout.weapon) {
-        return message.reply(`❌ ${target.username} doesn't have a weapon equipped!`);
-    }
-    
-    // Create battle challenge
-    const challengeEmbed = {
-        color: 0xff0000,
-        title: '⚔️ BATTLE CHALLENGE ⚔️',
-        description: `**${message.author.username}** has challenged **${target.username}** to a 1v1 battle!\n\n` +
-                     `**${target}**, react with ⚔️ to accept the challenge!\n\n` +
-                     `The battle will begin once accepted. May the best fighter win!`,
-        fields: [
-            { 
-                name: `${message.author.username}'s Loadout`, 
+
+    if (!challengerData.loadout.weapon) return message.reply('❌ You need to equip a weapon first! Use `$loadout equip <item_id>`');
+    if (!defenderData.loadout.weapon) return message.reply(`❌ ${target.username} doesn't have a weapon equipped!`);
+
+    const topGif = "https://i.imgur.com/yourTopBattle.gif"; // top GIF
+    const bottomGif = "https://i.imgur.com/yourBottomBattle.gif"; // bottom GIF
+
+    const challengeEmbed = new EmbedBuilder()
+        .setColor(0xff0000)
+        .setTitle('⚔️ BATTLE CHALLENGE ⚔️')
+        .setDescription(`**${message.author.username}** has challenged **${target.username}** to a 1v1 battle!\n\n` +
+                        `**${target.username}**, react with ⚔️ to accept the challenge!\n\n` +
+                        `The battle will begin once accepted. May the best fighter win!`)
+        .addFields(
+            {
+                name: `${message.author.username}'s Loadout`,
                 value: `🔫 ${challengerData.loadout.weapon ? findItem(challengerData.loadout.weapon).name : 'None'}\n` +
                        `🛡️ ${challengerData.loadout.armor ? findItem(challengerData.loadout.armor).name : 'None'}\n` +
                        `💣 ${challengerData.loadout.throwable ? findItem(challengerData.loadout.throwable).name : 'None'}`,
-                inline: true 
+                inline: true
             },
-            { 
-                name: `${target.username}'s Loadout`, 
+            {
+                name: `${target.username}'s Loadout`,
                 value: `🔫 ${defenderData.loadout.weapon ? findItem(defenderData.loadout.weapon).name : 'None'}\n` +
                        `🛡️ ${defenderData.loadout.armor ? findItem(defenderData.loadout.armor).name : 'None'}\n` +
                        `💣 ${defenderData.loadout.throwable ? findItem(defenderData.loadout.throwable).name : 'None'}`,
-                inline: true 
-            },
-        ],
-        footer: { text: 'Challenge expires in 60 seconds' }
-    };
-    
+                inline: true
+            }
+        )
+        .setImage(topGif) // Top GIF
+        .setFooter({ text: 'Challenge expires in 60 seconds', iconURL: bottomGif })
+        .setTimestamp();
+
     const challengeMsg = await message.channel.send({ embeds: [challengeEmbed] });
     await challengeMsg.react('⚔️');
-    
+
     // Store battle data
     activeBattles[challengeMsg.id] = {
         challenger: message.author.id,
@@ -2013,7 +2005,7 @@ else if (command === 'battle' || command === '1v1') {
         timestamp: Date.now()
     };
     saveBattles();
-    
+
     // Auto-cancel after 60 seconds
     setTimeout(() => {
         if (activeBattles[challengeMsg.id] && activeBattles[challengeMsg.id].status === 'pending') {
@@ -2023,7 +2015,6 @@ else if (command === 'battle' || command === '1v1') {
         }
     }, 60000);
 }
-
 
   // ---- Log Mode Commands ----
   else if (command === 'logmode') {
