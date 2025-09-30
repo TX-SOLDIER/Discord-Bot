@@ -1949,9 +1949,6 @@ else if (command === 'loadout') {
 }
 
 // ---- [NEW] BATTLE COMMAND ----
-const { EmbedBuilder } = require('discord.js');
- 
-// ---- [NEW] BATTLE COMMAND ----
 else if (command === 'battle' || command === '1v1') {
     const target = message.mentions.users.first();
 
