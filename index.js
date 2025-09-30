@@ -2228,8 +2228,18 @@ else if (command === 'battle' || command === '1v1') {
 
   // ---- Utility Commands ----
   else if (command === 'ping') {
-    const sent = await message.channel.send('Pinging...');
-    sent.edit(`🏓 Pong! Latency is ${sent.createdTimestamp - message.createdTimestamp}ms`);
+  const loadingGif = "https://i.imgur.com/yourLoading.gif"; // replace with your GIF link
+  const sent = await message.channel.send({ content: "🏓 Pinging..." });
+
+  const pingEmbed = {
+    color: 0x39FF14,
+    title: "🏓 Pong!",
+    description: `Latency is **${sent.createdTimestamp - message.createdTimestamp}ms**\nAPI Latency is **${Math.round(client.ws.ping)}ms**`,
+    thumbnail: { url: https://i.imgur.com/Abo2D8x.gif } // shows GIF in corner
+  };
+
+  await sent.edit({ content: "", embeds: [pingEmbed] });
+  }
   } else if (command === 'stats') {
     message.channel.send(`📊 Server has ${message.guild.memberCount} members.`);
   } else if (command === 'uptime') {
