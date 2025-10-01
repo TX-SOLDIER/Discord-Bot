@@ -1,5 +1,5 @@
 require('dotenv').config();
-const { Client, GatewayIntentBits, PermissionsBitField } = require('discord.js');
+const { Client, GatewayIntentBits, PermissionsBitField, EmbedBuilder } = require('discord.js');
 const fetch = require('node-fetch');
 const fs = require('fs');
 const express = require('express');
@@ -114,7 +114,7 @@ function getBalance(userId) {
 
 function updateBalance(userId, amount) {
     const currentBalance = getBalance(userId);
-    economyData[userId] = currentBalance + amount;
+    economyData[userId] = Math.max(0, currentBalance + amount); // Ensure balance doesn't go below 0
     return economyData[userId];
 }
 
@@ -123,9 +123,11 @@ function updateBalance(userId, amount) {
 const storeFile = './store.json';
 const playersFile = './players.json';
 const battlesFile = './battles.json';
+const dwBattlesFile = './dw_battles.json'; // New file for Deadliest Warrior games
 let storeData = {};
 let playerData = {};
 let activeBattles = {};
+let activeDWGames = {}; // New object for turn-based games
 
 function loadStoreData() {
     if (fs.existsSync(storeFile)) {
@@ -169,6 +171,22 @@ function saveBattles() {
     fs.writeFileSync(battlesFile, JSON.stringify(activeBattles, null, 2));
 }
 
+// ---- [NEW] DEADLIEST WARRIOR BATTLE DATA ----
+function loadDWBattles() {
+    if (fs.existsSync(dwBattlesFile)) {
+        try {
+            activeDWGames = JSON.parse(fs.readFileSync(dwBattlesFile, 'utf8'));
+        } catch (e) {
+            console.error("Error parsing dw_battles.json:", e);
+        }
+    }
+}
+
+function saveDWBattles() {
+    fs.writeFileSync(dwBattlesFile, JSON.stringify(activeDWGames, null, 2));
+}
+
+
 // Helper to get or initialize a player's data
 function getPlayerData(userId) {
     if (!playerData[userId]) {
@@ -183,7 +201,8 @@ function getPlayerData(userId) {
             }
         };
     }
-    return playerData[userId];
+    // Return a deep copy to avoid modifying the original object directly in battles
+    return JSON.parse(JSON.stringify(playerData[userId]));
 }
 
 // Helper to find an item in the store by its ID
@@ -286,6 +305,7 @@ function initializeStore() {
             tear_gas: { name: "Tear Gas", price: 400, damage: 10, effect: "blind", effectChance: 90, duration: 3, description: "Heavy blind effect" },
         }
     };
+    saveStoreData();
 }
 
 
@@ -294,10 +314,10 @@ loadEconomyData();
 loadStoreData();
 if (Object.keys(storeData).length === 0) {
     initializeStore();
-    saveStoreData();
 }
 loadPlayerData();
 loadBattles();
+loadDWBattles(); // Load new game data
 
 
 const spookyMessages = [
@@ -1147,33 +1167,65 @@ To avoid confusion, the next number is **${nextNumber}**.`;
   await sendLog(message.guild.id, logMessage);
 });
 
-// ---- BATTLE SYSTEM: Reaction Handler ----
+// ---- BATTLE SYSTEMS: Reaction Handler ----
 client.on('messageReactionAdd', async (reaction, user) => {
-  if (user.bot) return;
+    if (user.bot) return;
 
-  // Handle partial messages
-  if (reaction.partial) {
-    try {
-      await reaction.fetch();
-    } catch (error) {
-      console.error('Error fetching reaction:', error);
-      return;
+    // Handle partial messages
+    if (reaction.partial) {
+        try {
+            await reaction.fetch();
+        } catch (error) {
+            console.error('Error fetching reaction:', error);
+            return;
+        }
     }
-  }
+    const battleKey = reaction.message.id;
 
-  const battleKey = reaction.message.id;
-  if (activeBattles[battleKey] && activeBattles[battleKey].status === 'pending') {
-    const battle = activeBattles[battleKey];
-    
-    if (user.id === battle.defender && reaction.emoji.name === '⚔️') {
-      battle.status = 'accepted';
-      saveBattles();
-      
-      await reaction.message.channel.send(`⚔️ **${user.username}** has accepted the challenge! The battle begins!`);
-      await startBattle(reaction.message.channel, battle.challenger, battle.defender, battleKey);
+    // --- Automated Battle System ---
+    if (activeBattles[battleKey] && activeBattles[battleKey].status === 'pending') {
+        const battle = activeBattles[battleKey];
+        if (user.id === battle.defender && reaction.emoji.name === '⚔️') {
+            battle.status = 'accepted';
+            saveBattles();
+            await reaction.message.channel.send(`⚔️ **${user.username}** has accepted the automated battle challenge! The battle begins!`);
+            await startBattle(reaction.message.channel, battle.challenger, battle.defender, battleKey);
+        }
+        return;
     }
-  }
+
+    // --- [NEW] Turn-based "Deadliest Warrior" Battle System ---
+    const dwGame = activeDWGames[battleKey];
+    if (!dwGame) return;
+
+    // Challenge acceptance
+    if (dwGame.status === 'pending') {
+        if (user.id === dwGame.p2.id && reaction.emoji.name === '⚔️') {
+            await startDWBattle(reaction.message, dwGame);
+        }
+        return;
+    }
+
+    // Active game turn handling
+    if (dwGame.status === 'active') {
+        const currentPlayer = dwGame.turn === dwGame.p1.id ? dwGame.p1 : dwGame.p2;
+        if (user.id !== currentPlayer.id) {
+             // Remove the reaction if it's not the player's turn
+            await reaction.users.remove(user.id).catch(err => console.error("Failed to remove reaction:", err));
+            return;
+        }
+
+        const actionMap = { '⚔️': 'attack', '🛡️': 'cover', '❤️': 'heal', '💣': 'throwable' };
+        const action = actionMap[reaction.emoji.name];
+
+        if (action) {
+            // Remove all reactions to prevent multiple inputs
+            await reaction.message.reactions.removeAll().catch(err => console.error("Failed to clear reactions:", err));
+            await processDWTurn(battleKey, action);
+        }
+    }
 });
+
 
 // ---- BATTLE SYSTEM: Combat Functions ----
 async function startBattle(channel, challengerId, defenderId, battleKey) {
@@ -1193,7 +1245,7 @@ async function startBattle(channel, challengerId, defenderId, battleKey) {
   const challenger = await client.users.fetch(challengerId);
   const defender = await client.users.fetch(defenderId);
 
-  let battleLog = `⚔️ **BATTLE START** ⚔️\n`;
+  let battleLog = `⚔️ **AUTO BATTLE START** ⚔️\n`;
   battleLog += `**${challenger.username}** vs **${defender.username}**\n\n`;
   battleLog += `**${challenger.username}** | HP: ${p1Data.health} | Weapon: ${p1Weapon ? p1Weapon.name : 'Fists'} | Armor: ${p1Armor ? p1Armor.name : 'None'}\n`;
   battleLog += `**${defender.username}** | HP: ${p2Data.health} | Weapon: ${p2Weapon ? p2Weapon.name : 'Fists'} | Armor: ${p2Armor ? p2Armor.name : 'None'}\n`;
@@ -1296,7 +1348,7 @@ async function startBattle(channel, challengerId, defenderId, battleKey) {
 
   delete activeBattles[battleKey];
   saveBattles();
-  savePlayerData();
+  // We don't save player data because health should reset after battle
 }
 
 async function executeAttack(attacker, target) {
@@ -1386,6 +1438,186 @@ async function executeThrowable(attacker, target, currentLog) {
   return { log, instantDeath };
 }
 
+
+// ---- [NEW] DEADLIEST WARRIOR FUNCTIONS ----
+
+async function startDWBattle(message, game) {
+    game.status = 'active';
+    game.p1.health = 100;
+    game.p2.health = 100;
+    game.p1.healsLeft = 3;
+    game.p2.healsLeft = 3;
+    game.p1.inCover = false;
+    game.p2.inCover = false;
+    game.round = 1;
+    game.turn = game.p1.id;
+    game.log = `**${game.p2.name}** accepted the challenge! The battle begins!`;
+    
+    saveDWBattles();
+    await updateDWEmbed(message.channel, message.id);
+}
+
+async function updateDWEmbed(channel, messageId) {
+    const game = activeDWGames[messageId];
+    if (!game) return;
+
+    const message = await channel.messages.fetch(messageId);
+    if (!message) return;
+
+    const currentPlayer = game.turn === game.p1.id ? game.p1 : game.p2;
+    const waitingPlayer = game.turn === game.p1.id ? game.p2 : game.p1;
+    
+    const embed = new EmbedBuilder()
+        .setColor('#C70039')
+        .setTitle(`DEADLIEST WARRIOR - Round ${game.round}/30`)
+        .setDescription(`**Last Action:**\n${game.log}\n\nIt's **${currentPlayer.name}**'s turn to act!`)
+        .addFields(
+            { name: `🔴 ${game.p1.name}`, value: `**HP:** ${game.p1.health}/100\n**Heals:** ${game.p1.healsLeft}\n**Cover:** ${game.p1.inCover ? 'Yes' : 'No'}`, inline: true },
+            { name: `🔵 ${game.p2.name}`, value: `**HP:** ${game.p2.health}/100\n**Heals:** ${game.p2.healsLeft}\n**Cover:** ${game.p2.inCover ? 'Yes' : 'No'}`, inline: true }
+        )
+        .setImage('https://i.imgur.com/8f1V3gI.gif') // General battle GIF
+        .setFooter({ text: '⚔️ Attack | 🛡️ Take Cover | ❤️ Heal | 💣 Use Throwable' });
+
+    await message.edit({ embeds: [embed], content: `${currentPlayer.name}, it's your turn!` });
+    
+    // Add reactions for the current player
+    await message.react('⚔️');
+    await message.react('🛡️');
+    await message.react('❤️');
+    if (currentPlayer.throwable) { // Only show throwable if they have one
+        await message.react('💣');
+    }
+}
+
+async function processDWTurn(messageId, action) {
+    const game = activeDWGames[messageId];
+    if (!game) return;
+
+    const channel = await client.channels.fetch(game.channelId);
+    const attacker = game.turn === game.p1.id ? game.p1 : game.p2;
+    const target = game.turn === game.p1.id ? game.p2 : game.p1;
+    let actionLog = '';
+    let gameOver = false;
+
+    // Reset attacker's cover status at the start of their turn
+    attacker.inCover = false;
+
+    switch (action) {
+        case 'attack': {
+            const weapon = attacker.weapon;
+            if (!weapon) {
+                 actionLog = `👊 **${attacker.name}** has no weapon and attacks with their fists!`;
+                 target.health -= 5;
+            } else {
+                const missChance = weapon.missChance || 10;
+                if (Math.random() * 100 < missChance) {
+                    actionLog = `❌ **${attacker.name}** attacked with ${weapon.name} but missed!`;
+                } else {
+                    let damage = weapon.damage || 10;
+                    if (target.inCover) {
+                        damage *= 0.5; // 50% damage reduction if target is in cover
+                        actionLog += `🛡️ **${target.name}** was in cover and took reduced damage!\n`;
+                    }
+                    const defense = target.armor ? target.armor.defense * 0.4 : 0;
+                    const actualDamage = Math.max(1, damage - defense);
+                    target.health = Math.max(0, target.health - actualDamage);
+                    actionLog += `⚔️ **${attacker.name}** hits **${target.name}** with ${weapon.name} for **${actualDamage.toFixed(1)}** damage!`;
+                }
+            }
+            break;
+        }
+        case 'cover': {
+            attacker.inCover = true;
+            actionLog = `🛡️ **${attacker.name}** takes cover, preparing for the next attack!`;
+            break;
+        }
+        case 'heal': {
+            if (attacker.healsLeft > 0) {
+                const healAmount = 25;
+                attacker.health = Math.min(100, attacker.health + healAmount);
+                attacker.healsLeft--;
+                actionLog = `❤️ **${attacker.name}** healed for **${healAmount}** HP!`;
+            } else {
+                actionLog = `❌ **${attacker.name}** is out of heals!`;
+            }
+            break;
+        }
+        case 'throwable': {
+            const throwable = attacker.throwable;
+            if (!throwable) {
+                actionLog = `❌ **${attacker.name}** has no throwable item equipped!`;
+            } else {
+                let damage = throwable.damage || 0;
+                if (target.inCover) {
+                    damage *= 0.6; // Cover helps a bit against explosives
+                }
+                 const defense = target.armor ? target.armor.defense * 0.2 : 0;
+                 const actualDamage = Math.max(1, damage - defense);
+                 target.health = Math.max(0, target.health - actualDamage);
+                 actionLog = `💣 **${attacker.name}** used **${throwable.name}**, dealing **${actualDamage.toFixed(1)}** damage to **${target.name}**!`;
+                 attacker.throwable = null; // Throwable is consumed
+            }
+            break;
+        }
+    }
+
+    game.log = actionLog;
+
+    // Check for win/loss
+    if (target.health <= 0) {
+        gameOver = true;
+        await endDWBattle(channel, messageId, attacker, target);
+    } else if (game.turn === game.p2.id) { // End of a full round
+        game.round++;
+    }
+
+    if (game.round > 30 && !gameOver) {
+        gameOver = true;
+        await endDWBattle(channel, messageId, null, null, true); // It's a draw
+    }
+
+    if (!gameOver) {
+        game.turn = target.id; // Switch turns
+        saveDWBattles();
+        await updateDWEmbed(channel, messageId);
+    }
+}
+
+async function endDWBattle(channel, messageId, winner, loser, isDraw = false) {
+    const game = activeDWGames[messageId];
+    if (!game) return;
+
+    let embed;
+    const reward = 750;
+    const drawReward = 350;
+
+    if (isDraw) {
+        updateBalance(game.p1.id, drawReward);
+        updateBalance(game.p2.id, drawReward);
+        embed = new EmbedBuilder()
+            .setColor('#FFFF00')
+            .setTitle('DEADLIEST WARRIOR - DRAW')
+            .setDescription(`After 30 rounds, neither warrior could claim victory!\nBoth **${game.p1.name}** and **${game.p2.name}** have earned **${drawReward}** Gold Coins!`)
+            .setImage('https://i.imgur.com/c6QZ8vG.gif');
+    } else {
+        updateBalance(winner.id, reward);
+        embed = new EmbedBuilder()
+            .setColor('#00FF00')
+            .setTitle(`DEADLIEST WARRIOR - ${winner.name} WINS!`)
+            .setDescription(`🏆 **${winner.name}** has defeated **${loser.name}**!\n💰 **${winner.name}** earned **${reward}** Gold Coins!`)
+            .setImage('https://i.imgur.com/Fuhs8b3.gif');
+    }
+    
+    saveEconomyData();
+    await channel.send({ embeds: [embed] });
+    
+    const message = await channel.messages.fetch(messageId).catch(() => null);
+    if(message) await message.reactions.removeAll().catch(err => console.error("Could not clear reactions on finished game"));
+
+    delete activeDWGames[messageId];
+    saveDWBattles();
+}
+
 client.on('channelUpdate', async (oldChannel, newChannel) => {
   let changes = [];
   if (oldChannel.name !== newChannel.name) {
@@ -1420,14 +1652,17 @@ client.on('messageCreate', async (message) => {
     // ---- COUNTING GAME LOGIC ----
     const guildCountingData = countingData[message.guild.id];
     if (guildCountingData && message.channel.id === guildCountingData.channelId) {
-        const number = parseInt(message.content);
+        // Allow commands to pass through
+        if (message.content.startsWith(PREFIX)) {
+            // Do nothing, let command handler below take over
+        } else {
+            const number = parseInt(message.content);
 
-        // Ignore non-numeric messages, but allow commands to pass through
-        if (isNaN(number) && !message.content.startsWith(PREFIX)) {
-            return; 
-        }
+            // Ignore non-numeric messages
+            if (isNaN(number)) {
+                return; 
+            }
 
-        if (!isNaN(number)) {
             let failed = false;
             if (number !== guildCountingData.currentCount + 1 || message.author.id === guildCountingData.lastUserId) {
                 const correctNextNumber = guildCountingData.currentCount + 1;
@@ -1491,9 +1726,6 @@ client.on('messageCreate', async (message) => {
     }
 
 // ---- Help Command ----
-
-const { EmbedBuilder } = require('discord.js');
-
 if (command === 'help') {
   // 1️⃣ Utility & Fun/Games
   const embed1 = new EmbedBuilder()
@@ -1592,7 +1824,8 @@ if (command === 'help') {
       `• \`${PREFIX}store [buy <item_id>]\` – Shop\n` +
       `• \`${PREFIX}inventory [@user]\` – View inventory\n` +
       `• \`${PREFIX}loadout [equip/unequip <item_id>]\` – Manage loadout\n` +
-      `• \`${PREFIX}battle @user\` / \`${PREFIX}1v1 @user\` – 1v1 battle\n\n` +
+      `• \`${PREFIX}battle @user\` – Automated 1v1 battle\n` +
+      `• \`${PREFIX}dw @user\` – Turn-based "Deadliest Warrior" battle\n\n` +
 
       `👑 **Owner & Immune Commands**\n` +
       `• \`${PREFIX}promote/demote @user <rank>\` – Grant/revoke immunity\n` +
@@ -1825,10 +2058,13 @@ else if (command === 'store') {
         }
 
         updateBalance(message.author.id, -item.price);
-        userPData.inventory.push(itemId);
-        saveEconomyData();
+        
+        // This is a bit tricky, we need to modify the actual player data, not the copy
+        const actualPlayerData = playerData[message.author.id] || getPlayerData(message.author.id);
+        actualPlayerData.inventory.push(itemId);
         savePlayerData();
-
+        
+        saveEconomyData();
         return message.reply(`✅ You purchased **${item.name}** for **${item.price}** Gold Coins!`);
     }
 
@@ -1873,6 +2109,8 @@ else if (command === 'inventory' || command === 'inv') {
             const item = findItem(itemId);
             if(item && categorizedItems[item.type]) {
                 categorizedItems[item.type].push(`- **${item.name}** (\`${item.id}\`)`);
+            } else if (item) {
+                 categorizedItems.misc.push(`- **${item.name}** (\`${item.id}\`)`);
             }
         });
         
@@ -1903,7 +2141,9 @@ else if (command === 'loadout') {
         const item = findItem(itemId);
         if (!item || item.type === 'misc') return message.reply("❌ This item cannot be equipped.");
 
-        userPData.loadout[item.type] = item.id;
+        // Modify the actual player data
+        const actualPlayerData = playerData[message.author.id];
+        actualPlayerData.loadout[item.type] = item.id;
         savePlayerData();
         return message.reply(`✅ Equipped **${item.name}**.`);
     }
@@ -1914,12 +2154,13 @@ else if (command === 'loadout') {
             return message.reply("❌ Usage: `$loadout unequip <weapon|armor|throwable>`");
         }
         
-        const userPData = getPlayerData(message.author.id);
-        const equippedItemId = userPData.loadout[slot];
+        // Modify the actual player data
+        const actualPlayerData = playerData[message.author.id];
+        const equippedItemId = actualPlayerData.loadout[slot];
         if (!equippedItemId) return message.reply(`❌ You don't have a ${slot} equipped.`);
 
         const item = findItem(equippedItemId);
-        userPData.loadout[slot] = null;
+        actualPlayerData.loadout[slot] = null;
         savePlayerData();
         return message.reply(`✅ Unequipped **${item.name}**.`);
     }
@@ -1937,7 +2178,7 @@ else if (command === 'loadout') {
         color: 0xf5b042,
         title: `⚔️ ${target.username}'s Loadout`,
         fields: [
-            { name: '❤️ Health', value: `${userPData.health}/100`, inline: false },
+            { name: '❤️ Health', value: `${userPData.health}/${userPData.maxHealth}`, inline: false },
             { name: '🔫 Weapon', value: weapon ? `**${weapon.name}** (\`${weapon.id}\`)` : 'None', inline: true },
             { name: '🛡️ Armor', value: armor ? `**${armor.name}** (\`${armor.id}\`)` : 'None', inline: true },
             { name: '💣 Throwable', value: throwable ? `**${throwable.name}** (\`${throwable.id}\`)` : 'None', inline: true },
@@ -1948,7 +2189,7 @@ else if (command === 'loadout') {
     return message.channel.send({ embeds: [loadoutEmbed] });
 }
 
-// ---- [NEW] BATTLE COMMAND ----
+// ---- Automated Battle Command ----
 else if (command === 'battle' || command === '1v1') {
     const target = message.mentions.users.first();
 
@@ -1962,34 +2203,18 @@ else if (command === 'battle' || command === '1v1') {
     if (!challengerData.loadout.weapon) return message.reply('❌ You need to equip a weapon first! Use `$loadout equip <item_id>`');
     if (!defenderData.loadout.weapon) return message.reply(`❌ ${target.username} doesn't have a weapon equipped!`);
 
-    const topGif = "https://i.imgur.com/yourTopBattle.gif"; // top GIF
-    const bottomGif = "https://i.imgur.com/yourBottomBattle.gif"; // bottom GIF
-
     const challengeEmbed = new EmbedBuilder()
         .setColor(0xff0000)
-        .setTitle('⚔️ BATTLE CHALLENGE ⚔️')
-        .setDescription(`**${message.author.username}** has challenged **${target.username}** to a 1v1 battle!\n\n` +
+        .setTitle('⚔️ AUTOMATED BATTLE CHALLENGE ⚔️')
+        .setDescription(`**${message.author.username}** has challenged **${target.username}** to an automated 1v1 battle!\n\n` +
                         `**${target.username}**, react with ⚔️ to accept the challenge!\n\n` +
-                        `The battle will begin once accepted. May the best fighter win!`)
+                        `This battle will resolve automatically.`)
         .addFields(
-            {
-                name: `${message.author.username}'s Loadout`,
-                value: `🔫 ${challengerData.loadout.weapon ? findItem(challengerData.loadout.weapon).name : 'None'}\n` +
-                       `🛡️ ${challengerData.loadout.armor ? findItem(challengerData.loadout.armor).name : 'None'}\n` +
-                       `💣 ${challengerData.loadout.throwable ? findItem(challengerData.loadout.throwable).name : 'None'}`,
-                inline: true
-            },
-            {
-                name: `${target.username}'s Loadout`,
-                value: `🔫 ${defenderData.loadout.weapon ? findItem(defenderData.loadout.weapon).name : 'None'}\n` +
-                       `🛡️ ${defenderData.loadout.armor ? findItem(defenderData.loadout.armor).name : 'None'}\n` +
-                       `💣 ${defenderData.loadout.throwable ? findItem(defenderData.loadout.throwable).name : 'None'}`,
-                inline: true
-            }
+            { name: `${message.author.username}'s Loadout`, value: `🔫 ${challengerData.loadout.weapon ? findItem(challengerData.loadout.weapon).name : 'None'}`, inline: true },
+            { name: `${target.username}'s Loadout`, value: `🔫 ${defenderData.loadout.weapon ? findItem(defenderData.loadout.weapon).name : 'None'}`, inline: true }
         )
-        .setImage(topGif) // Top GIF
-        .setFooter({ text: 'Challenge expires in 60 seconds', iconURL: bottomGif })
-        .setTimestamp();
+        .setImage("https://i.imgur.com/yourTopBattle.gif")
+        .setFooter({ text: 'Challenge expires in 60 seconds' });
 
     const challengeMsg = await message.channel.send({ embeds: [challengeEmbed] });
     await challengeMsg.react('⚔️');
@@ -2008,10 +2233,59 @@ else if (command === 'battle' || command === '1v1') {
         if (activeBattles[challengeMsg.id] && activeBattles[challengeMsg.id].status === 'pending') {
             delete activeBattles[challengeMsg.id];
             saveBattles();
-            message.channel.send(`⏱️ The battle challenge from **${message.author.username}** to **${target.username}** has expired.`);
+            message.channel.send(`⏱️ The automated battle challenge from **${message.author.username}** to **${target.username}** has expired.`);
         }
     }, 60000);
 }
+
+// ---- [NEW] DEADLIEST WARRIOR BATTLE COMMAND ----
+else if (command === 'dw' || command === 'deadliestwarrior') {
+    const target = message.mentions.users.first();
+
+    if (!target) return message.reply('❌ Please mention someone to battle! Example: `$dw @user`');
+    if (target.id === message.author.id) return message.reply('❌ You cannot battle yourself!');
+    if (target.bot) return message.reply('❌ You cannot battle a bot!');
+
+    const challengerData = getPlayerData(message.author.id);
+    const defenderData = getPlayerData(target.id);
+
+    if (!challengerData.loadout.weapon) return message.reply('❌ You need to equip a weapon first! Use `$loadout equip <item_id>`');
+    if (!defenderData.loadout.weapon) return message.reply(`❌ ${target.username} doesn't have a weapon equipped!`);
+
+    const challengeEmbed = new EmbedBuilder()
+        .setColor('#8B0000')
+        .setTitle("🔥 TX SOLDIER'S DEADLIEST WARRIOR 🔥")
+        .setDescription(`**${message.author.username}** has challenged **${target.username}** to a turn-based duel to the death!\n\n` +
+                        `**${target.username}**, react with ⚔️ to accept the challenge!\n\n` +
+                        `This is a turn-based battle. You will choose your actions each round.`)
+        .addFields(
+            { name: `${message.author.username}'s Loadout`, value: `🔫 ${challengerData.loadout.weapon ? findItem(challengerData.loadout.weapon).name : 'None'}\n🛡️ ${challengerData.loadout.armor ? findItem(challengerData.loadout.armor).name : 'None'}\n💣 ${challengerData.loadout.throwable ? findItem(challengerData.loadout.throwable).name : 'None'}`, inline: true },
+            { name: `${target.username}'s Loadout`, value: `🔫 ${defenderData.loadout.weapon ? findItem(defenderData.loadout.weapon).name : 'None'}\n🛡️ ${defenderData.loadout.armor ? findItem(defenderData.loadout.armor).name : 'None'}\n💣 ${defenderData.loadout.throwable ? findItem(defenderData.loadout.throwable).name : 'None'}`, inline: true }
+        )
+        .setImage('https://i.imgur.com/eT824xG.gif')
+        .setFooter({ text: 'Challenge expires in 60 seconds' });
+
+    const challengeMsg = await message.channel.send({ embeds: [challengeEmbed] });
+    await challengeMsg.react('⚔️');
+
+    activeDWGames[challengeMsg.id] = {
+        channelId: message.channel.id,
+        status: 'pending',
+        p1: { id: message.author.id, name: message.author.username, weapon: findItem(challengerData.loadout.weapon), armor: findItem(challengerData.loadout.armor), throwable: findItem(challengerData.loadout.throwable) },
+        p2: { id: target.id, name: target.username, weapon: findItem(defenderData.loadout.weapon), armor: findItem(defenderData.loadout.armor), throwable: findItem(defenderData.loadout.throwable) },
+    };
+    saveDWBattles();
+
+    // Auto-cancel after 60 seconds
+    setTimeout(() => {
+        if (activeDWGames[challengeMsg.id] && activeDWGames[challengeMsg.id].status === 'pending') {
+            delete activeDWGames[challengeMsg.id];
+            saveDWBattles();
+            message.channel.send(`⏱️ The Deadliest Warrior challenge from **${message.author.username}** to **${target.username}** has expired.`);
+        }
+    }, 60000);
+}
+
 
   // ---- Log Mode Commands ----
   else if (command === 'logmode') {
@@ -2216,42 +2490,34 @@ else if (command === 'battle' || command === '1v1') {
 
   // ---- Utility Commands ----
   else if (command === 'ping') {
-  const loadingGif = "https://i.imgur.com/yourLoading.gif"; // replace with your GIF link
-  const sent = await message.channel.send({ content: "🏓 Pinging..." });
-
-  const pingEmbed = {
-    color: 0x39FF14,
-    title: "🏓 Pong!",
-    description: `Latency is **${sent.createdTimestamp - message.createdTimestamp}ms**\nAPI Latency is **${Math.round(client.ws.ping)}ms**`,
-    thumbnail: { url: "https://i.imgur.com/Abo2D8x.gif" } // shows GIF in corner
-  };
-
-  await sent.edit({ content: "", embeds: [pingEmbed] });
+    const sent = await message.channel.send({ content: "🏓 Pinging..." });
+    const pingEmbed = {
+      color: 0x39FF14,
+      title: "🏓 Pong!",
+      description: `Latency is **${sent.createdTimestamp - message.createdTimestamp}ms**\nAPI Latency is **${Math.round(client.ws.ping)}ms**`,
+      thumbnail: { url: "https://i.imgur.com/Abo2D8x.gif" } // shows GIF in corner
+    };
+    await sent.edit({ content: "", embeds: [pingEmbed] });
   } else if (command === 'stats') {
     message.channel.send(`📊 Server has ${message.guild.memberCount} members.`);
   } else if (command === 'uptime') {
     const uptime = Math.floor(process.uptime());
     message.channel.send(`⏱️ Bot uptime: ${uptime} seconds.`);
-  const { EmbedBuilder } = require('discord.js');
-
-} else if (command === 'botinfo') {
-  const topGif = "https://i.imgur.com/yourTopGif.gif"; // replace with your top GIF URL
-  const bottomGif = "https://i.imgur.com/yourBottomGif.gif"; // replace with your bottom GIF URL
-
-  const botInfoEmbed = new EmbedBuilder()
-    .setColor(0x00FFFF) // Cyan color, you can change
-    .setTitle(`🤖 ${client.user.tag} — Bot Info`)
-    .setDescription(`📡 [SECURE TRANSMISSION] 📡\n\n**Unit:** Discord Bot\n**Creator / Operator:** TX_SOLDIER\n**Status:** Mission-Ready. Armed.`)
-    .addFields(
-      { name: 'Capabilities', value: 
-        `**Defense:** Active protection for allied servers.\n` +
-        `**Offense:** Engage threats if provoked or mission parameters require.\n` +
-        `**Recon:** Logging and monitoring activities\n` +
-        `**Special Operations:** Classified.` }
-    )
-    .setImage(topGif) // Top GIF
-    .setFooter({ text: 'End Transmission.', iconURL: bottomGif }); // Bottom GIF in footer
-  message.channel.send({ embeds: [botInfoEmbed] });
+  } else if (command === 'botinfo') {
+    const botInfoEmbed = new EmbedBuilder()
+      .setColor(0x00FFFF) // Cyan color, you can change
+      .setTitle(`🤖 ${client.user.tag} — Bot Info`)
+      .setDescription(`📡 [SECURE TRANSMISSION] 📡\n\n**Unit:** Discord Bot\n**Creator / Operator:** TX_SOLDIER\n**Status:** Mission-Ready. Armed.`)
+      .addFields(
+        { name: 'Capabilities', value: 
+          `**Defense:** Active protection for allied servers.\n` +
+          `**Offense:** Engage threats if provoked or mission parameters require.\n` +
+          `**Recon:** Logging and monitoring activities\n` +
+          `**Special Operations:** Classified.` }
+      )
+      .setImage("https://i.imgur.com/yourTopGif.gif") // Top GIF
+      .setFooter({ text: 'End Transmission.', iconURL: "https://i.imgur.com/yourBottomGif.gif" }); // Bottom GIF in footer
+    message.channel.send({ embeds: [botInfoEmbed] });
   } else if (command === 'invite') {
     message.channel.send(`🔗 Invite me: https://discord.com/api/oauth2/authorize?client_id=${client.user.id}&permissions=8&scope=bot%20applications.commands`);
   } else if (command === 'prefix') {
