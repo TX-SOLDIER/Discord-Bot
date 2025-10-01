@@ -2296,9 +2296,20 @@ else if (command === 'battle' || command === '1v1') {
     };
     saveBattles();
 
-    setTimeout(() => {
-        if (activeBattles[challengeMsg.id] && activeBattles[challengeMsg.id].status ===
-            }
+    setTimeout(async () => {
+        const battle = activeBattles[challengeMsg.id];
+        // Check if the battle still exists and is still pending acceptance
+        if (battle && battle.status === 'pending') { // <-- FIX: Completed the conditional check
+            delete activeBattles[challengeMsg.id];
+            // You may want to call saveBattles() here
+            
+            // Edit the message to reflect the expiration and remove the reaction
+            const expiredEmbed = challengeEmbed.setFooter({ text: 'Challenge Expired' });
+            challengeMsg.edit({ embeds: [expiredEmbed] }).catch(() => {}); 
+        } // <-- FIX: Closed the 'if' block
+    }, 60000); // 60 seconds delay <-- FIX: Closed the 'setTimeout' block
+}
+            
 
   // ---- Log Mode Commands ----
   else if (command === 'logmode') {
