@@ -3266,6 +3266,6 @@ Created: ${guild.createdAt.toDateString()}`);
     }
   }
 
-}); // ---- End of messageCreate ----
-
+// ---- End of messageCreate ----
+});
 client.login(process.env.BOT_TOKEN);
