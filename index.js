@@ -1147,7 +1147,8 @@ To avoid confusion, the next number is **${nextNumber}**.`;
   await sendLog(message.guild.id, logMessage);
 });
 
- = await client.users.fetch(challengerId);
+const challenger = await client.users.fetch(challengerId);
+const defender = await client.users.fetch(defenderId);
   
 // ---- ENHANCED BATTLE SYSTEM ----
 
