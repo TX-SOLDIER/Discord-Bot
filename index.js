@@ -1147,91 +1147,11 @@ To avoid confusion, the next number is **${nextNumber}**.`;
   await sendLog(message.guild.id, logMessage);
 });
 
-async function startBattle(channel, challengerId, defenderId, battleKey) {
-const challenger = await client.users.fetch(challengerId);
-const defender = await client.users.fetch(defenderId);
-  
-// ---- ENHANCED BATTLE SYSTEM ----
-
-// Battle action emojis
-const BATTLE_ACTIONS = {
-  ATTACK: '⚔️',
-  THROWABLE: '💣',
-  COVER: '🛡️',
-  HEAL: '💊'
-};
-
-// Modified throwable effects
-const THROWABLE_EFFECTS = {
-  smoke_grenade: { 
-    name: "Smoke Grenade", 
-    effect: "blind", 
-    duration: 2, 
-    missIncrease: 40,
-    description: "Creates a smoke screen, drastically reducing accuracy"
-  },
-  flashbang: { 
-    name: "Flashbang", 
-    effect: "stun", 
-    duration: 1, 
-    description: "Stuns enemy, causing them to skip their next turn"
-  },
-  frag_grenade: { 
-    name: "Frag Grenade", 
-    damage: 60, 
-    armorPiercing: 0.7,
-    effect: "shrapnel", 
-    duration: 2,
-    description: "Explosive damage with armor penetration, causes bleeding"
-  },
-  molotov: { 
-    name: "Molotov Cocktail", 
-    damage: 35, 
-    effect: "burn", 
-    duration: 3,
-    burnDamage: 12,
-    description: "Sets target on fire, dealing damage over time"
-  },
-  throwing_knife: { 
-    name: "Throwing Knife", 
-    damage: 25, 
-    effect: "bleed", 
-    duration: 2,
-    bleedDamage: 8,
-    description: "Quick strike that causes bleeding"
-  },
-  shuriken: { 
-    name: "Shuriken", 
-    damage: 20, 
-    effect: "bleed", 
-    duration: 2,
-    bleedDamage: 6,
-    description: "Ninja star causing light bleeding"
-  },
-  c4: { 
-    name: "C4 Explosive", 
-    damage: 80, 
-    armorPiercing: 0.9,
-    effect: "devastate",
-    description: "Massive explosion ignoring most armor"
-  },
-  tear_gas: { 
-    name: "Tear Gas", 
-    damage: 10, 
-    effect: "blind", 
-    duration: 3,
-    missIncrease: 50,
-    healthDrain: 5,
-    description: "Debilitating gas that impairs vision and drains health"
-  }
-};
-
-// Battle state tracker
-const activeTurnBattles = new Map(); 
-// ---- BATTLE REACTION HANDLER ----
+// ---- BATTLE SYSTEM: Reaction Handler ----
 client.on('messageReactionAdd', async (reaction, user) => {
   if (user.bot) return;
 
+  // Handle partial messages
   if (reaction.partial) {
     try {
       await reaction.fetch();
@@ -1242,8 +1162,6 @@ client.on('messageReactionAdd', async (reaction, user) => {
   }
 
   const battleKey = reaction.message.id;
-  
-  // Check for pending battle acceptance
   if (activeBattles[battleKey] && activeBattles[battleKey].status === 'pending') {
     const battle = activeBattles[battleKey];
     
@@ -1253,250 +1171,15 @@ client.on('messageReactionAdd', async (reaction, user) => {
       
       await reaction.message.channel.send(`⚔️ **${user.username}** has accepted the challenge! The battle begins!`);
       await startBattle(reaction.message.channel, battle.challenger, battle.defender, battleKey);
-      
-      delete activeBattles[battleKey];
-      saveBattles();
     }
-    return;
   }
-
-  // Handle active turn-based battle
-  const battleState = activeTurnBattles.get(battleKey);
-  if (!battleState) return;
-
-  // Check if it's this user's turn
-  if (user.id !== battleState.currentTurn) {
-    return reaction.users.remove(user.id).catch(() => {});
-  }
-
-  const attacker = battleState.currentTurn === battleState.p1.id ? battleState.p1 : battleState.p2;
-  const defender = battleState.currentTurn === battleState.p1.id ? battleState.p2 : battleState.p1;
-
-  // Check if stunned
-  if (attacker.effects.stun && attacker.effects.stun > 0) {
-    attacker.effects.stun--;
-    await reaction.message.channel.send(`⚡ **${attacker.user.username}** is stunned and cannot act this turn!`);
-    await nextTurn(battleState, reaction.message.channel);
-    return;
-  }
-
-  const action = reaction.emoji.name;
-  let actionResult = '';
-
-  switch (action) {
-    case BATTLE_ACTIONS.ATTACK:
-      actionResult = await performAttack(attacker, defender);
-      break;
-    case BATTLE_ACTIONS.THROWABLE:
-      if (!attacker.throwable || attacker.throwableUsed) {
-        return reaction.users.remove(user.id).catch(() => {});
-      }
-      actionResult = await performThrowable(attacker, defender);
-      attacker.throwableUsed = true;
-      break;
-    case BATTLE_ACTIONS.COVER:
-      attacker.inCover = true;
-      actionResult = `🛡️ **${attacker.user.username}** takes cover! Defense increased for next attack.`;
-      break;
-    case BATTLE_ACTIONS.HEAL:
-      if (attacker.healUsed) {
-        return reaction.users.remove(user.id).catch(() => {});
-      }
-      const healAmount = 30;
-      attacker.health = Math.min(attacker.maxHealth, attacker.health + healAmount);
-      attacker.healUsed = true;
-      actionResult = `💊 **${attacker.user.username}** used a heal! Restored ${healAmount} HP.`;
-      break;
-    default:
-      return;
-  }
-
-  // Apply status effects
-  actionResult += await applyStatusEffects(attacker, defender);
-
-  await reaction.message.channel.send(actionResult);
-
-  // Check for battle end
-  if (defender.health <= 0 || attacker.health <= 0) {
-    await endBattle(battleState, reaction.message.channel, battleKey);
-    return;
-  }
-
-  await nextTurn(battleState, reaction.message.channel);
 });
-// ---- COMBAT FUNCTIONS ----
-async function performAttack(attacker, defender) {
-  let log = '';
-  const weapon = attacker.weapon;
-  const baseDamage = weapon.damage || 10;
 
-  // Calculate miss chance
-  let missChance = weapon.missChance || 10;
-  if (attacker.effects.blind && attacker.effects.blind > 0) {
-    missChance += (THROWABLE_EFFECTS[attacker.effects.blindType]?.missIncrease || 30);
-  }
-
-  // Cover provides 50% dodge chance
-  if (defender.inCover) {
-    missChance += 50;
-    defender.inCover = false;
-  }
-
-  if (Math.random() * 100 < missChance) {
-    log += `❌ **${attacker.user.username}** missed with ${weapon.name}!\n`;
-    return log;
-  }
-
-  let damageMultiplier = 1;
-  let damageType = 'normal';
-
-  // Check for headshot
-  if (Math.random() * 100 < (weapon.headshotChance || 5)) {
-    damageMultiplier = 2;
-    damageType = 'headshot';
-  }
-  // Check for critical hit
-  else if (Math.random() * 100 < (weapon.critChance || 10)) {
-    damageMultiplier = 1.5;
-    damageType = 'critical';
-  }
-
-  const totalDamage = baseDamage * damageMultiplier;
-  
-  // Apply damage to armor first, then health
-  const { finalDamage, armorDamage, healthDamage } = applyDamage(defender, totalDamage, 0.6);
-
-  // Log the attack
-  if (damageType === 'headshot') {
-    log += `🎯 **HEADSHOT!** **${attacker.user.username}** hits **${defender.user.username}** with ${weapon.name}!\n`;
-  } else if (damageType === 'critical') {
-    log += `💥 **CRITICAL HIT!** **${attacker.user.username}** strikes **${defender.user.username}** with ${weapon.name}!\n`;
-  } else {
-    log += `⚔️ **${attacker.user.username}** hits **${defender.user.username}** with ${weapon.name}!\n`;
-  }
-
-  if (armorDamage > 0) {
-    log += `🛡️ Armor absorbed ${armorDamage.toFixed(1)} damage!\n`;
-  }
-  if (healthDamage > 0) {
-    log += `❤️ Dealt ${healthDamage.toFixed(1)} damage to health!\n`;
-  }
-
-  return log;
-}
-
-async function performThrowable(attacker, defender) {
-  const throwableId = attacker.throwable.id;
-  const throwableEffect = THROWABLE_EFFECTS[throwableId];
-  
-  let log = `💣 **${attacker.user.username}** throws ${attacker.throwable.name}!\n`;
-
-  // Base damage
-  if (throwableEffect.damage > 0) {
-    const armorPiercing = throwableEffect.armorPiercing || 0.3;
-    const { finalDamage, armorDamage, healthDamage } = applyDamage(defender, throwableEffect.damage, armorPiercing);
-    
-    log += `💥 ${attacker.throwable.name} explodes!\n`;
-    if (armorDamage > 0) {
-      log += `🛡️ Destroyed ${armorDamage.toFixed(1)} armor!\n`;
-    }
-    if (healthDamage > 0) {
-      log += `❤️ Dealt ${healthDamage.toFixed(1)} damage!\n`;
-    }
-  }
-
-  // Apply effects
-  if (throwableEffect.effect) {
-    switch (throwableEffect.effect) {
-      case 'blind':
-        defender.effects.blind = throwableEffect.duration;
-        defender.effects.blindType = throwableId;
-        log += `😵 **${defender.user.username}** is blinded! Accuracy severely reduced!\n`;
-        break;
-      case 'stun':
-        defender.effects.stun = throwableEffect.duration;
-        log += `⚡ **${defender.user.username}** is stunned and will skip their next turn!\n`;
-        break;
-      case 'burn':
-        defender.effects.burn = throwableEffect.duration;
-        defender.effects.burnDamage = throwableEffect.burnDamage;
-        log += `🔥 **${defender.user.username}** is burning! Taking ${throwableEffect.burnDamage} damage per turn!\n`;
-        break;
-      case 'bleed':
-        defender.effects.bleed = throwableEffect.duration;
-        defender.effects.bleedDamage = throwableEffect.bleedDamage;
-        log += `🩸 **${defender.user.username}** is bleeding! Taking ${throwableEffect.bleedDamage} damage per turn!\n`;
-        break;
-      case 'shrapnel':
-        defender.effects.bleed = throwableEffect.duration;
-        defender.effects.bleedDamage = 10;
-        log += `🩸 **${defender.user.username}** is hit by shrapnel and bleeding!\n`;
-        break;
-      case 'devastate':
-        log += `☠️ **DEVASTATING EXPLOSION!**\n`;
-        break;
-    }
-  }
-
-  return log;
-}
-
-function applyDamage(target, totalDamage, armorEffectiveness) {
-  let armorDamage = 0;
-  let healthDamage = 0;
-  
-  if (target.armor > 0) {
-    // Armor absorbs damage based on effectiveness (1.0 = full absorption, 0 = no absorption)
-    const armorAbsorption = totalDamage * armorEffectiveness;
-    armorDamage = Math.min(target.armor, armorAbsorption);
-    target.armor -= armorDamage;
-    
-    // Remaining damage goes to health
-    healthDamage = totalDamage - armorAbsorption;
-  } else {
-    healthDamage = totalDamage;
-  }
-  
-  target.health -= healthDamage;
-  
-  return { finalDamage: totalDamage, armorDamage, healthDamage };
-}
-
-async function applyStatusEffects(attacker, defender) {
-  let log = '\n';
-  
-  // Apply burn
-  if (attacker.effects.burn && attacker.effects.burn > 0) {
-    const burnDmg = attacker.effects.burnDamage || 8;
-    attacker.health -= burnDmg;
-    log += `🔥 **${attacker.user.username}** takes ${burnDmg} burn damage!\n`;
-    attacker.effects.burn--;
-  }
-  
-  // Apply bleed
-  if (attacker.effects.bleed && attacker.effects.bleed > 0) {
-    const bleedDmg = attacker.effects.bleedDamage || 5;
-    attacker.health -= bleedDmg;
-    log += `🩸 **${attacker.user.username}** takes ${bleedDmg} bleed damage!\n`;
-    attacker.effects.bleed--;
-  }
-  
-  // Reduce blind duration
-  if (attacker.effects.blind && attacker.effects.blind > 0) {
-    attacker.effects.blind--;
-    if (attacker.effects.blind === 0) {
-      log += `👁️ **${attacker.user.username}** vision is clearing!\n`;
-    }
-  }
-  
-  return log;
-}
-// ---- BATTLE START AND TURN MANAGEMENT ----
+// ---- BATTLE SYSTEM: Combat Functions ----
 async function startBattle(channel, challengerId, defenderId, battleKey) {
   const p1Data = getPlayerData(challengerId);
   const p2Data = getPlayerData(defenderId);
   
-  // Initialize health and armor
   p1Data.health = p1Data.maxHealth;
   p2Data.health = p2Data.maxHealth;
   
@@ -1507,181 +1190,201 @@ async function startBattle(channel, challengerId, defenderId, battleKey) {
   const p1Throwable = p1Data.loadout.throwable ? findItem(p1Data.loadout.throwable) : null;
   const p2Throwable = p2Data.loadout.throwable ? findItem(p2Data.loadout.throwable) : null;
 
-  // Armor points separate from health
-  const p1ArmorPoints = p1Armor ? p1Armor.defense : 0;
-  const p2ArmorPoints = p2Armor ? p2Armor.defense : 0;
-
   const challenger = await client.users.fetch(challengerId);
   const defender = await client.users.fetch(defenderId);
 
-  // Initialize battle state
-  const battleState = {
-    p1: {
-      id: challengerId,
-      user: challenger,
-      health: p1Data.health,
-      maxHealth: p1Data.maxHealth,
-      armor: p1ArmorPoints,
-      maxArmor: p1ArmorPoints,
-      weapon: p1Weapon,
-      throwable: p1Throwable,
-      effects: {},
-      inCover: false,
-      healUsed: false,
-      throwableUsed: false
-    },
-    p2: {
-      id: defenderId,
-      user: defender,
-      health: p2Data.health,
-      maxHealth: p2Data.maxHealth,
-      armor: p2ArmorPoints,
-      maxArmor: p2ArmorPoints,
-      weapon: p2Weapon,
-      throwable: p2Throwable,
-      effects: {},
-      inCover: false,
-      healUsed: false,
-      throwableUsed: false
-    },
-    round: 1,
-    currentTurn: challengerId,
-    channelId: channel.id
-  };
+  let battleLog = `⚔️ **BATTLE START** ⚔️\n`;
+  battleLog += `**${challenger.username}** vs **${defender.username}**\n\n`;
+  battleLog += `**${challenger.username}** | HP: ${p1Data.health} | Weapon: ${p1Weapon ? p1Weapon.name : 'Fists'} | Armor: ${p1Armor ? p1Armor.name : 'None'}\n`;
+  battleLog += `**${defender.username}** | HP: ${p2Data.health} | Weapon: ${p2Weapon ? p2Weapon.name : 'Fists'} | Armor: ${p2Armor ? p2Armor.name : 'None'}\n`;
 
-  activeTurnBattles.set(battleKey, battleState);
+  await channel.send(battleLog);
 
-  const startEmbed = new EmbedBuilder()
-    .setColor(0x00FF00)
-    .setTitle('⚔️ BATTLE START ⚔️')
-    .setDescription(`**${challenger.username}** vs **${defender.username}**\n\nRound 1 begins!\n**${challenger.username}'s turn!**`)
-    .addFields(
-      {
-        name: `${challenger.username}`,
-        value: `❤️ HP: ${battleState.p1.health}/${battleState.p1.maxHealth}\n🛡️ Armor: ${battleState.p1.armor}/${battleState.p1.maxArmor}\n🔫 ${p1Weapon.name}`,
-        inline: true
-      },
-      {
-        name: `${defender.username}`,
-        value: `❤️ HP: ${battleState.p2.health}/${battleState.p2.maxHealth}\n🛡️ Armor: ${battleState.p2.armor}/${battleState.p2.maxArmor}\n🔫 ${p2Weapon.name}`,
-        inline: true
+  let round = 1;
+  let p1Effects = {};
+  let p2Effects = {};
+
+  while (p1Data.health > 0 && p2Data.health > 0 && round <= 20) {
+    let roundLog = `\n**━━━ Round ${round} ━━━**\n`;
+
+    const p1First = Math.random() < 0.5;
+    const fighters = p1First ? 
+      [{id: challengerId, data: p1Data, weapon: p1Weapon, armor: p1Armor, throwable: p1Throwable, user: challenger, effects: p1Effects},
+       {id: defenderId, data: p2Data, weapon: p2Weapon, armor: p2Armor, throwable: p2Throwable, user: defender, effects: p2Effects}] :
+      [{id: defenderId, data: p2Data, weapon: p2Weapon, armor: p2Armor, throwable: p2Throwable, user: defender, effects: p2Effects},
+       {id: challengerId, data: p1Data, weapon: p1Weapon, armor: p1Armor, throwable: p1Throwable, user: challenger, effects: p1Effects}];
+
+    for (let i = 0; i < 2; i++) {
+      if (fighters[0].data.health <= 0 || fighters[1].data.health <= 0) break;
+
+      const attacker = fighters[i];
+      const target = fighters[1 - i];
+
+      // Check if using throwable this round (30% chance)
+      if (attacker.throwable && Math.random() < 0.3) {
+        const throwResult = await executeThrowable(attacker, target, roundLog);
+        roundLog += throwResult.log;
+        if (throwResult.instantDeath) break;
+      } else if (attacker.weapon) {
+        const attackResult = await executeAttack(attacker, target);
+        roundLog += attackResult;
+      } else {
+        const fistDamage = 10;
+        const actualDamage = Math.max(1, fistDamage - (target.armor ? target.armor.defense * 0.3 : 0));
+        target.data.health -= actualDamage;
+        roundLog += `👊 **${attacker.user.username}** punches for ${actualDamage.toFixed(1)} damage!\n`;
       }
-    )
-    .setImage('https://i.imgur.com/NAneRS5.gif')
-    .setFooter({ text: 'React with your action!' });
+    }
 
-  const battleMsg = await channel.send({ embeds: [startEmbed] });
-  
-  // Add reaction options
-  await battleMsg.react(BATTLE_ACTIONS.ATTACK);
-  if (battleState.p1.throwable && !battleState.p1.throwableUsed) {
-    await battleMsg.react(BATTLE_ACTIONS.THROWABLE);
-  }
-  await battleMsg.react(BATTLE_ACTIONS.COVER);
-  if (!battleState.p1.healUsed) {
-    await battleMsg.react(BATTLE_ACTIONS.HEAL);
-  }
-
-  battleState.messageId = battleMsg.id;
-  activeTurnBattles.set(battleMsg.id, battleState);
-}
-
-async function nextTurn(battleState, channel) {
-  // Switch turns
-  battleState.currentTurn = battleState.currentTurn === battleState.p1.id ? battleState.p2.id : battleState.p1.id;
-  const currentPlayer = battleState.currentTurn === battleState.p1.id ? battleState.p1 : battleState.p2;
-  
-  // Increment round if back to p1
-  if (battleState.currentTurn === battleState.p1.id) {
-    battleState.round++;
-  }
-
-  // Create turn embed
-  const turnEmbed = new EmbedBuilder()
-    .setColor(0x3498DB)
-    .setTitle(`⚔️ Round ${battleState.round} ⚔️`)
-    .setDescription(`**${currentPlayer.user.username}'s turn!**\n\nChoose your action:`)
-    .addFields(
-      {
-        name: `${battleState.p1.user.username}`,
-        value: `❤️ HP: ${Math.max(0, battleState.p1.health).toFixed(0)}/${battleState.p1.maxHealth}\n🛡️ Armor: ${Math.max(0, battleState.p1.armor).toFixed(0)}/${battleState.p1.maxArmor}\n${getStatusIcons(battleState.p1)}`,
-        inline: true
-      },
-      {
-        name: `${battleState.p2.user.username}`,
-        value: `❤️ HP: ${Math.max(0, battleState.p2.health).toFixed(0)}/${battleState.p2.maxHealth}\n🛡️ Armor: ${Math.max(0, battleState.p2.armor).toFixed(0)}/${battleState.p2.maxArmor}\n${getStatusIcons(battleState.p2)}`,
-        inline: true
+    // Apply status effects
+    for (let fighter of fighters) {
+      if (fighter.effects.burn && fighter.effects.burn > 0) {
+        const burnDamage = 8;
+        fighter.data.health -= burnDamage;
+        roundLog += `🔥 **${fighter.user.username}** takes ${burnDamage} burn damage!\n`;
+        fighter.effects.burn--;
       }
-    )
-    .setFooter({ text: 'React with your action!' })
-    .setTimestamp();
+      if (fighter.effects.bleed && fighter.effects.bleed > 0) {
+        const bleedDamage = 5;
+        fighter.data.health -= bleedDamage;
+        roundLog += `🩸 **${fighter.user.username}** takes ${bleedDamage} bleed damage!\n`;
+        fighter.effects.bleed--;
+      }
+      if (fighter.effects.blind && fighter.effects.blind > 0) {
+        fighter.effects.blind--;
+      }
+    }
 
-  const turnMsg = await channel.send({ embeds: [turnEmbed] });
-  
-  // Add available actions
-  await turnMsg.react(BATTLE_ACTIONS.ATTACK);
-  if (currentPlayer.throwable && !currentPlayer.throwableUsed) {
-    await turnMsg.react(BATTLE_ACTIONS.THROWABLE);
+    roundLog += `\n**${challenger.username}**: ${Math.max(0, p1Data.health).toFixed(0)} HP\n`;
+    roundLog += `**${defender.username}**: ${Math.max(0, p2Data.health).toFixed(0)} HP\n`;
+
+    await channel.send(roundLog);
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    round++;
   }
-  await turnMsg.react(BATTLE_ACTIONS.COVER);
-  if (!currentPlayer.healUsed) {
-    await turnMsg.react(BATTLE_ACTIONS.HEAL);
-  }
 
-  // Update battle message ID
-  const oldMessageId = battleState.messageId;
-  battleState.messageId = turnMsg.id;
-  
-  // Transfer battle state to new message
-  activeTurnBattles.delete(oldMessageId);
-  activeTurnBattles.set(turnMsg.id, battleState);
-}
-
-function getStatusIcons(player) {
-  let icons = [];
-  if (player.effects.burn && player.effects.burn > 0) icons.push('🔥 Burning');
-  if (player.effects.bleed && player.effects.bleed > 0) icons.push('🩸 Bleeding');
-  if (player.effects.blind && player.effects.blind > 0) icons.push('😵 Blinded');
-  if (player.effects.stun && player.effects.stun > 0) icons.push('⚡ Stunned');
-  if (player.inCover) icons.push('🛡️ In Cover');
-  return icons.length > 0 ? icons.join(' | ') : 'No effects';
-}
-
-async function endBattle(battleState, channel, battleKey) {
+  // Determine winner
+  let resultLog = `\n**━━━ BATTLE END ━━━**\n`;
   let winnerId, winnerName, reward = 500;
-  
-  const resultEmbed = new EmbedBuilder()
-    .setColor(0xFFD700)
-    .setTitle('⚔️ BATTLE END ⚔️')
-    .setImage('https://i.imgur.com/NAneRS5.gif');
 
-  if (battleState.p1.health > battleState.p2.health) {
-    winnerId = battleState.p1.id;
-    winnerName = battleState.p1.user.username;
-    resultEmbed.setDescription(`🏆 **${battleState.p1.user.username}** wins with ${battleState.p1.health.toFixed(0)} HP remaining!\n\n💰 Earned **${reward}** Gold Coins!`);
-  } else if (battleState.p2.health > battleState.p1.health) {
-    winnerId = battleState.p2.id;
-    winnerName = battleState.p2.user.username;
-    resultEmbed.setDescription(`🏆 **${battleState.p2.user.username}** wins with ${battleState.p2.health.toFixed(0)} HP remaining!\n\n💰 Earned **${reward}** Gold Coins!`);
+  if (p1Data.health > p2Data.health) {
+    winnerId = challengerId;
+    winnerName = challenger.username;
+    resultLog += `🏆 **${challenger.username}** wins with ${p1Data.health.toFixed(0)} HP remaining!\n`;
+  } else if (p2Data.health > p1Data.health) {
+    winnerId = defenderId;
+    winnerName = defender.username;
+    resultLog += `🏆 **${defender.username}** wins with ${p2Data.health.toFixed(0)} HP remaining!\n`;
   } else {
-    resultEmbed.setDescription(`🤝 It's a draw! Both fighters are equally matched!\n\n💰 Both earned **${reward / 2}** Gold Coins!`);
-    reward = reward / 2;
+    resultLog += `🤝 It's a draw! Both fighters are equally matched!\n`;
+    reward = 250;
   }
-
-  await channel.send({ embeds: [resultEmbed] });
 
   if (winnerId) {
     updateBalance(winnerId, reward);
+    saveEconomyData();
+    resultLog += `💰 **${winnerName}** earned ${reward} Gold Coins!\n`;
   } else {
-    updateBalance(battleState.p1.id, reward);
-    updateBalance(battleState.p2.id, reward);
+    updateBalance(challengerId, reward);
+    updateBalance(defenderId, reward);
+    saveEconomyData();
+    resultLog += `💰 Both fighters earned ${reward} Gold Coins for their effort!\n`;
   }
-  
-  saveEconomyData();
-  activeTurnBattles.delete(battleKey);
+
+  await channel.send(resultLog);
+
+  delete activeBattles[battleKey];
+  saveBattles();
   savePlayerData();
 }
-       
+
+async function executeAttack(attacker, target) {
+  let log = '';
+  const weapon = attacker.weapon;
+  const baseDamage = weapon.damage || 10;
+
+  // Check for miss
+  let missChance = weapon.missChance || 10;
+  if (attacker.effects.blind && attacker.effects.blind > 0) {
+    missChance += 30;
+  }
+
+  if (Math.random() * 100 < missChance) {
+    log += `❌ **${attacker.user.username}** missed with ${weapon.name}!\n`;
+    return log;
+  }
+
+  // Check for headshot
+  if (Math.random() * 100 < (weapon.headshotChance || 5)) {
+    const headshotDamage = baseDamage * 2;
+    const actualDamage = Math.max(1, headshotDamage - (target.armor ? target.armor.defense * 0.4 : 0));
+    target.data.health -= actualDamage;
+    log += `🎯 **HEADSHOT!** **${attacker.user.username}** hits **${target.user.username}** with ${weapon.name} for ${actualDamage.toFixed(1)} damage!\n`;
+    return log;
+  }
+
+  // Check for critical hit
+  if (Math.random() * 100 < (weapon.critChance || 10)) {
+    const critDamage = baseDamage * 1.5;
+    const actualDamage = Math.max(1, critDamage - (target.armor ? target.armor.defense * 0.5 : 0));
+    target.data.health -= actualDamage;
+    log += `💥 **CRITICAL HIT!** **${attacker.user.username}** strikes **${target.user.username}** with ${weapon.name} for ${actualDamage.toFixed(1)} damage!\n`;
+    return log;
+  }
+
+  // Normal hit
+  const actualDamage = Math.max(1, baseDamage - (target.armor ? target.armor.defense * 0.6 : 0));
+  target.data.health -= actualDamage;
+  log += `⚔️ **${attacker.user.username}** hits **${target.user.username}** with ${weapon.name} for ${actualDamage.toFixed(1)} damage!\n`;
+
+  return log;
+}
+
+async function executeThrowable(attacker, target, currentLog) {
+  const throwable = attacker.throwable;
+  let log = `💣 **${attacker.user.username}** throws ${throwable.name}!\n`;
+  let instantDeath = false;
+
+  // Base damage
+  if (throwable.damage > 0) {
+    const actualDamage = Math.max(1, throwable.damage - (target.armor ? target.armor.defense * 0.3 : 0));
+    target.data.health -= actualDamage;
+    log += `💥 ${throwable.name} deals ${actualDamage.toFixed(1)} damage to **${target.user.username}**!\n`;
+  }
+
+  // Apply effects
+  if (throwable.effect && Math.random() * 100 < (throwable.effectChance || 50)) {
+    switch (throwable.effect) {
+      case 'blind':
+        target.effects.blind = throwable.duration || 2;
+        log += `😵 **${target.user.username}** is blinded! Miss chance increased!\n`;
+        break;
+      case 'stun':
+        log += `⚡ **${target.user.username}** is stunned!\n`;
+        break;
+      case 'burn':
+        target.effects.burn = throwable.duration || 3;
+        log += `🔥 **${target.user.username}** is burning!\n`;
+        break;
+      case 'bleed':
+        target.effects.bleed = throwable.duration || 2;
+        log += `🩸 **${target.user.username}** is bleeding!\n`;
+        break;
+      case 'death':
+        if (Math.random() < 0.7) {
+          target.data.health = 0;
+          instantDeath = true;
+          log += `☠️ **INSTANT DEATH!** **${target.user.username}** was eliminated by ${throwable.name}!\n`;
+        } else {
+          log += `🛡️ **${target.user.username}** took cover and survived the explosion!\n`;
+        }
+        break;
+    }
+  }
+
+  return { log, instantDeath };
+}
 
 client.on('channelUpdate', async (oldChannel, newChannel) => {
   let changes = [];
@@ -2259,8 +1962,11 @@ else if (command === 'battle' || command === '1v1') {
     if (!challengerData.loadout.weapon) return message.reply('❌ You need to equip a weapon first! Use `$loadout equip <item_id>`');
     if (!defenderData.loadout.weapon) return message.reply(`❌ ${target.username} doesn't have a weapon equipped!`);
 
+    const topGif = "https://i.imgur.com/yourTopBattle.gif"; // top GIF
+    const bottomGif = "https://i.imgur.com/yourBottomBattle.gif"; // bottom GIF
+
     const challengeEmbed = new EmbedBuilder()
-        .setColor(0xFF0000)
+        .setColor(0xff0000)
         .setTitle('⚔️ BATTLE CHALLENGE ⚔️')
         .setDescription(`**${message.author.username}** has challenged **${target.username}** to a 1v1 battle!\n\n` +
                         `**${target.username}**, react with ⚔️ to accept the challenge!\n\n` +
@@ -2281,13 +1987,14 @@ else if (command === 'battle' || command === '1v1') {
                 inline: true
             }
         )
-        .setImage('https://i.imgur.com/NAneRS5.gif')
-        .setFooter({ text: 'Challenge expires in 60 seconds' })
+        .setImage(topGif) // Top GIF
+        .setFooter({ text: 'Challenge expires in 60 seconds', iconURL: bottomGif })
         .setTimestamp();
 
     const challengeMsg = await message.channel.send({ embeds: [challengeEmbed] });
     await challengeMsg.react('⚔️');
 
+    // Store battle data
     activeBattles[challengeMsg.id] = {
         challenger: message.author.id,
         defender: target.id,
@@ -2296,20 +2003,16 @@ else if (command === 'battle' || command === '1v1') {
     };
     saveBattles();
 
-    setTimeout(async () => {
-        const battle = activeBattles[challengeMsg.id];
-        // Check if the battle still exists and is still pending acceptance
-        if (battle && battle.status === 'pending') { // <-- FIX: Completed the conditional check
+    // Auto-cancel after 60 seconds
+    setTimeout(() => {
+        if (activeBattles[challengeMsg.id] && activeBattles[challengeMsg.id].status === 'pending') {
             delete activeBattles[challengeMsg.id];
-            // You may want to call saveBattles() here
-            
-            // Edit the message to reflect the expiration and remove the reaction
-            const expiredEmbed = challengeEmbed.setFooter({ text: 'Challenge Expired' });
-            challengeMsg.edit({ embeds: [expiredEmbed] }).catch(() => {}); 
-        } // <-- FIX: Closed the 'if' block
-    }, 60000); // 60 seconds delay <-- FIX: Closed the 'setTimeout' block
+            saveBattles();
+            message.channel.send(`⏱️ The battle challenge from **${message.author.username}** to **${target.username}** has expired.`);
+        }
+    }, 60000);
 }
-            
+
   // ---- Log Mode Commands ----
   else if (command === 'logmode') {
     if (!checkPermission(PermissionsBitField.Flags.ManageGuild)) return;
@@ -3265,6 +2968,6 @@ Created: ${guild.createdAt.toDateString()}`);
     }
   }
 
-// ---- End of messageCreate ----
-});
+}); // ---- End of messageCreate ----
+
 client.login(process.env.BOT_TOKEN);
