@@ -2298,19 +2298,16 @@ else if (command === 'battle' || command === '1v1') {
 
     setTimeout(async () => {
         const battle = activeBattles[challengeMsg.id];
-        // Check if the battle still exists and is still pending acceptance
-        if (battle && battle.status === 'pending') { // <-- FIX: Completed the conditional check
+        if (battle && battle.status === 'pending') {
             delete activeBattles[challengeMsg.id];
-            // You may want to call saveBattles() here
+            saveBattles();
             
-            // Edit the message to reflect the expiration and remove the reaction
             const expiredEmbed = challengeEmbed.setFooter({ text: 'Challenge Expired' });
-            challengeMsg.edit({ embeds: [expiredEmbed] }).catch(() => {}); 
-        } // <-- FIX: Closed the 'if' block
-    }, 60000); // 60 seconds delay <-- FIX: Closed the 'setTimeout' block
-}
+            challengeMsg.edit({ embeds: [expiredEmbed] }).catch(() => {});
+        }
+    }, 60000);
+} 
             
-
   // ---- Log Mode Commands ----
   else if (command === 'logmode') {
     if (!checkPermission(PermissionsBitField.Flags.ManageGuild)) return;
