@@ -3255,14 +3255,14 @@ Created: ${guild.createdAt.toDateString()}`);
     saveLeaveMessages();
     message.reply('✅ Leave message has been cleared for this server.');
   }
-
+  
   // ---- Unknown command ----
   else {
-    if (message.content.startsWith('$') && command) { // Check if it was a command attempt
+    if (message.content.startsWith('$') && command) {
       message.reply('❌ Unknown command or you do not have permission.');
     }
   }
 
-// ---- End of messageCreate ----
-});
+}); // <-- This closes client.on('messageCreate', async (message) => {
+
 client.login(process.env.BOT_TOKEN);
