@@ -1147,6 +1147,7 @@ To avoid confusion, the next number is **${nextNumber}**.`;
   await sendLog(message.guild.id, logMessage);
 });
 
+async function startBattle(channel, challengerId, defenderId, battleKey) {
 const challenger = await client.users.fetch(challengerId);
 const defender = await client.users.fetch(defenderId);
   
