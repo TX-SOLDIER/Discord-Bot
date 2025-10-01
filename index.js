@@ -1152,17 +1152,82 @@ const challenger = await client.users.fetch(challengerId);
 const defender = await client.users.fetch(defenderId);
   
 // ---- ENHANCED BATTLE SYSTEM ----
-async function startBattle(channel, challengerId, defenderId, battleKey) {
-  const challenger = await client.users.fetch(challengerId);
-  const defender = await client.users.fetch(defenderId);
-  
-  const p1Data = getPlayerData(challengerId);
-  const p2Data = getPlayerData(defenderId);
-  
-  // Initialize health and armor
-  p1Data.health = p1Data.maxHealth;
-  p2Data.health = p2Data.maxHealth;
- 
+
+// Battle action emojis
+const BATTLE_ACTIONS = {
+  ATTACK: '⚔️',
+  THROWABLE: '💣',
+  COVER: '🛡️',
+  HEAL: '💊'
+};
+
+// Modified throwable effects
+const THROWABLE_EFFECTS = {
+  smoke_grenade: { 
+    name: "Smoke Grenade", 
+    effect: "blind", 
+    duration: 2, 
+    missIncrease: 40,
+    description: "Creates a smoke screen, drastically reducing accuracy"
+  },
+  flashbang: { 
+    name: "Flashbang", 
+    effect: "stun", 
+    duration: 1, 
+    description: "Stuns enemy, causing them to skip their next turn"
+  },
+  frag_grenade: { 
+    name: "Frag Grenade", 
+    damage: 60, 
+    armorPiercing: 0.7,
+    effect: "shrapnel", 
+    duration: 2,
+    description: "Explosive damage with armor penetration, causes bleeding"
+  },
+  molotov: { 
+    name: "Molotov Cocktail", 
+    damage: 35, 
+    effect: "burn", 
+    duration: 3,
+    burnDamage: 12,
+    description: "Sets target on fire, dealing damage over time"
+  },
+  throwing_knife: { 
+    name: "Throwing Knife", 
+    damage: 25, 
+    effect: "bleed", 
+    duration: 2,
+    bleedDamage: 8,
+    description: "Quick strike that causes bleeding"
+  },
+  shuriken: { 
+    name: "Shuriken", 
+    damage: 20, 
+    effect: "bleed", 
+    duration: 2,
+    bleedDamage: 6,
+    description: "Ninja star causing light bleeding"
+  },
+  c4: { 
+    name: "C4 Explosive", 
+    damage: 80, 
+    armorPiercing: 0.9,
+    effect: "devastate",
+    description: "Massive explosion ignoring most armor"
+  },
+  tear_gas: { 
+    name: "Tear Gas", 
+    damage: 10, 
+    effect: "blind", 
+    duration: 3,
+    missIncrease: 50,
+    healthDrain: 5,
+    description: "Debilitating gas that impairs vision and drains health"
+  }
+};
+
+// Battle state tracker
+const activeTurnBattles = new Map(); 
 // ---- BATTLE REACTION HANDLER ----
 client.on('messageReactionAdd', async (reaction, user) => {
   if (user.bot) return;
@@ -2233,15 +2298,17 @@ else if (command === 'battle' || command === '1v1') {
 
     setTimeout(async () => {
         const battle = activeBattles[challengeMsg.id];
-        if (battle && battle.status === 'pending') {
+        // Check if the battle still exists and is still pending acceptance
+        if (battle && battle.status === 'pending') { // <-- FIX: Completed the conditional check
             delete activeBattles[challengeMsg.id];
-            saveBattles();
+            // You may want to call saveBattles() here
             
+            // Edit the message to reflect the expiration and remove the reaction
             const expiredEmbed = challengeEmbed.setFooter({ text: 'Challenge Expired' });
-            challengeMsg.edit({ embeds: [expiredEmbed] }).catch(() => {});
-        }
-    }, 60000);
-} 
+            challengeMsg.edit({ embeds: [expiredEmbed] }).catch(() => {}); 
+        } // <-- FIX: Closed the 'if' block
+    }, 60000); // 60 seconds delay <-- FIX: Closed the 'setTimeout' block
+}
             
   // ---- Log Mode Commands ----
   else if (command === 'logmode') {
@@ -3190,14 +3257,14 @@ Created: ${guild.createdAt.toDateString()}`);
     saveLeaveMessages();
     message.reply('✅ Leave message has been cleared for this server.');
   }
-  
+
   // ---- Unknown command ----
   else {
-    if (message.content.startsWith('$') && command) {
+    if (message.content.startsWith('$') && command) { // Check if it was a command attempt
       message.reply('❌ Unknown command or you do not have permission.');
     }
   }
 
-}); // <-- This closes client.on('messageCreate', async (message) => {
-
+// ---- End of messageCreate ----
+});
 client.login(process.env.BOT_TOKEN);
