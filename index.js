@@ -1324,7 +1324,7 @@ async function startBattle(channel, challengerId, defenderId, battleKey) {
     winnerId = challengerId;
     winnerName = challenger.username;
     resultLog += `🏆 **${challenger.username}** wins with ${p1Data.health.toFixed(0)} HP remaining!\n`;
-  } else if (p2Data.health > p1Data.health) {
+  } else if (p2Data.health > p2Data.health) {
     winnerId = defenderId;
     winnerName = defender.username;
     resultLog += `🏆 **${defender.username}** wins with ${p2Data.health.toFixed(0)} HP remaining!\n`;
@@ -1449,6 +1449,8 @@ async function startDWBattle(message, game) {
     game.p2.healsLeft = 3;
     game.p1.inCover = false;
     game.p2.inCover = false;
+    game.p1.effects = {}; // stun, blind, burn, bleed
+    game.p2.effects = {};
     game.round = 1;
     game.turn = game.p1.id;
     game.log = `**${game.p2.name}** accepted the challenge! The battle begins!`;
@@ -1465,20 +1467,22 @@ async function updateDWEmbed(channel, messageId) {
     if (!message) return;
 
     const currentPlayer = game.turn === game.p1.id ? game.p1 : game.p2;
-    const waitingPlayer = game.turn === game.p1.id ? game.p2 : game.p1;
     
+    const p1Effects = Object.entries(game.p1.effects).filter(([_, v]) => v > 0).map(([k, v]) => `${k.charAt(0).toUpperCase() + k.slice(1)} (${v})`).join(', ') || 'None';
+    const p2Effects = Object.entries(game.p2.effects).filter(([_, v]) => v > 0).map(([k, v]) => `${k.charAt(0).toUpperCase() + k.slice(1)} (${v})`).join(', ') || 'None';
+
     const embed = new EmbedBuilder()
         .setColor('#C70039')
         .setTitle(`DEADLIEST WARRIOR - Round ${game.round}/30`)
         .setDescription(`**Last Action:**\n${game.log}\n\nIt's **${currentPlayer.name}**'s turn to act!`)
         .addFields(
-            { name: `🔴 ${game.p1.name}`, value: `**HP:** ${game.p1.health}/100\n**Heals:** ${game.p1.healsLeft}\n**Cover:** ${game.p1.inCover ? 'Yes' : 'No'}`, inline: true },
-            { name: `🔵 ${game.p2.name}`, value: `**HP:** ${game.p2.health}/100\n**Heals:** ${game.p2.healsLeft}\n**Cover:** ${game.p2.inCover ? 'Yes' : 'No'}`, inline: true }
+            { name: `🔴 ${game.p1.name}`, value: `**HP:** ${game.p1.health.toFixed(0)}/100\n**Heals:** ${game.p1.healsLeft}\n**Cover:** ${game.p1.inCover ? 'Yes' : 'No'}\n**Effects:** ${p1Effects}`, inline: true },
+            { name: `🔵 ${game.p2.name}`, value: `**HP:** ${game.p2.health.toFixed(0)}/100\n**Heals:** ${game.p2.healsLeft}\n**Cover:** ${game.p2.inCover ? 'Yes' : 'No'}\n**Effects:** ${p2Effects}`, inline: true }
         )
         .setImage('https://i.imgur.com/8f1V3gI.gif') // General battle GIF
         .setFooter({ text: '⚔️ Attack | 🛡️ Take Cover | ❤️ Heal | 💣 Use Throwable' });
 
-    await message.edit({ embeds: [embed], content: `${currentPlayer.name}, it's your turn!` });
+    await message.edit({ embeds: [embed], content: `<@${currentPlayer.id}>, it's your turn!` });
     
     // Add reactions for the current player
     await message.react('⚔️');
@@ -1499,6 +1503,41 @@ async function processDWTurn(messageId, action) {
     let actionLog = '';
     let gameOver = false;
 
+    // --- Apply Status Effects at start of turn ---
+    let preTurnLog = '';
+    if (attacker.effects.burn > 0) {
+        const burnDamage = 8;
+        attacker.health -= burnDamage;
+        preTurnLog += `🔥 **${attacker.name}** took **${burnDamage}** burn damage!\n`;
+        attacker.effects.burn--;
+    }
+     if (attacker.effects.bleed > 0) {
+        const bleedDamage = 5;
+        attacker.health -= bleedDamage;
+        preTurnLog += `🩸 **${attacker.name}** took **${bleedDamage}** bleed damage!\n`;
+        attacker.effects.bleed--;
+    }
+    if (attacker.health <= 0) {
+        game.log = preTurnLog + `\n**${attacker.name}** succumbed to their injuries!`;
+        await endDWBattle(channel, messageId, target, attacker);
+        return;
+    }
+    if (attacker.effects.stun > 0) {
+        preTurnLog += `😵 **${attacker.name}** is stunned and skips their turn!`;
+        attacker.effects.stun--;
+        game.log = preTurnLog;
+        game.turn = target.id; // Switch turns
+        if (game.turn === game.p1.id) game.round++;
+        if (game.round > 30) {
+            await endDWBattle(channel, messageId, null, null, true);
+        } else {
+            saveDWBattles();
+            await updateDWEmbed(channel, messageId);
+        }
+        return;
+    }
+
+
     // Reset attacker's cover status at the start of their turn
     attacker.inCover = false;
 
@@ -1506,22 +1545,38 @@ async function processDWTurn(messageId, action) {
         case 'attack': {
             const weapon = attacker.weapon;
             if (!weapon) {
-                 actionLog = `👊 **${attacker.name}** has no weapon and attacks with their fists!`;
+                 actionLog = `👊 **${attacker.name}** attacks with their fists!`;
                  target.health -= 5;
             } else {
-                const missChance = weapon.missChance || 10;
+                let missChance = weapon.missChance || 10;
+                if(attacker.effects.blind > 0) {
+                    missChance += 30; // Harder to hit when blind
+                    attacker.effects.blind--;
+                }
+
                 if (Math.random() * 100 < missChance) {
                     actionLog = `❌ **${attacker.name}** attacked with ${weapon.name} but missed!`;
                 } else {
                     let damage = weapon.damage || 10;
+                    let hitType = '';
+
+                    // Check for headshot first
+                    if (Math.random() * 100 < (weapon.headshotChance || 5)) {
+                        damage *= 2;
+                        hitType = '🎯 **HEADSHOT!** ';
+                    } else if (Math.random() * 100 < (weapon.critChance || 10)) {
+                        damage *= 1.5;
+                        hitType = '💥 **CRITICAL HIT!** ';
+                    }
+
                     if (target.inCover) {
-                        damage *= 0.5; // 50% damage reduction if target is in cover
+                        damage *= 0.5; // 50% damage reduction
                         actionLog += `🛡️ **${target.name}** was in cover and took reduced damage!\n`;
                     }
                     const defense = target.armor ? target.armor.defense * 0.4 : 0;
                     const actualDamage = Math.max(1, damage - defense);
                     target.health = Math.max(0, target.health - actualDamage);
-                    actionLog += `⚔️ **${attacker.name}** hits **${target.name}** with ${weapon.name} for **${actualDamage.toFixed(1)}** damage!`;
+                    actionLog += `${hitType}**${attacker.name}** hits **${target.name}** with ${weapon.name} for **${actualDamage.toFixed(1)}** damage!`;
                 }
             }
             break;
@@ -1548,20 +1603,25 @@ async function processDWTurn(messageId, action) {
                 actionLog = `❌ **${attacker.name}** has no throwable item equipped!`;
             } else {
                 let damage = throwable.damage || 0;
-                if (target.inCover) {
-                    damage *= 0.6; // Cover helps a bit against explosives
+                if (target.inCover) damage *= 0.6; 
+                const defense = target.armor ? target.armor.defense * 0.2 : 0;
+                const actualDamage = Math.max(1, damage - defense);
+                target.health = Math.max(0, target.health - actualDamage);
+                actionLog = `💣 **${attacker.name}** used **${throwable.name}**, dealing **${actualDamage.toFixed(1)}** damage!\n`;
+
+                 // Apply effects
+                if (throwable.effect && Math.random() * 100 < (throwable.effectChance || 50)) {
+                    target.effects[throwable.effect] = (target.effects[throwable.effect] || 0) + throwable.duration;
+                     actionLog += `...and inflicted **${throwable.effect.toUpperCase()}** on **${target.name}**!`;
                 }
-                 const defense = target.armor ? target.armor.defense * 0.2 : 0;
-                 const actualDamage = Math.max(1, damage - defense);
-                 target.health = Math.max(0, target.health - actualDamage);
-                 actionLog = `💣 **${attacker.name}** used **${throwable.name}**, dealing **${actualDamage.toFixed(1)}** damage to **${target.name}**!`;
-                 attacker.throwable = null; // Throwable is consumed
+
+                attacker.throwable = null; // Throwable is consumed
             }
             break;
         }
     }
 
-    game.log = actionLog;
+    game.log = preTurnLog + actionLog;
 
     // Check for win/loss
     if (target.health <= 0) {
@@ -1604,15 +1664,20 @@ async function endDWBattle(channel, messageId, winner, loser, isDraw = false) {
         embed = new EmbedBuilder()
             .setColor('#00FF00')
             .setTitle(`DEADLIEST WARRIOR - ${winner.name} WINS!`)
-            .setDescription(`🏆 **${winner.name}** has defeated **${loser.name}**!\n💰 **${winner.name}** earned **${reward}** Gold Coins!`)
+            .setDescription(`${game.log}\n\n🏆 **${winner.name}** has defeated **${loser.name}**!\n💰 **${winner.name}** earned **${reward}** Gold Coins!`)
             .setImage('https://i.imgur.com/Fuhs8b3.gif');
     }
     
     saveEconomyData();
-    await channel.send({ embeds: [embed] });
     
     const message = await channel.messages.fetch(messageId).catch(() => null);
-    if(message) await message.reactions.removeAll().catch(err => console.error("Could not clear reactions on finished game"));
+    if(message) {
+        await message.edit({ embeds: [embed], content: "The battle has ended!" });
+        await message.reactions.removeAll().catch(err => console.error("Could not clear reactions on finished game"));
+    } else {
+        await channel.send({ embeds: [embed] });
+    }
+
 
     delete activeDWGames[messageId];
     saveDWBattles();
@@ -3237,3 +3302,4 @@ Created: ${guild.createdAt.toDateString()}`);
 }); // ---- End of messageCreate ----
 
 client.login(process.env.BOT_TOKEN);
+
