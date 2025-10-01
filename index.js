@@ -2298,6 +2298,7 @@ else if (command === 'battle' || command === '1v1') {
 
     setTimeout(() => {
         if (activeBattles[challengeMsg.id] && activeBattles[challengeMsg.id].status ===
+            }
 
   // ---- Log Mode Commands ----
   else if (command === 'logmode') {
