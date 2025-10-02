@@ -2596,7 +2596,7 @@ else if (command === 'dw' || command === 'deadliestwarrior') {
     const result = Math.random() < 0.5 ? 'Heads' : 'Tails';
     message.channel.send(`🪙 You flipped **${result}**!`);
 // ---- Coin Flip (PvP Challenge) ----
-else if (command === 'challengeflip') {
+}else if (command === 'challengeflip') {
     const challengedUser = message.mentions.users.first();
     const amountArg = args[1];
     const amount = parseInt(amountArg);
