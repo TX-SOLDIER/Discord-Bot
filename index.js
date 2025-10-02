@@ -90,6 +90,134 @@ const activeFlipChallenges = new Map();
 const economyFile = './economy.json';
 let economyData = {};
 
+// ---- NEW GAME GLOBALS & LOTTERY DATA ----
+
+// Higher or Lower
+const higherLowerGames = new Map(); // { guildId: { messageId: '...', number: 50, attempts: 0, player: '...' } }
+
+// Guess the Number
+const guessNumberGames = new Map(); // { channelId: { number: 50, player: '...' } }
+
+// Lottery System
+const lotteryFile = './lottery.json';
+let lotteryData = {
+    drawDate: null,
+    winningNumbers: [],
+    entries: {}, // { guildId: { userId: [numbers] } }
+    prizePool: 500000,
+    isActive: false,
+};
+
+if (fs.existsSync(lotteryFile)) {
+    lotteryData = JSON.parse(fs.readFileSync(lotteryFile, 'utf8'));
+}
+
+function saveLotteryData() {
+    fs.writeFileSync(lotteryFile, JSON.stringify(lotteryData, null, 2));
+}
+
+// Function to generate 7 unique random numbers from 1 to 99
+function generateWinningNumbers() {
+    const numbers = new Set();
+    while (numbers.size < 7) {
+        // Numbers from 1 to 99
+        numbers.add(Math.floor(Math.random() * 99) + 1);
+    }
+    return Array.from(numbers).sort((a, b) => a - b);
+}
+
+// Function to run the weekly lottery draw
+async function runLotteryDraw() {
+    // 1. Check if the lottery is active and due
+    if (!lotteryData.isActive || (lotteryData.drawDate && new Date(lotteryData.drawDate) > new Date())) {
+        return; // Not due yet
+    }
+    
+    // 2. Generate winning numbers
+    lotteryData.winningNumbers = generateWinningNumbers();
+    
+    // 3. Process entries and find the winner
+    let jackpotWinner = null;
+    
+    for (const [guildId, entries] of Object.entries(lotteryData.entries)) {
+        for (const [userId, userNumbers] of Object.entries(entries)) {
+            const matchCount = userNumbers.filter(num => lotteryData.winningNumbers.includes(num)).length;
+
+            if (matchCount === 7) {
+                jackpotWinner = { userId, guildId, userNumbers };
+                break;
+            }
+        }
+        if (jackpotWinner) break;
+    }
+
+    // 4. Announce results in all Guilds that had entries
+    for (const guildId of Object.keys(lotteryData.entries)) {
+        const guild = client.guilds.cache.get(guildId);
+        if (!guild) continue;
+
+        // Try to find a channel to send the announcement
+        const channel = guild.channels.cache.find(c => c.name.includes('lottery') || c.type === 0); 
+        if (!channel) continue;
+
+        const resultsEmbed = new EmbedBuilder()
+            .setTitle('💰 Weekly Lottery Draw Results!')
+            .setColor(0xFFA500) // Orange
+            .addFields(
+                { name: '✨ Winning Numbers', value: `\`${lotteryData.winningNumbers.join(', ')}\``, inline: false }
+            )
+            .setImage('YOUR_LOTTERY_GIF_URL'); // Placeholder
+
+        if (jackpotWinner && jackpotWinner.guildId === guildId) {
+            // Jackpot announcement
+            const winnerId = jackpotWinner.userId;
+            const winnings = lotteryData.prizePool;
+            
+            updateBalance(winnerId, winnings);
+            saveEconomyData();
+
+            resultsEmbed.setDescription(`🎉 **JACKPOT WINNER FOUND!** 🎉\n<@${winnerId}> guessed all 7 numbers and wins **${winnings} Gold Coins**!`)
+                         .setColor(0xFFD700) // Gold
+                         .addFields({ name: 'Winning Ticket', value: `\`${jackpotWinner.userNumbers.join(', ')}\``, inline: false });
+
+            // Reset for next week
+            lotteryData.drawDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+            lotteryData.entries = {};
+            
+        } else {
+            resultsEmbed.setDescription('Sorry, no jackpot winner this week. The prize pool rolls over!')
+                         .addFields({ name: 'Next Draw', value: `<t:${Math.floor(new Date(lotteryData.drawDate).getTime() / 1000)}:R>` });
+        }
+        
+        await channel.send({ embeds: [resultsEmbed] });
+    }
+    
+    // 5. If no winner, roll the draw date over and save
+    if (!jackpotWinner) {
+        lotteryData.drawDate = new Date(new Date(lotteryData.drawDate).getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    }
+    saveLotteryData();
+}
+
+// Set up the lottery interval check
+client.on('ready', () => {
+    // ... existing ready code ...
+    setInterval(runLotteryDraw, 600000); // Check every 10 minutes (600,000 ms)
+    console.log(`✅ Lottery check started.`);
+
+    // Initialize the first draw date if not set
+    if (!lotteryData.drawDate) {
+        // Set draw date for next Sunday at 10 AM (adjust time zone if needed)
+        const nextSunday = new Date();
+        nextSunday.setDate(nextSunday.getDate() + (7 - nextSunday.getDay()) % 7);
+        nextSunday.setHours(10, 0, 0, 0); 
+        lotteryData.drawDate = nextSunday.toISOString();
+        lotteryData.isActive = true;
+        saveLotteryData();
+        console.log(`✅ Initial lottery draw date set for: ${nextSunday.toLocaleString()}`);
+    }
+});
+
 // ---- GAME DATA (Add these near other Maps/Objects) ----
 const rouletteColors = {
     0: { color: 'green', multiplier: 35 }, // Single zero
@@ -1996,6 +2124,248 @@ else if (command === 'counting' || command === 'c') {
     return message.reply('❌ Invalid subcommand. Use `$counting set`, `$counting off`, or `$counting leaderboard`.');
 }
 
+// ====================================================================
+// ---- HIGHER OR LOWER GAME COMMAND ($hl) ----
+// ====================================================================
+else if (command === 'hl') {
+    const game = higherLowerGames.get(message.guild.id);
+    const reward = 100;
+    const gifUrl = 'YOUR_HL_GIF_URL'; // Placeholder
+    
+    if (args.length === 0) {
+        // Start a new game
+        if (game) {
+            return message.reply(`❌ A Higher or Lower game is already active! Guess \`higher\` or \`lower\` to continue, or wait for it to expire.`);
+        }
+
+        const initialNumber = Math.floor(Math.random() * 100) + 1; // 1-100
+        const nextNumber = Math.floor(Math.random() * 100) + 1;
+        
+        const startEmbed = new EmbedBuilder()
+            .setTitle('⬆️⬇️ Higher or Lower')
+            .setDescription(`**Starting Number:** \`${initialNumber}\`\n\nWill the next number be **Higher** or **Lower** than \`${initialNumber}\`?`)
+            .addFields(
+                { name: '💰 Potential Win', value: `\`${reward} Gold Coins\``, inline: true }
+            )
+            .setFooter({ text: 'Reply with "higher" or "lower" to guess. Game expires in 30 seconds.' })
+            .setColor(0x0099FF)
+            .setImage(gifUrl);
+
+        const gameMessage = await message.channel.send({ embeds: [startEmbed] });
+
+        const newGame = {
+            messageId: gameMessage.id,
+            number: nextNumber,
+            attempts: 1,
+            player: message.author.id,
+            initialNumber: initialNumber
+        };
+        higherLowerGames.set(message.guild.id, newGame);
+
+        // Auto-expire game after 30 seconds
+        setTimeout(() => {
+            if (higherLowerGames.get(message.guild.id)?.messageId === gameMessage.id) {
+                higherLowerGames.delete(message.guild.id);
+                gameMessage.edit({ 
+                    embeds: [startEmbed.setFooter({ text: 'Game expired due to inactivity.' }).setColor(0xAAAAAA)]
+                }).catch(() => {});
+            }
+        }, 30000); // 30 seconds
+        
+    } else if (game && game.player === message.author.id) {
+        // Player is making a guess
+        const guess = args[0].toLowerCase();
+        if (guess !== 'higher' && guess !== 'lower') {
+            return message.reply('❌ Invalid guess. Please reply with `higher` or `lower`.');
+        }
+
+        const currentNumber = game.initialNumber;
+        const nextNumber = game.number;
+        
+        let didWin = false;
+        let resultMessage = '';
+
+        if (guess === 'higher') {
+            didWin = nextNumber > currentNumber;
+            resultMessage = didWin ? `🎉 **Higher!** \`${nextNumber}\` is greater than \`${currentNumber}\`.` : `💔 **Lower!** \`${nextNumber}\` is not greater than \`${currentNumber}\`.`;
+        } else if (guess === 'lower') {
+            didWin = nextNumber < currentNumber;
+            resultMessage = didWin ? `🎉 **Lower!** \`${nextNumber}\` is less than \`${currentNumber}\`.` : `💔 **Higher!** \`${nextNumber}\` is not less than \`${currentNumber}\`.`;
+        }
+        
+        higherLowerGames.delete(message.guild.id); // End game after one guess
+        
+        const finalEmbed = new EmbedBuilder()
+            .setTitle('⬆️⬇️ Higher or Lower: Result')
+            .setDescription(resultMessage)
+            .setImage(gifUrl);
+            
+        if (didWin) {
+            const newBalance = updateBalance(message.author.id, reward);
+            saveEconomyData();
+            finalEmbed.setColor(0x00FF00)
+                      .addFields(
+                          { name: '💰 Winnings', value: `+${reward} Gold Coins`, inline: true },
+                          { name: '💸 New Balance', value: `\`${newBalance}\` Gold Coins`, inline: true }
+                      );
+        } else {
+            finalEmbed.setColor(0xFF0000)
+                      .addFields({ name: '😭 Loss', value: 'The game has ended.' });
+        }
+        
+        message.channel.send({ embeds: [finalEmbed] });
+    }
+}
+
+// ====================================================================
+// ---- GUESS THE NUMBER GAME COMMAND ($gtn) ----
+// ====================================================================
+else if (command === 'gtn') {
+    const game = guessNumberGames.get(message.channel.id);
+    const reward = 10000;
+    const gifUrl = 'YOUR_GTN_GIF_URL'; // Placeholder
+
+    if (args.length === 0) {
+        // Start a new game
+        if (game) {
+            return message.reply(`❌ A Guess the Number game is already active in this channel!`);
+        }
+        
+        // Generate number between 1 and 100
+        const targetNumber = Math.floor(Math.random() * 100) + 1;
+        
+        guessNumberGames.set(message.channel.id, {
+            number: targetNumber,
+            player: null, // Any user can participate
+            attempts: 0
+        });
+
+        const startEmbed = new EmbedBuilder()
+            .setTitle('🔢 Guess The Number (1-100)')
+            .setDescription('I have chosen a secret number between **1 and 100**. Start guessing!')
+            .addFields(
+                { name: '🏆 Jackpot', value: `**${reward} Gold Coins**`, inline: true }
+            )
+            .setFooter({ text: 'First user to guess correctly wins!' })
+            .setColor(0x3498DB)
+            .setImage(gifUrl);
+            
+        return message.channel.send({ embeds: [startEmbed] });
+
+    } else {
+        // User is making a guess
+        if (!game) {
+            return message.reply('❌ No Guess the Number game is currently active. Start one with `$gtn`.');
+        }
+        
+        const guess = parseInt(args[0]);
+        if (isNaN(guess) || guess < 1 || guess > 100) {
+            return message.reply('❌ Please guess a valid number between 1 and 100.');
+        }
+
+        game.attempts++;
+
+        let response = '';
+        if (guess < game.number) {
+            response = `⬆️ Too low! Try a higher number.`;
+        } else if (guess > game.number) {
+            response = `⬇️ Too high! Try a lower number.`;
+        } else {
+            // Winner!
+            const winner = message.author;
+            guessNumberGames.delete(message.channel.id);
+            
+            const newBalance = updateBalance(winner.id, reward);
+            saveEconomyData();
+            
+            const winEmbed = new EmbedBuilder()
+                .setTitle('🎉 GUESS THE NUMBER: WINNER! 🎉')
+                .setDescription(`Congratulations, <@${winner.id}>! You guessed the number **${game.number}** in **${game.attempts}** attempts!`)
+                .addFields(
+                    { name: '🏆 Winnings', value: `+${reward} Gold Coins`, inline: true },
+                    { name: '💸 New Balance', value: `\`${newBalance}\` Gold Coins`, inline: true }
+                )
+                .setColor(0x2ECC71)
+                .setImage(gifUrl);
+
+            return message.channel.send({ embeds: [winEmbed] });
+        }
+
+        // Send feedback message for incorrect guess
+        message.reply(response);
+    }
+}
+
+// ====================================================================
+// ---- LOTTERY GAME COMMANDS ($lottery, $buyticket) ----
+// ====================================================================
+else if (command === 'lottery') {
+    const nextDraw = new Date(lotteryData.drawDate);
+    const timeUntilDraw = Math.floor(nextDraw.getTime() / 1000); // Unix timestamp for Discord's <t:X:R> format
+    const gifUrl = 'YOUR_LOTTERY_GIF_URL'; // Placeholder
+
+    const infoEmbed = new EmbedBuilder()
+        .setTitle('🎟️ Weekly Lottery Information')
+        .setDescription('Match 7 unique numbers (1-99) to win the jackpot!')
+        .addFields(
+            { name: '🏆 Jackpot Prize', value: `**${lotteryData.prizePool.toLocaleString()} Gold Coins**`, inline: true },
+            { name: '⏰ Next Draw', value: `<t:${timeUntilDraw}:R> (on <t:${timeUntilDraw}:F>)`, inline: true },
+            { name: '🔢 Your Tickets', value: `${lotteryData.entries[message.guild.id]?.[message.author.id]?.length || 0}`, inline: true },
+            { name: '💵 Cost to Enter', value: '1,000 Gold Coins per ticket', inline: true },
+            { name: '❓ How to Play', value: 'Use `$buyticket <num1> <num2> ... <num7>`', inline: false }
+        )
+        .setColor(0x9B59B6) // Purple
+        .setImage(gifUrl)
+        .setFooter({ text: 'Good luck! All tickets reset after the draw.' });
+
+    message.channel.send({ embeds: [infoEmbed] });
+}
+else if (command === 'buyticket') {
+    const ticketCost = 1000;
+    const balance = getBalance(message.author.id);
+    
+    if (balance < ticketCost) {
+        return message.reply(`❌ Buying a ticket costs **${ticketCost} Gold Coins**, and you only have **${balance}**.`);
+    }
+
+    if (args.length !== 7) {
+        return message.reply('❌ You must provide exactly 7 unique numbers between 1 and 99. Usage: `$buyticket 5 10 15 20 25 30 35`');
+    }
+    
+    const userNumbers = args.map(n => parseInt(n)).filter(n => !isNaN(n) && n >= 1 && n <= 99);
+    
+    if (userNumbers.length !== 7 || new Set(userNumbers).size !== 7) {
+        return message.reply('❌ All 7 numbers must be unique and between 1 and 99.');
+    }
+    
+    // Deduct cost
+    const newBalance = updateBalance(message.author.id, -ticketCost);
+    saveEconomyData();
+    
+    // Store ticket
+    if (!lotteryData.entries[message.guild.id]) {
+        lotteryData.entries[message.guild.id] = {};
+    }
+    if (!lotteryData.entries[message.guild.id][message.author.id]) {
+        lotteryData.entries[message.guild.id][message.author.id] = [];
+    }
+    
+    // Store the ticket numbers
+    lotteryData.entries[message.guild.id][message.author.id].push(userNumbers.sort((a, b) => a - b));
+    saveLotteryData();
+    
+    const embed = new EmbedBuilder()
+        .setTitle('✅ Lottery Ticket Purchased!')
+        .setDescription(`Your ticket numbers: \`${userNumbers.join(', ')}\`\nGood luck!`)
+        .addFields(
+            { name: '💵 Cost', value: `-${ticketCost} Gold Coins`, inline: true },
+            { name: '💸 New Balance', value: `\`${newBalance}\` Gold Coins`, inline: true }
+        )
+        .setColor(0x27AE60);
+
+    message.channel.send({ embeds: [embed] });
+}
+  
 // ---- ECONOMY COMMANDS ----
 else if (command === 'balance' || command === 'bal') {
     const target = message.mentions.users.first() || message.author;
