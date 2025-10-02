@@ -90,6 +90,17 @@ const activeFlipChallenges = new Map();
 const economyFile = './economy.json';
 let economyData = {};
 
+// ---- GAME DATA (Add these near other Maps/Objects) ----
+const rouletteColors = {
+    0: { color: 'green', multiplier: 35 }, // Single zero
+    // For simplicity, we will only use single 0. Double zero (00) is often omitted in basic bots.
+};
+
+const activeRouletteGames = new Map();
+const activeRRGames = new new Map();
+const rrCooldowns = new Map(); // Cooldown to prevent spamming the Russian Roulette command
+const RR_COOLDOWN_TIME = 30000; // 30 seconds cooldown
+
 // Cooldowns to prevent spam earning
 const messageCooldowns = new Map();
 const commandCooldowns = new Map();
@@ -2825,6 +2836,221 @@ else if (command === 'challengeflip') {
             }
         }
     });
+}
+  // ====================================================================
+// ---- ROULETTE GAME COMMAND ----
+// ====================================================================
+else if (command === 'roulette') {
+    if (!message.guild) return message.reply('❌ This command can only be used in a server.');
+
+    const betAmount = parseInt(args[0]);
+    let betTarget = args[1]?.toLowerCase();
+    const gifUrl = args[2] || 'https://i.imgur.com/G4Y2qXg.gif'; // Default GIF
+
+    if (isNaN(betAmount) || betAmount <= 0) {
+        return message.reply('❌ Please specify a valid bet amount greater than 0. Usage: `$roulette <amount> <number|red|black|even|odd> [optional_gif_url]`');
+    }
+
+    if (!betTarget) {
+        return message.reply('❌ Please specify your bet target (e.g., `red`, `black`, `odd`, `even`, or a number from 0-36).');
+    }
+
+    const balance = getBalance(message.author.id);
+    if (balance < betAmount) {
+        return message.reply(`❌ You only have **${balance}** Gold Coins. You cannot bet **${betAmount}**.`);
+    }
+
+    // --- Validate Bet Target ---
+    let payoutMultiplier = 0;
+    let betType = 'unknown';
+
+    // Handle number bets
+    const numBet = parseInt(betTarget);
+    if (!isNaN(numBet) && numBet >= 0 && numBet <= 36) {
+        betType = 'number';
+        payoutMultiplier = 35; // 35:1 for any single number (including 0)
+    } 
+    // Handle color/parity bets
+    else if (betTarget === 'red' || betTarget === 'black') {
+        betType = 'color';
+        payoutMultiplier = 2; // 1:1 payout (betAmount * 2 = total return)
+    } else if (betTarget === 'even' || betTarget === 'odd') {
+        betType = 'parity';
+        payoutMultiplier = 2; // 1:1 payout
+    } else {
+        return message.reply('❌ Invalid bet target. Choose: `red`, `black`, `even`, `odd`, or a number from `0` to `36`.');
+    }
+    
+    // --- Determine Roulette Result ---
+    // Numbers 1-36: 18 Red, 18 Black. Number 0 is Green.
+    const resultNumber = Math.floor(Math.random() * 37); // 0 to 36
+    let resultColor = 'green';
+    let isRed = (resultNumber % 2 !== 0 && resultNumber >= 1 && resultNumber <= 10) || // 1, 3, 5, 7, 9
+                (resultNumber % 2 === 0 && resultNumber >= 11 && resultNumber <= 18) || // 12, 14, 16, 18
+                (resultNumber % 2 !== 0 && resultNumber >= 19 && resultNumber <= 28) || // 19, 21, 23, 25, 27
+                (resultNumber % 2 === 0 && resultNumber >= 29 && resultNumber <= 36);   // 30, 32, 34, 36
+    
+    if (resultNumber !== 0) {
+        resultColor = isRed ? 'red' : 'black';
+    }
+
+    const isEven = resultNumber !== 0 && resultNumber % 2 === 0;
+    const resultParity = resultNumber === 0 ? 'green' : (isEven ? 'even' : 'odd');
+    
+    // --- Check Win Condition ---
+    let win = false;
+    let winDescription = '';
+
+    if (betType === 'number' && numBet === resultNumber) {
+        win = true;
+        winDescription = `**Landed on your number!** ${resultNumber}`;
+    } else if (betType === 'color' && betTarget === resultColor) {
+        win = true;
+        winDescription = `**Landed on your color!** ${resultColor.toUpperCase()}`;
+    } else if (betType === 'parity' && betTarget === resultParity) {
+        win = true;
+        winDescription = `**Landed on your parity!** ${resultParity.toUpperCase()}`;
+    }
+
+    // --- Calculate Winnings/Losses ---
+    let newBalance;
+    let finalMessage;
+    let colorCode;
+    
+    if (win) {
+        const winnings = betType === 'number' ? betAmount * payoutMultiplier : betAmount * (payoutMultiplier - 1); // 35:1 is a 36x return, 1:1 is a 2x return
+        newBalance = updateBalance(message.author.id, winnings);
+        saveEconomyData();
+        finalMessage = `🎉 **YOU WON!** You bet on **${betTarget.toUpperCase()}**.\n${winDescription}!\n**Payout:** +${winnings} Gold Coins`;
+        colorCode = 0x00FF00; // Green
+    } else {
+        newBalance = updateBalance(message.author.id, -betAmount);
+        saveEconomyData();
+        finalMessage = `😭 **YOU LOST!** You bet on **${betTarget.toUpperCase()}**.\nIt landed on **${resultNumber} ${resultColor.toUpperCase()}**.\n**Loss:** -${betAmount} Gold Coins`;
+        colorCode = 0xFF0000; // Red
+    }
+
+    // --- Send Embed Result ---
+    const resultEmbed = new EmbedBuilder()
+        .setColor(colorCode)
+        .setTitle(`🎰 Roulette: Spin Result`)
+        .setDescription(finalMessage)
+        .addFields(
+            { name: '💰 Bet Amount', value: `\`${betAmount}\``, inline: true },
+            { name: '🎯 Bet Target', value: `\`${betTarget.toUpperCase()}\``, inline: true },
+            { name: '⚫ Result', value: `\`${resultNumber} ${resultColor.toUpperCase()}\``, inline: true },
+            { name: '💸 New Balance', value: `\`${newBalance}\` Gold Coins`, inline: false }
+        )
+        .setImage(gifUrl);
+
+    await message.channel.send({ embeds: [resultEmbed] });
+}
+// ====================================================================
+// ---- RUSSIAN ROULETTE COMMAND ----
+// ====================================================================
+else if (command === 'rr') {
+    if (!message.guild || !message.member) return message.reply('❌ This command can only be used in a server.');
+    
+    // Check command cooldown
+    if (rrCooldowns.has(message.author.id)) {
+        const expirationTime = rrCooldowns.get(message.author.id) + RR_COOLDOWN_TIME;
+        const timeLeft = expirationTime - Date.now();
+        if (timeLeft > 0) {
+            const seconds = Math.ceil(timeLeft / 1000);
+            return message.reply(`⚠️ You must wait **${seconds}** seconds before playing Russian Roulette again.`);
+        }
+    }
+    
+    // Check if the bot can mute members
+    if (!message.guild.members.me.permissions.has(PermissionsBitField.Flags.MuteMembers)) {
+        return message.reply('❌ I need the **Mute Members** permission to enforce the penalty for this game.');
+    }
+
+    const players = [message.author];
+    const mentionedUsers = message.mentions.users.filter(u => u.id !== client.user.id && u.id !== message.author.id);
+    
+    if (mentionedUsers.size > 4) {
+        return message.reply('❌ Russian Roulette is limited to 5 players (yourself + up to 4 others).');
+    }
+    
+    mentionedUsers.forEach(user => players.push(user));
+    
+    // --- The Game Logic ---
+    const chamberCount = 6;
+    const bulletChamber = Math.floor(Math.random() * chamberCount); // 0 to 5
+    const shotChamber = Math.floor(Math.random() * chamberCount); // The chamber that fires the shot
+
+    const muteDurationMs = 60 * 60 * 1000; // 1 hour in milliseconds
+    const muteEndTimestamp = new Date(Date.now() + muteDurationMs).getTime();
+    
+    const gifUrl = args[args.length - 1]?.startsWith('http') ? args[args.length - 1] : 'https://i.imgur.com/8QG9s0G.gif'; // Default RR GIF
+
+    // Check if anyone is immune using your existing function
+    const immunePlayer = players.find(p => isImmune(p));
+    if (immunePlayer) {
+        return message.reply(`🛡️ **${immunePlayer.tag}** is immune and cannot be muted! The game is cancelled.`);
+    }
+
+    const playerList = players.map(p => `• <@${p.id}>`).join('\n');
+    
+    const embed = new EmbedBuilder()
+        .setColor(0x333333)
+        .setTitle('🔫 Russian Roulette: The Cylinder Spins...')
+        .setDescription(`**Chamber:** ${chamberCount} 
+**Players:**\n${playerList}
+\n**The shot will fire on chamber:** \`${shotChamber + 1}\``)
+        .setImage(gifUrl)
+        .setFooter({ text: 'One player will be muted for 1 hour.' });
+
+    const gameMessage = await message.channel.send({ embeds: [embed] });
+
+    await new Promise(resolve => setTimeout(resolve, 3000)); // Wait for suspense
+
+    if (bulletChamber === shotChamber) {
+        // --- LOSER LOGIC (MUTE) ---
+        const loser = players[Math.floor(Math.random() * players.length)];
+        const loserMember = await message.guild.members.fetch(loser.id);
+
+        try {
+            // Discord.js v13/v14 uses timeout() for muting/timing out
+            await loserMember.timeout(muteDurationMs, `Lost a game of Russian Roulette (Chamber ${shotChamber + 1}/${chamberCount})`);
+
+            const loseEmbed = new EmbedBuilder()
+                .setColor(0xFF0000)
+                .setTitle('💥 BANG! The Chamber Fires!')
+                .setDescription(`The bullet was in chamber **${bulletChamber + 1}**!\n
+                **💀 LOSER:** <@${loser.id}>
+                **PENALTY:** You have been muted (timed out) for **1 hour**!
+                `)
+                .setImage(gifUrl);
+
+            await message.channel.send({ embeds: [loseEmbed] });
+            
+            // Apply cooldown
+            rrCooldowns.set(message.author.id, Date.now());
+            setTimeout(() => rrCooldowns.delete(message.author.id), RR_COOLDOWN_TIME);
+
+        } catch (error) {
+            console.error(`Error muting ${loser.tag}:`, error);
+            await message.channel.send(`❌ **FATAL ERROR:** I couldn't mute <@${loser.id}>. I might be missing permissions, or their role is higher than mine. **The game results are void.**`);
+        }
+
+    } else {
+        // --- WINNER LOGIC (NO MUTE) ---
+        const winEmbed = new EmbedBuilder()
+            .setColor(0x00FF00)
+            .setTitle('✅ CLICK. The Chamber is Empty.')
+            .setDescription(`The bullet was in chamber **${bulletChamber + 1}**, but the cylinder was spun!
+            
+            **🎉 EVERYONE WINS!** No one was muted today. You all live to spin another day.`)
+            .setImage(gifUrl);
+
+        await message.channel.send({ embeds: [winEmbed] });
+
+        // Apply cooldown
+        rrCooldowns.set(message.author.id, Date.now());
+        setTimeout(() => rrCooldowns.delete(message.author.id), RR_COOLDOWN_TIME);
+    }
 }
 else if (command === '8ball') { // <--- Note the correct 'else if' connection
     const responses = ['Yes.', 'No.', 'Maybe.', 'Ask again later.', 'Definitely!', 'I dont think so.'];
