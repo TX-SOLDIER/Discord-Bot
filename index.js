@@ -83,6 +83,8 @@ if (fs.existsSync(countingFile)) {
 function saveCountingData() {
     fs.writeFileSync(countingFile, JSON.stringify(countingData, null, 2));
 }
+// New map to store active coin flip challenges (to prevent conflicts)
+const activeFlipChallenges = new Map();
 
 // ---- ECONOMY/CURRENCY DATA ----
 const economyFile = './economy.json';
@@ -2593,6 +2595,164 @@ else if (command === 'dw' || command === 'deadliestwarrior') {
   else if (command === 'flip') {
     const result = Math.random() < 0.5 ? 'Heads' : 'Tails';
     message.channel.send(`🪙 You flipped **${result}**!`);
+// ---- Coin Flip (PvP Challenge) ----
+else if (command === 'challengeflip') {
+    const challengedUser = message.mentions.users.first();
+    const amountArg = args[1];
+    const amount = parseInt(amountArg);
+    const challenger = message.author;
+    const challengerId = challenger.id;
+
+    // 1. Basic Validation
+    if (!challengedUser || challengedUser.bot || challengedUser.id === challengerId) {
+        return message.reply('❌ You must mention a valid, non-bot user to challenge.');
+    }
+    if (isNaN(amount) || amount <= 0) {
+        return message.reply('❌ The bet amount must be a positive number.');
+    }
+    // Check if either player is already in a game
+    if (activeFlipChallenges.has(challengerId) || activeFlipChallenges.has(challengedUser.id)) {
+        return message.reply('❌ One of the players is already involved in a coin flip challenge.');
+    }
+    
+    // 2. Balance Check (Challenged user balance is checked again upon acceptance)
+    const challengerBalance = getBalance(challengerId);
+    if (amount > challengerBalance) {
+        return message.reply(`❌ You only have **${challengerBalance}** Gold Coins. You cannot bet **${amount}**.`);
+    }
+
+    // 3. Set up Challenge
+    // Store the challenge details
+    activeFlipChallenges.set(challengerId, challengedUser.id);
+    activeFlipChallenges.set(challengedUser.id, challengerId);
+
+    // Temporarily deduct the bet from the challenger (will be refunded if rejected/timed out)
+    updateBalance(challengerId, -amount);
+    saveEconomyData();
+    
+    const pot = amount * 2;
+
+    const embed = new EmbedBuilder()
+        .setColor(0x0099ff)
+        .setTitle('🤝 Coin Flip Challenge Initiated!')
+        .setDescription(`${challengedUser}, **${challenger.tag}** has challenged you to a coin flip for **${amount}** Gold Coins!`)
+        .addFields(
+            { name: 'Total Pot', value: `**${pot}** Gold Coins`, inline: true },
+            { name: 'To Accept', value: 'React with ✅ (You must have the funds)', inline: true },
+            { name: 'To Reject', value: 'React with ❌', inline: true }
+        )
+        .setFooter({ text: 'Challenge expires in 60 seconds.' })
+        .setTimestamp();
+    
+    const challengeMessage = await message.reply({ embeds: [embed] });
+    
+    // React with the options
+    await challengeMessage.react('✅');
+    await challengeMessage.react('❌');
+    
+    // 4. Reaction Collector
+    const filter = (reaction, user) => {
+        return ['✅', '❌'].includes(reaction.emoji.name) && user.id === challengedUser.id;
+    };
+
+    const collector = challengeMessage.createReactionCollector({ filter, time: 60000, max: 1 });
+
+    collector.on('collect', async (reaction) => {
+        collector.stop();
+
+        if (reaction.emoji.name === '✅') {
+            // **ACCEPTED**
+            
+            // Final balance check for challenged user
+            const challengedBalance = getBalance(challengedUser.id);
+            if (amount > challengedBalance) {
+                // If challenged user ran out of money during the wait time, refund challenger
+                updateBalance(challengerId, amount); 
+                saveEconomyData();
+                activeFlipChallenges.delete(challengerId);
+                activeFlipChallenges.delete(challengedUser.id);
+                return challengeMessage.edit({ 
+                    embeds: [new EmbedBuilder()
+                        .setColor(0xFF0000)
+                        .setTitle('🛑 Challenge Failed: Insufficient Funds')
+                        .setDescription(`**${challengedUser.tag}** no longer has **${amount}** Gold Coins. Challenge canceled and **${challenger.tag}** refunded.`)
+                    ]
+                });
+            }
+
+            // Deduct bet from challenged user
+            updateBalance(challengedUser.id, -amount);
+            saveEconomyData();
+            
+            // Determine winner
+            const winner = Math.random() < 0.5 ? challenger : challengedUser;
+            const loser = winner.id === challengerId ? challengedUser : challenger;
+            
+            // Award pot (2 * amount) to winner
+            updateBalance(winner.id, pot); 
+            saveEconomyData();
+            
+            // Final Embed
+            const resultEmbed = new EmbedBuilder()
+                .setColor(0x00FF00)
+                .setTitle('💰 Coin Flip Battle Concluded! 🥇')
+                .setDescription(`The coin has been flipped! The winner is **${winner.tag}**!`)
+                .addFields(
+                    { name: 'Challenger', value: challenger.tag, inline: true },
+                    { name: 'Challenged', value: challengedUser.tag, inline: true },
+                    { name: 'Prize', value: `**${pot}** Gold Coins`, inline: false }
+                )
+                .setFooter({ 
+                    text: `New Balances | Winner: ${getBalance(winner.id)} | Loser: ${getBalance(loser.id)}` 
+                })
+                .setTimestamp();
+
+            await challengeMessage.edit({ embeds: [resultEmbed] });
+            
+        } else if (reaction.emoji.name === '❌') {
+            // **REJECTED**
+            
+            // Refund challenger's bet
+            updateBalance(challengerId, amount); 
+            saveEconomyData();
+            
+            const rejectEmbed = new EmbedBuilder()
+                .setColor(0xFF0000)
+                .setTitle('⚔️ Coin Flip Challenge Rejected')
+                .setDescription(`**${challengedUser.tag}** has rejected the challenge. **${challenger.tag}** has been refunded **${amount}** Gold Coins.`);
+            
+            await challengeMessage.edit({ embeds: [rejectEmbed] });
+        }
+        
+        // Clean up the challenge map
+        activeFlipChallenges.delete(challengerId);
+        activeFlipChallenges.delete(challengedUser.id);
+    });
+
+    collector.on('end', collected => {
+        if (collected.size === 0) {
+            // **TIMED OUT**
+            
+            // Refund challenger's bet
+            updateBalance(challengerId, amount); 
+            saveEconomyData();
+            
+            // Only update the message if the game is still active in the map (wasn't resolved by other means)
+            if (activeFlipChallenges.has(challengerId)) {
+                const timeoutEmbed = new EmbedBuilder()
+                    .setColor(0xFFA500)
+                    .setTitle('⏳ Coin Flip Challenge Timed Out')
+                    .setDescription(`**${challengedUser.tag}** did not respond in time. **${challenger.tag}** has been refunded **${amount}** Gold Coins.`);
+                
+                challengeMessage.edit({ embeds: [timeoutEmbed] });
+            
+                // Clean up the challenge map
+                activeFlipChallenges.delete(challengerId);
+                activeFlipChallenges.delete(challengedUser.id);
+            }
+        }
+    });
+}
   } else if (command === '8ball') {
     const responses = ['Yes.', 'No.', 'Maybe.', 'Ask again later.', 'Definitely!', 'I dont think so.'];
     if (!args.length) return message.reply('🎱 Ask me a question.');
