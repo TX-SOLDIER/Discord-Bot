@@ -166,7 +166,7 @@ async function runLotteryDraw() {
             .addFields(
                 { name: '✨ Winning Numbers', value: `\`${lotteryData.winningNumbers.join(', ')}\``, inline: false }
             )
-            .setImage('YOUR_LOTTERY_GIF_URL'); // Placeholder
+            .setImage('https://i.imgur.com/rN99D4p.png'); // Placeholder
 
         if (jackpotWinner && jackpotWinner.guildId === guildId) {
             // Jackpot announcement
@@ -2130,7 +2130,7 @@ else if (command === 'counting' || command === 'c') {
 else if (command === 'hl') {
     const game = higherLowerGames.get(message.guild.id);
     const reward = 100;
-    const gifUrl = 'YOUR_HL_GIF_URL'; // Placeholder
+    const gifUrl = 'https://i.imgur.com/rN99D4p.png'; // Placeholder
     
     if (args.length === 0) {
         // Start a new game
@@ -2223,7 +2223,7 @@ else if (command === 'hl') {
 else if (command === 'gtn') {
     const game = guessNumberGames.get(message.channel.id);
     const reward = 10000;
-    const gifUrl = 'YOUR_GTN_GIF_URL'; // Placeholder
+    const gifUrl = 'https://i.imgur.com/rN99D4p.png'; // Placeholder
 
     if (args.length === 0) {
         // Start a new game
@@ -2302,7 +2302,7 @@ else if (command === 'gtn') {
 else if (command === 'lottery') {
     const nextDraw = new Date(lotteryData.drawDate);
     const timeUntilDraw = Math.floor(nextDraw.getTime() / 1000); // Unix timestamp for Discord's <t:X:R> format
-    const gifUrl = 'YOUR_LOTTERY_GIF_URL'; // Placeholder
+    const gifUrl = 'https://i.imgur.com/rN99D4p.png'; // Placeholder
 
     const infoEmbed = new EmbedBuilder()
         .setTitle('🎟️ Weekly Lottery Information')
