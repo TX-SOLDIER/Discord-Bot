@@ -97,7 +97,7 @@ const rouletteColors = {
 };
 
 const activeRouletteGames = new Map();
-const activeRRGames = new new Map();
+const activeRRGames = new Map();
 const rrCooldowns = new Map(); // Cooldown to prevent spamming the Russian Roulette command
 const RR_COOLDOWN_TIME = 30000; // 30 seconds cooldown
 
