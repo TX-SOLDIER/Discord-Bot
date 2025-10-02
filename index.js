@@ -2845,7 +2845,7 @@ else if (command === 'roulette') {
 
     const betAmount = parseInt(args[0]);
     let betTarget = args[1]?.toLowerCase();
-    const gifUrl = args[2] || 'https://i.imgur.com/G4Y2qXg.gif'; // Default GIF
+    const gifUrl = 'https://i.imgur.com/G4Y2qXg.gif'; // Default GIF
 
     if (isNaN(betAmount) || betAmount <= 0) {
         return message.reply('❌ Please specify a valid bet amount greater than 0. Usage: `$roulette <amount> <number|red|black|even|odd> [optional_gif_url]`');
