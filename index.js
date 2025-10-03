@@ -68,7 +68,9 @@ const hauntIntervals = new Map();
 // ---- ANTI-RAID DATA ----
 const antiRaidActive = new Set();
 const originalVerificationLevels = new Map();
+const originalChannelPermissions = new Map(); // [ADD THIS LINE]
 const joinTimestamps = new Map();
+
 
 // ---- COUNTING GAME DATA ----
 const countingFile = './counting.json';
@@ -1096,12 +1098,28 @@ async function engageAntiRaid(guild, alertChannel, author = null) {
     antiRaidActive.add(guild.id);
     originalVerificationLevels.set(guild.id, guild.verificationLevel);
 
+    // [NEW] Store original channel permissions
+    const permsToStore = [];
+    guild.channels.cache.forEach(channel => {
+        if (channel.isTextBased()) {
+            const everyoneRole = guild.roles.everyone;
+            const currentPerms = channel.permissionOverwrites.cache.get(everyoneRole.id);
+            // Store the current SendMessages state (true, false, or null if not set)
+            permsToStore.push({
+                channelId: channel.id,
+                sendMessages: currentPerms ? currentPerms.allow.has(PermissionsBitField.Flags.SendMessages) ? true : currentPerms.deny.has(PermissionsBitField.Flags.SendMessages) ? false : null : null
+            });
+        }
+    });
+    originalChannelPermissions.set(guild.id, permsToStore);
+    // [END NEW]
+
     try {
         await guild.setVerificationLevel(4); // Highest
 
         guild.channels.cache.forEach(async (channel) => {
-            if (channel.isTextBased() && channel.permissionsFor(guild.roles.everyone).has(PermissionsBitField.Flags.SendMessages)) {
-                await channel.permissionOverwrites.edit(guild.roles.everyone, {
+            if (channel.isTextBased()) { // Only lock text-based channels
+                 await channel.permissionOverwrites.edit(guild.roles.everyone, {
                     SendMessages: false
                 }).catch(err => console.error(`Failed to lock channel ${channel.name}:`, err));
             }
@@ -1122,6 +1140,7 @@ async function engageAntiRaid(guild, alertChannel, author = null) {
     } catch (err) {
         console.error("Anti-Raid ON Error:", err);
         antiRaidActive.delete(guild.id); // Revert state if failed
+        originalChannelPermissions.delete(guild.id); // [NEW] Clear stored perms on failure
         return false;
     }
 }
@@ -1133,22 +1152,40 @@ async function disengageAntiRaid(guild, replyChannel) {
     }
 
     antiRaidActive.delete(guild.id);
-    const originalLevel = originalVerificationLevels.get(guild.id) || 0; // Default to 'None'
+    const originalLevel = originalVerificationLevels.get(guild.id) || 0;
+    const savedPerms = originalChannelPermissions.get(guild.id);
+
     originalVerificationLevels.delete(guild.id);
+    originalChannelPermissions.delete(guild.id); // Clean up the stored permissions
 
     try {
         await guild.setVerificationLevel(originalLevel);
 
-        guild.channels.cache.forEach(async (channel) => {
-            if (channel.isTextBased()) {
-                await channel.permissionOverwrites.edit(guild.roles.everyone, {
-                    SendMessages: null // Resets permission to default
-                }).catch(err => console.error(`Failed to unlock channel ${channel.name}:`, err));
+        if (savedPerms) {
+            // [MODIFIED] Restore permissions from the saved state
+            for (const perm of savedPerms) {
+                const channel = guild.channels.cache.get(perm.channelId);
+                if (channel && channel.isTextBased()) {
+                    await channel.permissionOverwrites.edit(guild.roles.everyone, {
+                        SendMessages: perm.sendMessages
+                    }).catch(err => console.error(`Failed to restore channel ${channel.name}:`, err));
+                }
             }
-        });
+        } else {
+            // Fallback for safety, in case the bot restarted and lost the map data
+            console.warn(`[Anti-Raid] No saved permissions found for guild ${guild.id}. Using default unlock.`);
+            guild.channels.cache.forEach(async (channel) => {
+                if (channel.isTextBased()) {
+                    await channel.permissionOverwrites.edit(guild.roles.everyone, {
+                        SendMessages: null
+                    }).catch(err => console.error(`Failed to unlock channel ${channel.name}:`, err));
+                }
+            });
+        }
+
 
         if (replyChannel) {
-            await replyChannel.reply('✅ Anti-raid mode has been disengaged. All systems back to normal.');
+            await replyChannel.reply('✅ Anti-raid mode has been disengaged. All systems and channel permissions have been restored to their previous state.');
         }
         return true;
     } catch (err) {
@@ -1159,7 +1196,6 @@ async function disengageAntiRaid(guild, replyChannel) {
         return false;
     }
 }
-
 
 // --- Welcome & Leave Event Handlers ---
 client.on('guildMemberAdd', async member => {
@@ -3827,9 +3863,13 @@ else if (command === '8ball') { // <--- Note the correct 'else if' connection
       .catch(() => message.reply('❌ Cannot unmute this user.'));
   }
 
-  // ---- ANTI-RAID COMMAND (REFACTORED) ----
+  // ---- ANTI-RAID COMMAND (REFACTORED & SECURED) ----
   else if (command === 'antiraid') {
-      if (!checkPermission(PermissionsBitField.Flags.ManageGuild)) return;
+      // [MODIFIED] Check if the user is the owner or has an immunity rank
+      if (!isImmune(message.author)) {
+          return message.reply('❌ You do not have permission to manage the anti-raid system.');
+      }
+      
       const subcommand = args[0]?.toLowerCase();
 
       if (subcommand === 'on') {
