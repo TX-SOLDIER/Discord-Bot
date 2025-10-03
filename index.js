@@ -1185,13 +1185,13 @@ async function disengageAntiRaid(guild, replyChannel) {
 
 
         if (replyChannel) {
-            await replyChannel.reply('✅ Anti-raid mode has been disengaged. All systems and channel permissions have been restored to their previous state.');
+            await replyChannel.send('✅ Anti-raid mode has been disengaged. All systems and channel permissions have been restored to their previous state.');
         }
         return true;
     } catch (err) {
         console.error("Anti-Raid OFF Error:", err);
         if (replyChannel) {
-            await replyChannel.reply("❌ Failed to fully disengage anti-raid mode. I might be missing permissions. Please check channels manually.");
+            await replyChannel.send("❌ Failed to fully disengage anti-raid mode. I might be missing permissions. Please check channels manually.");
         }
         return false;
     }
