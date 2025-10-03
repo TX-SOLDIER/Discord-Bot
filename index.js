@@ -1147,7 +1147,7 @@ async function engageAntiRaid(guild, alertChannel, author = null) {
 
 async function disengageAntiRaid(guild, replyChannel) {
     if (!antiRaidActive.has(guild.id)) {
-        if (replyChannel) await replyChannel.reply('✅ Anti-raid mode is not currently active.');
+        if (replyChannel) await replyChannel.send("Anti-raid has been disengaged.")
         return false;
     }
 
