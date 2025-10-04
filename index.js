@@ -1155,16 +1155,16 @@ async function disengageAntiRaid(guild, replyChannel) {
                 if (channel && channel.isTextBased()) {
                     await channel.permissionOverwrites.edit(guild.roles.everyone, {
                         SendMessages: perm.sendMessages
-                    }).catch(err => console.error(`Failed to restore channel ${channel.name}:`, err));
+                    }).catch(err => console.error("Failed to restore channel " + channel.name + ":", err));
                 }
             }
         } else {
-            console.warn(`[Anti-Raid] No saved permissions found for guild ${guild.id}. Using default unlock.`);
+            console.warn("[Anti-Raid] No saved permissions found for guild " + guild.id + ". Using default unlock.");
             guild.channels.cache.forEach(async (channel) => {
                 if (channel.isTextBased()) {
                     await channel.permissionOverwrites.edit(guild.roles.everyone, {
                         SendMessages: null
-                    }).catch(err => console.error(`Failed to unlock channel ${channel.name}:`, err));
+                    }).catch(err => console.error("Failed to unlock channel " + channel.name + ":", err));
                 }
             });
         }
