@@ -1024,7 +1024,7 @@ function sendQuestion(channelId) {
 
   const prefix = botData.qotdSettings[channelId]?.everyone ? '@everyone ' : '';
   const question = qotdQuestions[randomIndex];
-  channel.send(`${prefix}**❓ Question of the Day:** ${question}`);
+  channel.send(prefix + "**❓ Question of the Day:** " + question);
   
   logToGlobal(question, channel.guild.name, channel.name);
 }
