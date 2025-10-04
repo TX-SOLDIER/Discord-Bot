@@ -997,7 +997,7 @@ function handValue(hand) {
 }
 
 function formatHand(hand) {
-  return hand.map(c => `${c.value}${c.suit}`).join(' ');
+  return hand.map(c => c.value + c.suit).join(' ');
 }
 
 // ---- Question of the Day ----
