@@ -501,8 +501,6 @@ const spicyTruths = [
   "What's a secret you've never told anyone?"
 ];
 
----
-
 ```javascript
 const spicyDares = [
   "Change your nickname to something silly for 10 minutes.",
@@ -577,8 +575,6 @@ const spicyDares = [
   "Talk like a news anchor for 2 messages.",
   "Send a message complimenting someone in the chat."
 ];
-
----
 
 ```javascript
 const compliments = [
@@ -658,8 +654,6 @@ const compliments = [
   "Your confidence is incredibly sexy.",
   "You have a presence that makes everyone want to get closer."
 ];
-
----
 
 ```javascript
 const qotdQuestions = [
@@ -843,8 +837,6 @@ const qotdQuestions = [
   "What’s your favorite holiday and why?",
   "Do you prefer big parties or small hangouts?"
 ];
-
----
 
 ```javascript
 const roasts = [
