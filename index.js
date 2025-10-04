@@ -576,7 +576,6 @@ const spicyDares = [
   "Send a message complimenting someone in the chat."
 ];
 
-```javascript
 const compliments = [
   "You have great taste in music.",
   "Your energy makes the chat better.",
@@ -655,7 +654,6 @@ const compliments = [
   "You have a presence that makes everyone want to get closer."
 ];
 
-```javascript
 const qotdQuestions = [
   "What's the best movie you've seen recently?",
   "If you could have any superpower, what would it be?",
@@ -838,7 +836,6 @@ const qotdQuestions = [
   "Do you prefer big parties or small hangouts?"
 ];
 
-```javascript
 const roasts = [
   'You bring people joy… by leaving.',
   'You make onions cry out of pity.',
