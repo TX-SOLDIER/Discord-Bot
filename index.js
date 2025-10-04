@@ -3300,10 +3300,6 @@ client.on("messageCreate", async (message) => {
     return;
   }
 
-  // ---- Unknown command fallback ----
-  if (message.content.startsWith(prefix) && command) {
-    message.reply("❌ Unknown command or you do not have permission.");
-  }
 }); // ---- End of messageCreate ----
 
 // ---- Login ----
