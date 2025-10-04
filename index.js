@@ -3243,6 +3243,8 @@ else if (command === 'clearleave') {
     saveLeaveMessages();
     message.reply('✅ Leave message has been cleared for this server.');
 }
+}
+  
 
 // Track how many times data has been saved this session
 let saveCount = 0;
