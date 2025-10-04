@@ -501,7 +501,6 @@ const spicyTruths = [
   "What's a secret you've never told anyone?"
 ];
 
-```javascript
 const spicyDares = [
   "Change your nickname to something silly for 10 minutes.",
   "Type your next 3 messages in ALL CAPS.",
@@ -997,7 +996,7 @@ function handValue(hand) {
 }
 
 function formatHand(hand) {
-  return hand.map(c => c.value + c.suit).join(' ');
+  return hand.map(c => `${c.value}${c.suit}`).join(' ');
 }
 
 // ---- Question of the Day ----
@@ -1024,7 +1023,7 @@ function sendQuestion(channelId) {
 
   const prefix = botData.qotdSettings[channelId]?.everyone ? '@everyone ' : '';
   const question = qotdQuestions[randomIndex];
-  channel.send(prefix + "**❓ Question of the Day:** " + question);
+  channel.send(`${prefix}**❓ Question of the Day:** ${question}`);
   
   logToGlobal(question, channel.guild.name, channel.name);
 }
@@ -1070,8 +1069,8 @@ async function logToGlobal(qotd, serverName, channelName) {
     if (logChannel) {
       const embed = {
         color: 0x0099ff,
-        title: "New QOTD in " + serverName,
-        description: "**Channel:** #" + channelName + "\n**Question:** " + qotd,
+        title: `New QOTD in ${serverName}`,
+        description: `**Channel:** #${channelName}\n**Question:** ${qotd}`,
         timestamp: new Date(),
         footer: { text: 'Logged by QOTD Bot' },
       };
@@ -1109,17 +1108,17 @@ async function engageAntiRaid(guild, alertChannel, author = null) {
             if (channel.isTextBased()) {
                  await channel.permissionOverwrites.edit(guild.roles.everyone, {
                     SendMessages: false
-                }).catch(err => console.error("Failed to lock channel " + channel.name + ":", err));
+                }).catch(err => console.error(`Failed to lock channel ${channel.name}:`, err));
             }
         });
 
         if (author) {
-            await sendLog(guild.id, "`[SECURITY]` **" + author.tag + "** has engaged ANTI-RAID mode.");
+            await sendLog(guild.id, `\`[SECURITY]\` **${author.tag}** has engaged ANTI-RAID mode.`);
             if (alertChannel) {
                 await alertChannel.send("🚨ANTI-RAID PROTOCOL  ENGAGED🚨THIS IS NOT A DRILL. All security measures are live. Unauthorized accounts will be IDENTIFIED, TRACKED and ELIMINATED. Channels are locked, posting is restricted, and verification is mandatory. Attempts to bypass will result in immediate bans and permanent removal from the server. Moderators: Engage intruders.");
             }
         } else {
-             await sendLog(guild.id, "`[SECURITY]` **AUTOMATIC ANTI-RAID** has been engaged due to rapid joins.");
+             await sendLog(guild.id, `\`[SECURITY]\` **AUTOMATIC ANTI-RAID** has been engaged due to rapid joins.`);
             if (alertChannel) {
                 await alertChannel.send("🚨**AUTO-TRIGGER**🚨ANTI-RAID PROTOCOL  ENGAGED🚨THIS IS NOT A DRILL. All security measures are live. Unauthorized accounts will be IDENTIFIED, TRACKED and ELIMINATED. Channels are locked, posting is restricted, and verification is mandatory. Attempts to bypass will result in immediate bans and permanent removal from the server. Moderators: Engage intruders.");
             }
@@ -1155,16 +1154,16 @@ async function disengageAntiRaid(guild, replyChannel) {
                 if (channel && channel.isTextBased()) {
                     await channel.permissionOverwrites.edit(guild.roles.everyone, {
                         SendMessages: perm.sendMessages
-                    }).catch(err => console.error("Failed to restore channel " + channel.name + ":", err));
+                    }).catch(err => console.error(`Failed to restore channel ${channel.name}:`, err));
                 }
             }
         } else {
-            console.warn("[Anti-Raid] No saved permissions found for guild " + guild.id + ". Using default unlock.");
+            console.warn(`[Anti-Raid] No saved permissions found for guild ${guild.id}. Using default unlock.`);
             guild.channels.cache.forEach(async (channel) => {
                 if (channel.isTextBased()) {
                     await channel.permissionOverwrites.edit(guild.roles.everyone, {
                         SendMessages: null
-                    }).catch(err => console.error("Failed to unlock channel " + channel.name + ":", err));
+                    }).catch(err => console.error(`Failed to unlock channel ${channel.name}:`, err));
                 }
             });
         }
