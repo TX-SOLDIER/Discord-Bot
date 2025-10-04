@@ -1,15 +1,9 @@
-// ============================================================================
-// DISCORD BOT - PERSISTENT DATA WITH JSONBIN.IO
-// ============================================================================
-// All 'fs' file system calls have been replaced with JSONBin.io API calls.
-// Data is now persistent and will not be erased on new commits or deployments.
-// ============================================================================
-
 require('dotenv').config();
 const { Client, GatewayIntentBits, PermissionsBitField, EmbedBuilder } = require('discord.js');
 const fetch = require('node-fetch');
+const fs = require('fs');
 const express = require('express');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { GoogleGenerativeAI } = require('@google/generative-ai'); // Gemini AI
 
 const app = express();
 app.get('/', (req, res) => res.send('✅ Bot is running!'));
@@ -29,177 +23,35 @@ const client = new Client({
 // ---- Google Gemini AI Setup ----
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
 
-// ---- JSONBin.io Setup ----
-// Secrets must be set on your hosting platform (e.g., Render)
-const JSONBIN_API_KEY = process.env.JSONBIN_API_KEY;
-const JSONBIN_BIN_ID = process.env.JSONBIN_BIN_ID;
-const JSONBIN_URL = `https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`;
-
-// ---- Central Bot Data Store ----
-// This single object holds all data that needs to persist.
-// It's loaded from JSONBin on startup and saved on changes.
-let botData = {
-    immuneUsers: {},
-    countingData: {},
-    economyData: {},
-    lotteryData: {
-        drawDate: null,
-        winningNumbers: [],
-        entries: {},
-        prizePool: 500000,
-        isActive: false,
-    },
-    storeData: {},
-    playerData: {},
-    activeBattles: {},
-    activeDWGames: {},
-    warnings: {},
-    activeQotdChannels: [], // Stored as an array for JSON
-    qotdSettings: {},
-    welcomeMessages: {},
-    leaveMessages: {},
-    logChannels: {},
-    masterLog: { channelId: null, enabled: false },
-};
-
-// In-memory Set for efficient QOTD channel lookups.
-// This is populated from botData.activeQotdChannels after loading.
-let activeQotdChannels = new Set();
-
-// ---- JSONBin.io Data Functions ----
-// Instead of saving every few seconds, we save only once per hour.
-let dirty = false;
-let saveCount = 0;
-let lastSaveTime = null;
-
-/**
- * Marks botData as changed so it will be saved at the next scheduled save.
- */
-function markDirty() {
-  dirty = true;
-}
-
-/**
- * Saves the current state of botData to JSONBin.io once per hour if dirty.
- */
-async function saveData() {
-  if (!JSONBIN_API_KEY || !JSONBIN_BIN_ID) return;
-  if (!dirty) return; // No changes since last save
-
-  try {
-    const dataToSave = {
-      ...botData,
-      activeQotdChannels: Array.from(activeQotdChannels)
-    };
-
-    const response = await fetch(JSONBIN_URL, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Master-Key': JSONBIN_API_KEY,
-      },
-      body: JSON.stringify(dataToSave),
-    });
-
-    const result = await response.json();
-    if (!response.ok) {
-      throw new Error(`JSONBin API Error: ${result.message || response.statusText}`);
-    }
-
-    console.log(`[DATA] ✅ Hourly save to JSONBin at ${new Date().toLocaleTimeString()}`);
-    dirty = false;
-  } catch (e) {
-    console.error('[DATA] ❌ Failed to save data to JSONBin:', e);
-  }
-}
-
-// Save once per hour if data has changed
-setInterval(saveData, 60 * 60 * 1000);
-
-// Save on shutdown
-process.on("SIGINT", async () => {
-  console.log("💾 Saving data before shutdown...");
-  await saveData();
-  process.exit();
-});
-
-/**
- * Loads the bot's data from JSONBin.io on startup.
- * Called once inside the client.once('ready') event.
- */
-async function loadData() {
-  if (!JSONBIN_API_KEY || !JSONBIN_BIN_ID) {
-    console.error("❌ JSONBin credentials not provided. Bot will run with default, non-persistent data.");
-    return;
-  }
-  
-  try {
-    const response = await fetch(JSONBIN_URL, {
-      method: 'GET',
-      headers: { 'X-Master-Key': JSONBIN_API_KEY },
-    });
-
-    if (response.status === 404) {
-        console.warn("⚠️ Bin not found or empty. Initializing with default data and performing first save.");
-        saveData(); // Save the initial default structure to the new bin
-        return;
-    }
-
-    if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Failed to fetch data from JSONBin. Status: ${response.status}. Body: ${errorText}`);
-    }
-
-    const loaded = await response.json();
-    
-    // Merge loaded data with defaults. This prevents errors if new properties are
-    // added to the bot's code but don't exist in the saved bin yet.
-    if (loaded.record) {
-        botData = { ...botData, ...loaded.record };
-    }
-
-    // Convert the loaded array of QOTD channels back into a Set for fast lookups.
-    activeQotdChannels = new Set(botData.activeQotdChannels || []);
-
-    console.log("[DATA] ✅ Data successfully loaded from JSONBin.");
-  } catch (e) {
-    console.error('[DATA] ❌ CRITICAL error loading data from JSONBin. Bot will use default data. Error:', e);
-  }
-}
-
-// ---- Consolidated Save Functions ----
-// Now they just mark data dirty instead of saving immediately.
-const saveImmunity = markDirty;
-const saveCountingData = markDirty;
-const saveEconomyData = markDirty;
-const saveLotteryData = markDirty;
-const saveStoreData = markDirty;
-const savePlayerData = markDirty;
-const saveBattles = markDirty;
-const saveDWBattles = markDirty;
-const saveWarnings = markDirty;
-const saveQotdState = markDirty;
-const saveQotdSettings = markDirty;
-const saveWelcomeMessages = markDirty;
-const saveLeaveMessages = markDirty;
-const saveLogChannels = markDirty;
-const saveMasterLog = markDirty;
-
 // ---- Immunity System ----
 const OWNER_ID = '782155864134909952';
 const IMMUNITY_RANKS = ['2LT', '1LT', 'CPT', 'MAJ', 'LTC', 'COL', 'BG', 'MG', 'LTG', 'GEN'];
+const immunityFile = './immunity.json';
+let immuneUsers = {};
+
+if (fs.existsSync(immunityFile)) {
+  immuneUsers = JSON.parse(fs.readFileSync(immunityFile, 'utf8'));
+}
+
+function saveImmunity() {
+  fs.writeFileSync(immunityFile, JSON.stringify(immuneUsers, null, 2));
+}
 
 function isImmune(user) {
+  // The owner is always immune.
   if (user.id === OWNER_ID) return true;
-  return !!botData.immuneUsers[user.id];
+  // Check if the user is in the immunity list.
+  return !!immuneUsers[user.id];
 }
 
 // ---- GIVEAWAY CODE: Time Parser ----
 function parseDuration(str) {
   const match = str.match(/^(\d+)(s|m|h|d)$/i);
   if (!match) return null;
+
   const num = parseInt(match[1]);
   const unit = match[2].toLowerCase();
+
   switch (unit) {
     case 's': return num * 1000;
     case 'm': return num * 60 * 1000;
@@ -209,47 +61,90 @@ function parseDuration(str) {
   }
 }
 
-// ---- In-Memory Data (Not Persistent) ----
+// ---- Data ----
 const hauntedChannels = new Set();
 const hauntIntervals = new Map();
+
+// ---- ANTI-RAID DATA ----
 const antiRaidActive = new Set();
 const originalVerificationLevels = new Map();
-const originalChannelPermissions = new Map();
+const originalChannelPermissions = new Map(); // [ADD THIS LINE]
 const joinTimestamps = new Map();
-const activeFlipChallenges = new Map();
-const higherLowerGames = new Map();
-const guessNumberGames = new Map();
-const activeRouletteGames = new Map();
-const activeRRGames = new Map();
-const rrCooldowns = new Map();
-const RR_COOLDOWN_TIME = 30000;
-const messageCooldowns = new Map();
-const commandCooldowns = new Map();
-const MESSAGE_COOLDOWN = 60 * 1000;
-const COMMAND_COOLDOWN = 30 * 1000;
-const blackjackGames = new Map();
 
-// ---- Lottery System ----
+
+// ---- COUNTING GAME DATA ----
+const countingFile = './counting.json';
+let countingData = {};
+if (fs.existsSync(countingFile)) {
+    try {
+        countingData = JSON.parse(fs.readFileSync(countingFile, 'utf8'));
+    } catch (e) {
+        console.error("Error parsing counting.json:", e);
+    }
+}
+function saveCountingData() {
+    fs.writeFileSync(countingFile, JSON.stringify(countingData, null, 2));
+}
+// New map to store active coin flip challenges (to prevent conflicts)
+const activeFlipChallenges = new Map();
+
+// ---- ECONOMY/CURRENCY DATA ----
+const economyFile = './economy.json';
+let economyData = {};
+
+// ---- NEW GAME GLOBALS & LOTTERY DATA ----
+
+// Higher or Lower
+const higherLowerGames = new Map(); // { guildId: { messageId: '...', number: 50, attempts: 0, player: '...' } }
+
+// Guess the Number
+const guessNumberGames = new Map(); // { channelId: { number: 50, player: '...' } }
+
+// Lottery System
+const lotteryFile = './lottery.json';
+let lotteryData = {
+    drawDate: null,
+    winningNumbers: [],
+    entries: {}, // { guildId: { userId: [numbers] } }
+    prizePool: 500000,
+    isActive: false,
+};
+
+if (fs.existsSync(lotteryFile)) {
+    lotteryData = JSON.parse(fs.readFileSync(lotteryFile, 'utf8'));
+}
+
+function saveLotteryData() {
+    fs.writeFileSync(lotteryFile, JSON.stringify(lotteryData, null, 2));
+}
+
+// Function to generate 7 unique random numbers from 1 to 99
 function generateWinningNumbers() {
     const numbers = new Set();
     while (numbers.size < 7) {
+        // Numbers from 1 to 99
         numbers.add(Math.floor(Math.random() * 99) + 1);
     }
     return Array.from(numbers).sort((a, b) => a - b);
 }
 
+// Function to run the weekly lottery draw
 async function runLotteryDraw() {
-    if (!botData.lotteryData.isActive || (botData.lotteryData.drawDate && new Date(botData.lotteryData.drawDate) > new Date())) {
-        return;
+    // 1. Check if the lottery is active and due
+    if (!lotteryData.isActive || (lotteryData.drawDate && new Date(lotteryData.drawDate) > new Date())) {
+        return; // Not due yet
     }
     
-    botData.lotteryData.winningNumbers = generateWinningNumbers();
+    // 2. Generate winning numbers
+    lotteryData.winningNumbers = generateWinningNumbers();
     
+    // 3. Process entries and find the winner
     let jackpotWinner = null;
     
-    for (const [guildId, entries] of Object.entries(botData.lotteryData.entries)) {
+    for (const [guildId, entries] of Object.entries(lotteryData.entries)) {
         for (const [userId, userNumbers] of Object.entries(entries)) {
-            const matchCount = userNumbers.filter(num => botData.lotteryData.winningNumbers.includes(num)).length;
+            const matchCount = userNumbers.filter(num => lotteryData.winningNumbers.includes(num)).length;
+
             if (matchCount === 7) {
                 jackpotWinner = { userId, guildId, userNumbers };
                 break;
@@ -258,63 +153,190 @@ async function runLotteryDraw() {
         if (jackpotWinner) break;
     }
 
-    for (const guildId of Object.keys(botData.lotteryData.entries)) {
+    // 4. Announce results in all Guilds that had entries
+    for (const guildId of Object.keys(lotteryData.entries)) {
         const guild = client.guilds.cache.get(guildId);
         if (!guild) continue;
+
+        // Try to find a channel to send the announcement
         const channel = guild.channels.cache.find(c => c.name.includes('lottery') || c.type === 0); 
         if (!channel) continue;
 
         const resultsEmbed = new EmbedBuilder()
             .setTitle('💰 Weekly Lottery Draw Results!')
-            .setColor(0xFFA500)
-            .addFields({ name: '✨ Winning Numbers', value: `\`${botData.lotteryData.winningNumbers.join(', ')}\``, inline: false })
-            .setImage('https://i.imgur.com/rN99D4p.png');
+            .setColor(0xFFA500) // Orange
+            .addFields(
+                { name: '✨ Winning Numbers', value: `\`${lotteryData.winningNumbers.join(', ')}\``, inline: false }
+            )
+            .setImage('https://i.imgur.com/rN99D4p.png'); // Placeholder
 
         if (jackpotWinner && jackpotWinner.guildId === guildId) {
+            // Jackpot announcement
             const winnerId = jackpotWinner.userId;
-            const winnings = botData.lotteryData.prizePool;
+            const winnings = lotteryData.prizePool;
             
             updateBalance(winnerId, winnings);
             saveEconomyData();
 
             resultsEmbed.setDescription(`🎉 **JACKPOT WINNER FOUND!** 🎉\n<@${winnerId}> guessed all 7 numbers and wins **${winnings} Gold Coins**!`)
-                         .setColor(0xFFD700)
+                         .setColor(0xFFD700) // Gold
                          .addFields({ name: 'Winning Ticket', value: `\`${jackpotWinner.userNumbers.join(', ')}\``, inline: false });
 
-            botData.lotteryData.drawDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-            botData.lotteryData.entries = {};
+            // Reset for next week
+            lotteryData.drawDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+            lotteryData.entries = {};
             
         } else {
             resultsEmbed.setDescription('Sorry, no jackpot winner this week. The prize pool rolls over!')
-                         .addFields({ name: 'Next Draw', value: `<t:${Math.floor(new Date(botData.lotteryData.drawDate).getTime() / 1000)}:R>` });
+                         .addFields({ name: 'Next Draw', value: `<t:${Math.floor(new Date(lotteryData.drawDate).getTime() / 1000)}:R>` });
         }
         
         await channel.send({ embeds: [resultsEmbed] });
     }
     
+    // 5. If no winner, roll the draw date over and save
     if (!jackpotWinner) {
-        botData.lotteryData.drawDate = new Date(new Date(botData.lotteryData.drawDate).getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
+        lotteryData.drawDate = new Date(new Date(lotteryData.drawDate).getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
     }
     saveLotteryData();
 }
 
-// ---- Economy & Player Data Functions ----
+// Set up the lottery interval check
+client.on('ready', () => {
+    // ... existing ready code ...
+    setInterval(runLotteryDraw, 600000); // Check every 10 minutes (600,000 ms)
+    console.log(`✅ Lottery check started.`);
+
+    // Initialize the first draw date if not set
+    if (!lotteryData.drawDate) {
+        // Set draw date for next Sunday at 10 AM (adjust time zone if needed)
+        const nextSunday = new Date();
+        nextSunday.setDate(nextSunday.getDate() + (7 - nextSunday.getDay()) % 7);
+        nextSunday.setHours(10, 0, 0, 0); 
+        lotteryData.drawDate = nextSunday.toISOString();
+        lotteryData.isActive = true;
+        saveLotteryData();
+        console.log(`✅ Initial lottery draw date set for: ${nextSunday.toLocaleString()}`);
+    }
+});
+
+// ---- GAME DATA (Add these near other Maps/Objects) ----
+const rouletteColors = {
+    0: { color: 'green', multiplier: 35 }, // Single zero
+    // For simplicity, we will only use single 0. Double zero (00) is often omitted in basic bots.
+};
+
+const activeRouletteGames = new Map();
+const activeRRGames = new Map();
+const rrCooldowns = new Map(); // Cooldown to prevent spamming the Russian Roulette command
+const RR_COOLDOWN_TIME = 30000; // 30 seconds cooldown
+
+// Cooldowns to prevent spam earning
+const messageCooldowns = new Map();
+const commandCooldowns = new Map();
+const MESSAGE_COOLDOWN = 60 * 1000; // 60 seconds
+const COMMAND_COOLDOWN = 30 * 1000; // 30 seconds
+
+function loadEconomyData() {
+    if (fs.existsSync(economyFile)) {
+        try {
+            economyData = JSON.parse(fs.readFileSync(economyFile, 'utf8'));
+        } catch (e) {
+            console.error("Error parsing economy.json:", e);
+        }
+    }
+}
+
+function saveEconomyData() {
+    fs.writeFileSync(economyFile, JSON.stringify(economyData, null, 2));
+}
+
 function getBalance(userId) {
-    return botData.economyData[userId] || 0;
+    return economyData[userId] || 0;
 }
 
 function updateBalance(userId, amount) {
     const currentBalance = getBalance(userId);
-    botData.economyData[userId] = Math.max(0, currentBalance + amount);
-    return botData.economyData[userId];
+    economyData[userId] = Math.max(0, currentBalance + amount); // Ensure balance doesn't go below 0
+    return economyData[userId];
 }
 
+
+// ---- [NEW] STORE/PLAYER DATA ----
+const storeFile = './store.json';
+const playersFile = './players.json';
+const battlesFile = './battles.json';
+const dwBattlesFile = './dw_battles.json'; // New file for Deadliest Warrior games
+let storeData = {};
+let playerData = {};
+let activeBattles = {};
+let activeDWGames = {}; // New object for turn-based games
+
+function loadStoreData() {
+    if (fs.existsSync(storeFile)) {
+        try {
+            storeData = JSON.parse(fs.readFileSync(storeFile, 'utf8'));
+        } catch (e) {
+            console.error("Error parsing store.json:", e);
+        }
+    }
+}
+
+function saveStoreData() {
+    fs.writeFileSync(storeFile, JSON.stringify(storeData, null, 2));
+}
+
+function loadPlayerData() {
+    if (fs.existsSync(playersFile)) {
+        try {
+            playerData = JSON.parse(fs.readFileSync(playersFile, 'utf8'));
+        } catch (e) {
+            console.error("Error parsing players.json:", e);
+        }
+    }
+}
+
+function savePlayerData() {
+    fs.writeFileSync(playersFile, JSON.stringify(playerData, null, 2));
+}
+
+function loadBattles() {
+    if (fs.existsSync(battlesFile)) {
+        try {
+            activeBattles = JSON.parse(fs.readFileSync(battlesFile, 'utf8'));
+        } catch (e) {
+            console.error("Error parsing battles.json:", e);
+        }
+    }
+}
+
+function saveBattles() {
+    fs.writeFileSync(battlesFile, JSON.stringify(activeBattles, null, 2));
+}
+
+// ---- [NEW] DEADLIEST WARRIOR BATTLE DATA ----
+function loadDWBattles() {
+    if (fs.existsSync(dwBattlesFile)) {
+        try {
+            activeDWGames = JSON.parse(fs.readFileSync(dwBattlesFile, 'utf8'));
+        } catch (e) {
+            console.error("Error parsing dw_battles.json:", e);
+        }
+    }
+}
+
+function saveDWBattles() {
+    fs.writeFileSync(dwBattlesFile, JSON.stringify(activeDWGames, null, 2));
+}
+
+
+// Helper to get or initialize a player's data
 function getPlayerData(userId) {
-    if (!botData.playerData[userId]) {
-        botData.playerData[userId] = {
+    if (!playerData[userId]) {
+        playerData[userId] = {
             health: 100,
             maxHealth: 100,
-            inventory: [],
+            inventory: [], // Array of item IDs
             loadout: {
                 weapon: null,
                 armor: null,
@@ -322,13 +344,16 @@ function getPlayerData(userId) {
             }
         };
     }
-    return JSON.parse(JSON.stringify(botData.playerData[userId]));
+    // Return a deep copy to avoid modifying the original object directly in battles
+    return JSON.parse(JSON.stringify(playerData[userId]));
 }
 
+// Helper to find an item in the store by its ID
 function findItem(itemId) {
-    for (const category in botData.storeData) {
-        if (botData.storeData[category][itemId]) {
-            const item = { ...botData.storeData[category][itemId], id: itemId, category };
+    for (const category in storeData) {
+        if (storeData[category][itemId]) {
+            // Return a copy of the item with its ID and category
+            const item = { ...storeData[category][itemId], id: itemId, category };
             if (category === 'modern_weapons' || category === 'medieval_weapons') {
                 item.type = 'weapon';
             } else if (category === 'armor') {
@@ -345,7 +370,7 @@ function findItem(itemId) {
 }
 
 function initializeStore() {
-    botData.storeData = {
+    storeData = {
         modern_weapons: {
             glock19: { name: "Glock 19", price: 500, damage: 25, missChance: 10, critChance: 15, headshotChance: 8, description: "Reliable 9mm pistol" },
             m4a1: { name: "M4A1", price: 1200, damage: 35, missChance: 8, critChance: 18, headshotChance: 12, description: "Standard military rifle" },
@@ -426,14 +451,24 @@ function initializeStore() {
     saveStoreData();
 }
 
+
+// Load all data on startup
+loadEconomyData();
+loadStoreData();
+if (Object.keys(storeData).length === 0) {
+    initializeStore();
+}
+loadPlayerData();
+loadBattles();
+loadDWBattles(); // Load new game data
+
+
 const spookyMessages = [
   '👻 Boo...', '💀 I see you...', '🩸 The shadows are watching...',
   '🔪 Behind you...', '🕷️ Something crawled across your screen...',
 ];
 
-// ============================================================================
-// DATA ARRAYS - ALL CONTENT IN ONE PLACE
-// ============================================================================
+// ---- Truth Questions ----
 const spicyTruths = [
   "What’s your most embarrassing moment?",
   "Who was your first crush?",
@@ -511,6 +546,7 @@ const spicyTruths = [
   "What's a secret you've never told anyone?"
 ];
 
+// ---- Spicy Dares ----
 const spicyDares = [
   "Change your nickname to something silly for 10 minutes.",
   "Type your next 3 messages in ALL CAPS.",
@@ -585,6 +621,7 @@ const spicyDares = [
   "Send a message complimenting someone in the chat."
 ];
 
+// ---- Compliments ----
 const compliments = [
   "You have great taste in music.",
   "Your energy makes the chat better.",
@@ -663,323 +700,21 @@ const compliments = [
   "You have a presence that makes everyone want to get closer."
 ];
 
-const qotdQuestions = [
-  "What's the best movie you've seen recently?",
-  "If you could have any superpower, what would it be?",
-  "What's your favorite food and why?",
-  "What's a hobby you've always wanted to try?",
-  "What's the most beautiful place you've ever visited?",
-  "What's a book you think everyone should read?",
-  "What's your go-to comfort meal?",
-  "What's a skill you'd like to learn?",
-  "What's the funniest thing that's happened to you this week?",
-  "What's your favorite season and why?",
-  "What's a small thing that makes you happy?",
-  "If you could travel anywhere, where would you go?",
-  "What's your all-time favorite song?",
-  "What’s one goal you’re working toward right now?",
-  "What’s the best compliment you’ve ever received?",
-  "What’s a random act of kindness someone did for you?",
-  "What’s the most adventurous thing you’ve ever done?",
-  "What’s your go-to karaoke song?",
-  "What's the first video game you ever played?",
-  "If you could live in any video game world, which would it be?",
-  "Which video game character do you relate to the most?",
-  "What's your all-time favorite multiplayer game?",
-  "If you could erase your memory of one game to play it again fresh, which game would you choose?",
-  "What's the most rage-inducing game you've ever played?",
-  "Do you prefer single-player or multiplayer games?",
-  "What's the most underrated game you've ever played?",
-  "What game had the best storyline in your opinion?",
-  "What game do you think deserves a remake?",
-  "What’s your favorite gaming console of all time?",
-  "If you could only play one game for the rest of your life, which would it be?",
-  "Who’s your favorite video game villain?",
-  "What’s your proudest gaming achievement?",
-  "Do you prefer story-driven games or competitive ones?",
-  "What’s a game you love that most people haven’t heard of?",
-  "Which game soundtrack is your favorite?",
-  "What’s the funniest bug/glitch you’ve seen in a game?",
-  "Would you rather be able to fly or be invisible?",
-  "Would you rather always know when someone is lying or always get away with lying?",
-  "Would you rather fight one horse-sized duck or 100 duck-sized horses?",
-  "Would you rather live in a world without music or a world without video games?",
-  "Would you rather be rich but lonely, or poor but surrounded by amazing friends?",
-  "Would you rather explore space or explore the deep ocean?",
-  "Would you rather teleport anywhere instantly or time travel once a year?",
-  "Would you rather never feel pain or never feel fear?",
-  "Would you rather lose the ability to read or lose the ability to speak?",
-  "Would you rather have unlimited free travel or never need to sleep?",
-  "Would you rather live forever at age 25 or live to 100 with a healthy life?",
-  "Would you rather be able to pause time or rewind time?",
-  "Would you rather always win arguments or always win games?",
-  "Would you rather live without the internet or live without AC/heating?",
-  "Would you rather be famous but hated or unknown but loved by everyone you meet?",
-  "Would you rather know the exact date of your death or the exact cause of your death?",
-  "Would you rather lose all your past memories or never be able to make new ones?",
-  "Would you rather save one loved one or 100 strangers?",
-  "Would you rather always know the truth but never be believed, or always believe lies?",
-  "Would you rather have the power to change the past or see the future but not change it?",
-  "Would you rather live 1,000 years in perfect health or live a normal lifespan but be famous forever?",
-  "Would you rather be feared by all or loved by none?",
-  "Would you rather have the ability to read minds but only bad thoughts, or hear only good lies?",
-  "Would you rather never feel happiness again or never feel sadness again (but also never truly appreciate happiness)?",
-  "Would you rather forget everyone else or have everyone else forget you?",
-  "Would you rather live in a simulation you control or reality you can’t control?",
-  "Would you rather save the world but nobody knows it was you, or get credit but not actually do it?",
-  "Would you rather be trapped in your best day forever or move forward with no good days left?",
-  "Would you rather never dream again or never be awake again?",
-  "Would you rather lose your sight or lose your hearing?",
-  "Would you rather never be able to speak again or never be able to think privately again?",
-  "Would you rather lose your most cherished possession or lose your most cherished memory?",
-  "Would you rather everyone knew your darkest secret or forget the best thing you ever did?",
-  "Would you rather die in 10 years with no regrets, or live 100 years with tons of regrets?",
-  "Would you rather be remembered forever for something bad or forgotten completely?",
-  "Would you rather always know the ending to every story or never know the ending to your own?",
-  "Would you rather betray your best friend or let your best friend betray you?",
-  "Would you rather carry the guilt of one terrible mistake forever or forget it but repeat it again?",
-  "Would you rather live in total safety but extreme boredom, or in danger but constant excitement?",
-  "Would you rather be the smartest person alive but hated, or the dumbest but loved?",
-  "Would you rather always lose everything you own once a year, or never be able to replace anything you own?",
-  "Would you rather find true love but die in 5 years, or never find it and live long?",
-  "Would you rather save your own life or sacrifice yourself to save 10 others?",
-  "Would you rather never be able to lie or never be able to tell the truth?",
-  "Would you rather live in poverty with peace or live rich but in constant war?",
-  "Would you rather forget how to read or forget how to write?",
-  "Would you rather have unlimited money but never be happy, or be poor but always content?",
-  "Would you rather always feel intense pain but never get sick, or never feel pain but always be sick?",
-  "Would you rather never be able to sleep again or never be able to eat again?",
-  "Would you rather know everyone’s future but not your own, or your own but not anyone else’s?",
-  "Would you rather lose your sense of time or your sense of reality?",
-  "Would you rather never be able to forgive or never be forgiven?",
-  "Would you rather be trapped alone in space or trapped with 100 strangers in a bunker?",
-  "Would you rather live forever but everyone you love dies normally, or die normally but everyone you love lives forever?",
-  "Would you rather always feel like you’re being watched or always be completely alone?",
-  "Would you rather change one moment in your past and risk changing everything, or never touch the past at all?",
-  "Would you rather be able to cure any disease but die young, or live long but never help anyone?",
-  "Would you rather lose all technology or lose all human connection?",
-  "Would you rather never be able to learn new things or forget one thing every day?",
-  "Would you rather know the ultimate secret of the universe but never be able to share it, or never know it at all?",
-  "Would you rather have a perfect body but an average mind, or a genius mind but weak body?",
-  "Would you rather never be able to love or never be able to be loved?",
-  "Would you rather live in a world with no crime but no freedom, or total freedom but constant crime?",
-  "Would you rather be invisible but never able to interact, or visible but ignored by everyone?",
-  "Would you rather watch your worst memory on repeat forever or never remember anything again?",
-  "Would you rather make one person happy forever or make millions happy for just a day?",
-  "If you could have any superpower for just 24 hours, what would you pick?",
-  "If you had to give up one of your five senses, which would it be?",
-  "If you were a superhero, what would your hero name be?",
-  "If you could shapeshift into any animal, which would you choose?",
-  "Would you want the ability to read minds if it meant you couldn’t turn it off?",
-  "If you had a time machine, would you go to the past or the future?",
-  "Would you rather be able to breathe underwater or survive in space?",
-  "If you could instantly master one skill, what would it be?",
-  "If you could snap your fingers and change one thing about the world, what would it be?",
-  "If you had a superpower but it only worked once a week, what would it be?",
-  "If you could create your own video game power-up, what would it do?",
-  "If you could talk to animals, what’s the first thing you’d ask them?",
-  "If you could be immortal but couldn’t tell anyone, would you do it?",
-  "If you could swap lives with a fictional character, who would you pick?",
-  "If you could live in any fantasy universe, which one would it be?",
-  "What's the weirdest food combination you secretly enjoy?",
-  "What's a song that instantly puts you in a good mood?",
-  "If you could swap lives with someone for a day, who would it be?",
-  "What's the best advice you've ever received?",
-  "What's one conspiracy theory you secretly think could be true?",
-  "What's something small that instantly annoys you?",
-  "What's a childhood memory that still makes you laugh?",
-  "If you could meet any historical figure, who would it be?",
-  "What's the most random fact you know?",
-  "What's one thing you'd change about the world if you could?",
-  "What's a guilty pleasure show or game you enjoy?",
-  "If aliens visited Earth tomorrow, what would you show them first?",
-  "What's the funniest meme you’ve seen recently?",
-  "What's the scariest movie or game you’ve played?",
-  "What's the most useless talent you have?",
-  "What's something embarrassing you did but still laugh about?",
-  "If you could instantly learn a language, which would it be?",
-  "What’s your dream vacation spot?",
-  "What’s one invention you wish existed?",
-  "What’s the most trouble you’ve ever gotten into?",
-  "What’s your favorite childhood cartoon?",
-  "If money didn’t matter, what job would you do?",
-  "What's the best concert you've ever been to?",
-  "Who's your favorite music artist or band?",
-  "What's a movie you can watch over and over again?",
-  "What’s your favorite streaming show right now?",
-  "If you could bring back any TV show, what would it be?",
-  "What’s your all-time favorite meme?",
-  "If you could hang out with any celebrity for a day, who would it be?",
-  "What’s your guilty pleasure song?",
-  "Which actor would play you in a movie about your life?",
-  "If you could make a cameo in any movie or show, which one would it be?",
-  "Do you prefer sweet or salty snacks?",
-  "What’s the weirdest thing you’ve ever eaten?",
-  "If you could only eat one meal for the rest of your life, what would it be?",
-  "What’s your favorite fast food place?",
-  "Would you rather never eat pizza again or never eat burgers again?",
-  "What’s your favorite type of dessert?",
-  "Do you prefer coffee, tea, or neither?",
-  "What’s the spiciest thing you’ve ever eaten?",
-  "If you opened a restaurant, what would you serve?",
-  "What’s a food you hated as a kid but love now?",
-  "What’s your survival plan for a zombie apocalypse?",
-  "If you were stranded on a desert island, what three things would you bring?",
-  "If you won the lottery tomorrow, what’s the first thing you’d do?",
-  "If you could time travel but only once, when/where would you go?",
-  "If you woke up invisible, what’s the first thing you’d do?",
-  "If you had to live in a different country, where would you move?",
-  "If you could swap lives with a character from a book, who would it be?",
-  "If you had to give up the internet or TV forever, which would you choose?",
-  "What would you do if you were the last person on Earth?",
-  "If you could live in any time period, past or future, which would you choose?",
-  "If you were an animal, what would you be and why?",
-  "What’s your weirdest habit?",
-  "What’s your biggest pet peeve?",
-  "What’s something you’ve done that you’re really proud of?",
-  "What’s your love language?",
-  "Are you more of a morning person or a night owl?",
-  "What’s your spirit animal?",
-  "What’s the first thing you do when you wake up?",
-  "What’s your favorite holiday and why?",
-  "Do you prefer big parties or small hangouts?"
-];
+// ---- Persistent Warnings ----
+const warningsFile = './warnings.json';
+let warnings = {};
 
-const roasts = [
-  'You bring people joy… by leaving.',
-  'You make onions cry out of pity.',
-  'You look like a before picture.',
-  'Bro thinks he is the main character, but ur not even in the opening credits.',
-  'You have got more filler than a Naruto flashback.',
-  'You talk big, but your aura screams background NPC.',
-  'Ur the type of villain who gets defeated in one episode just to hype the real boss.',
-  'U aim like a stormtrooper on low sensitivity.',
-  'Youre basically the tutorial boss—easy, forgettable, and only there so others can learn the game.',
-  'You die faster than my Wi-Fi when I need it most.',
-  'You camp harder than a free-to-play Fortnite kid with no skins.',
-  'Your KD ratio is a cry for help.',
-  'Youve got more missed messages than actual friends.',
-  'Your mic quality sounds like youre calling in from the Shadow Realm.',
-  'Even Google cant search up who asked.',
-  'Your comebacks load slower than Roblox on a school Chromebook.',
-  'Respawn and try again.',
-  'Alt+F4 your personality.',
-  'Lag is your only excuse.',
-  'Fuck you.',
-  'Game over. Insert skill to continue.',
-  'Your secrets are safe with me. I never listen anyway.',
-  'You have something on your face… oh wait, that’s just your face.',
-  'You bring everyone down to your IQ level, and then still lose.',
-  'You’re proof that even evolution makes mistakes.',
-  'You have something most people don’t: a personality no one asked for.',
-  'You’re like a software bug—annoying, pointless, and impossible to remove.',
-  'You’re as useless as a white crayon.',
-  'You bring people closer… to the exit.',
-  'You’re like a phone with no signal—nothing but dead weight.',
-  'You’re proof that not everyone deserves participation trophies.',
-  'You have something in common with a cloud: when you disappear, it’s finally nice outside.',
-  'You’re the human version of a headache.',
-  'You’re like Wi-Fi with one bar—barely functioning and always frustrating.',
-  'You’re proof that birth certificates can be returned.',
-  'You bring disappointment like it’s a full-time job.',
-  'You’re like expired milk—bad smell, worse taste, and no use.',
-  'You bring the kind of energy that makes batteries give up.',
-  'You’re like a broken pencil—pointless, messy, and not worth the effort.',
-  'You’re proof that intelligence skips generations.',
-  'You’re like an alarm clock that doesn’t go off—completely unreliable.',
-  'You bring people together… to laugh at you.',
-  'You’re like dial-up internet—annoying noises and zero speed.',
-  'You’re proof that natural selection sometimes gets lazy.',
-  'You’re like the flu—nobody wants you, and you make everyone feel worse.',
-  'You’re like a video game tutorial—unskippable and hated.',
-  'You bring the vibe of a Monday morning.',
-  'You’re like a printer—always jammed, loud, and nobody misses you when you’re gone.',
-  'You’re proof that not all babies are blessings.',
-  'You’re like an expired coupon—useless and embarrassing to use.',
-  'You’re like a popup ad—loud, desperate, and ignored instantly.',
-  'You’re proof that common sense isn’t common.',
-  'You’re like a math problem with no answer—pointless and irritating.',
-  'You bring nothing to the table but crumbs.',
-  'You’re like a mosquito—small, annoying, and everyone wants to slap you.',
-  'You’re proof that mistakes can walk and talk.',
-  'You’re like a virus—unwanted, contagious, and hard to get rid of.',
-  'You’re like a broken light bulb—dim, fragile, and useless in the dark.',
-  'You’re like the bottom of the barrel—literally what’s left over.',
-  'You’re proof that the gene pool has a shallow end.',
-  'You’re like a bad haircut—embarrassing and hard to ignore.',
-  'You’re like an alarm set for PM instead of AM—completely useless when needed.',
-  'You’re proof that practice doesn’t always make perfect.',
-  'You’re like diet water—fake and pointless.',
-  'You’re the reason warning labels exist.',
-  'You’re like a cloud full of hot air—loud and empty.',
-  'You’re proof that not every story has a happy ending.',
-  'You’re living proof that even trash gets recycled sometimes.',
-  'You’re like a software glitch—nobody asked for you, and everyone hates dealing with you.',
-  'You have two brain cells, and they’re both fighting for third place.',
-  'You’re like a cloud of smoke—bad for everyone around you and gone with a breeze.',
-  'You bring the IQ of the server down just by typing.',
-  'You look like a failed character creation screen.',
-  'You’re like an unpaid bill—everyone avoids you.',
-  'You’re like expired medicine—worthless and possibly dangerous.',
-  'You’re like a parking ticket—unwanted and makes everyone angry.',
-  'You’re living proof that birth control should be free.',
-  'You’re like a broken condom—an accident that nobody wanted.',
-  'You’re like a test nobody studied for—confusing, unwanted, and stressful.',
-  'You’re like a clown without makeup—still a clown.',
-  'You’re the human equivalent of a speed bump—pointless and irritating.',
-  'You’re like a smoke detector with low battery—annoying, loud, and useless.',
-  'You’re like a sequel nobody asked for—worse than the original.',
-  'You’re like a knockoff brand—cheap, fake, and disappointing.',
-  'You’re like a puzzle with missing pieces—frustrating and incomplete.',
-  'You’re proof that not every cry for attention deserves a reply.',
-  'You’re like malware—slow, annoying, and nobody wants you installed.',
-  'You’re like the Titanic—loud, overhyped, and destined to sink.',
-  'You’re like fast food—cheap, greasy, and makes everyone feel sick afterwards.',
-  'You’re like an error message nobody can fix.',
-  'You’re like roadkill—unpleasant to look at and better ignored.',
-  'I’m like a screen crack—ugly, distracting, and makes everything worse.',
-  'You’re like wet socks—disgusting and uncomfortable to be around.',
-  'You’re like a bad tattoo—permanent regret.',
-  'You’re like spoiled meat—bad smell, bad taste, and dangerous to consume.',
-  'You’re like a GPS with no signal—lost and completely useless.',
-  'You’re like homework—nobody wants you, and you ruin free time.',
-  'You’re like mold—grows where it’s not wanted and stinks up the place.',
-  'You’re like an unpaid intern—doing nothing, but somehow still in the way.',
-  'You’re like a prison sentence—nobody wants to deal with you and time feels longer when they do.',
-  'You’re like chewing tinfoil—unpleasant and painful.',
-  'You’re like a scratch on a CD—annoying, repetitive, and ruins everything.',
-  'You’re like a splinter—small but makes everyone hate you.',
-  'You’re like spam calls—relentless, irritating, and better blocked.',
-  'You’re like bad Wi-Fi—every interaction with you is frustrating.',
-  'You’re like a nightmare—nobody wants you, and everyone is relieved when you’re gone.',
-  'You’re like a side quest nobody cares about.',
-  'You’re like a pothole—unexpected, annoying, and ruins the ride.',
-  'You’re like burnt toast—useless and leaves a bad taste.',
-  'You’re like background noise—distracting and unwanted.',
-  'You’re like a rumor—worthless and spreads too easily.',
-  'You’re like a scam call—persistent, fake, and nobody falls for you.',
-  'You’re like rotten fruit—ugly on the outside and worse on the inside.',
-  'You’re like a bad driver—dangerous, clueless, and always in the way.',
-  'You’re like a horror movie sequel—predictable, cheap, and nobody asked for it.',
-  'You’re like sand in shoes—irritating and impossible to get rid of.',
-  'You’re like a bad memory—always there and never wanted.',
-  'You’re proof that dumb fucks can still learn to type.',
-  'You bring the same energy as a broken condom, useless shit.',
-  'You’re like Wi-Fi in hell—slow as fuck and painful to deal with.',
-  'You’re the human version of dog shit—everyone avoids you.',
-  'You’ve got two brain cells left, and one of them is on fucking break.',
-  'You’re like a clown, but somehow less funny and more pathetic as fuck.',
-  'You’re a walking “fuck this” moment.',
-  'You’re like spam mail—annoying as fuck and instantly deleted.',
-  'You’re the kind of idiot who could fuck up a free lunch.',
-  'You’re proof that evolution sometimes takes a giant fucking step backward.'
-];
+if (fs.existsSync(warningsFile)) {
+  warnings = JSON.parse(fs.readFileSync(warningsFile, 'utf8'));
+}
 
-// ============================================================================
-// GAME LOGIC & FUNCTIONALITY
-// ============================================================================
+function saveWarnings() {
+  fs.writeFileSync(warningsFile, JSON.stringify(warnings, null, 2));
+}
 
 // ---- Blackjack Game ----
+const blackjackGames = new Map();
+
 function drawCard() {
   const suits = ['♠️', '♥️', '♦️', '♣️'];
   const values = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
@@ -1010,34 +745,247 @@ function formatHand(hand) {
 }
 
 // ---- Question of the Day ----
-const qotdIntervals = new Map();
-let sentQuestions = {};
+const qotdQuestions = [
+    "What's the best movie you've seen recently?",
+    "If you could have any superpower, what would it be?",
+    "What's your favorite food and why?",
+    "What's a hobby you've always wanted to try?",
+    "What's the most beautiful place you've ever visited?",
+    "What's a book you think everyone should read?",
+    "What's your go-to comfort meal?",
+    "What's a skill you'd like to learn?",
+    "What's the funniest thing that's happened to you this week?",
+    "What's your favorite season and why?",
+    "What's a small thing that makes you happy?",
+    "If you could travel anywhere, where would you go?",
+    "What's your all-time favorite song?",
+    "What’s one goal you’re working toward right now?",
+    "What’s the best compliment you’ve ever received?",
+    "What’s a random act of kindness someone did for you?",
+    "What’s the most adventurous thing you’ve ever done?",
+    "What’s your go-to karaoke song?",
+    "What's the first video game you ever played?",
+    "If you could live in any video game world, which would it be?",
+    "Which video game character do you relate to the most?",
+    "What's your all-time favorite multiplayer game?",
+    "If you could erase your memory of one game to play it again fresh, which game would you choose?",
+    "What's the most rage-inducing game you've ever played?",
+    "Do you prefer single-player or multiplayer games?",
+    "What's the most underrated game you've ever played?",
+    "What game had the best storyline in your opinion?",
+    "What game do you think deserves a remake?",
+    "What’s your favorite gaming console of all time?",
+    "If you could only play one game for the rest of your life, which would it be?",
+    "Who’s your favorite video game villain?",
+    "What’s your proudest gaming achievement?",
+    "Do you prefer story-driven games or competitive ones?",
+    "What’s a game you love that most people haven’t heard of?",
+    "Which game soundtrack is your favorite?",
+    "What’s the funniest bug/glitch you’ve seen in a game?",
+    "Would you rather be able to fly or be invisible?",
+    "Would you rather always know when someone is lying or always get away with lying?",
+    "Would you rather fight one horse-sized duck or 100 duck-sized horses?",
+    "Would you rather live in a world without music or a world without video games?",
+    "Would you rather be rich but lonely, or poor but surrounded by amazing friends?",
+    "Would you rather explore space or explore the deep ocean?",
+    "Would you rather teleport anywhere instantly or time travel once a year?",
+    "Would you rather never feel pain or never feel fear?",
+    "Would you rather lose the ability to read or lose the ability to speak?",
+    "Would you rather have unlimited free travel or never need to sleep?",
+    "Would you rather live forever at age 25 or live to 100 with a healthy life?",
+    "Would you rather be able to pause time or rewind time?",
+    "Would you rather always win arguments or always win games?",
+    "Would you rather live without the internet or live without AC/heating?",
+    "Would you rather be famous but hated or unknown but loved by everyone you meet?",
+    "Would you rather know the exact date of your death or the exact cause of your death?",
+    "Would you rather lose all your past memories or never be able to make new ones?",
+    "Would you rather save one loved one or 100 strangers?",
+    "Would you rather always know the truth but never be believed, or always believe lies?",
+    "Would you rather have the power to change the past or see the future but not change it?",
+    "Would you rather live 1,000 years in perfect health or live a normal lifespan but be famous forever?",
+    "Would you rather be feared by all or loved by none?",
+    "Would you rather have the ability to read minds but only bad thoughts, or hear only good lies?",
+    "Would you rather never feel happiness again or never feel sadness again (but also never truly appreciate happiness)?",
+    "Would you rather forget everyone else or have everyone else forget you?",
+    "Would you rather live in a simulation you control or reality you can’t control?",
+    "Would you rather save the world but nobody knows it was you, or get credit but not actually do it?",
+    "Would you rather be trapped in your best day forever or move forward with no good days left?",
+    "Would you rather never dream again or never be awake again?",
+    "Would you rather lose your sight or lose your hearing?",
+    "Would you rather never be able to speak again or never be able to think privately again?",
+    "Would you rather lose your most cherished possession or lose your most cherished memory?",
+    "Would you rather everyone knew your darkest secret or forget the best thing you ever did?",
+    "Would you rather die in 10 years with no regrets, or live 100 years with tons of regrets?",
+    "Would you rather be remembered forever for something bad or forgotten completely?",
+    "Would you rather always know the ending to every story or never know the ending to your own?",
+    "Would you rather betray your best friend or let your best friend betray you?",
+    "Would you rather carry the guilt of one terrible mistake forever or forget it but repeat it again?",
+    "Would you rather live in total safety but extreme boredom, or in danger but constant excitement?",
+    "Would you rather be the smartest person alive but hated, or the dumbest but loved?",
+    "Would you rather always lose everything you own once a year, or never be able to replace anything you own?",
+    "Would you rather find true love but die in 5 years, or never find it and live long?",
+    "Would you rather save your own life or sacrifice yourself to save 10 others?",
+    "Would you rather never be able to lie or never be able to tell the truth?",
+    "Would you rather live in poverty with peace or live rich but in constant war?",
+    "Would you rather forget how to read or forget how to write?",
+    "Would you rather have unlimited money but never be happy, or be poor but always content?",
+    "Would you rather always feel intense pain but never get sick, or never feel pain but always be sick?",
+    "Would you rather never be able to sleep again or never be able to eat again?",
+    "Would you rather know everyone’s future but not your own, or your own but not anyone else’s?",
+    "Would you rather lose your sense of time or your sense of reality?",
+    "Would you rather never be able to forgive or never be forgiven?",
+    "Would you rather be trapped alone in space or trapped with 100 strangers in a bunker?",
+    "Would you rather live forever but everyone you love dies normally, or die normally but everyone you love lives forever?",
+    "Would you rather always feel like you’re being watched or always be completely alone?",
+    "Would you rather change one moment in your past and risk changing everything, or never touch the past at all?",
+    "Would you rather be able to cure any disease but die young, or live long but never help anyone?",
+    "Would you rather lose all technology or lose all human connection?",
+    "Would you rather never be able to learn new things or forget one thing every day?",
+    "Would you rather know the ultimate secret of the universe but never be able to share it, or never know it at all?",
+    "Would you rather have a perfect body but an average mind, or a genius mind but weak body?",
+    "Would you rather never be able to love or never be able to be loved?",
+    "Would you rather live in a world with no crime but no freedom, or total freedom but constant crime?",
+    "Would you rather be invisible but never able to interact, or visible but ignored by everyone?",
+    "Would you rather watch your worst memory on repeat forever or never remember anything again?",
+    "Would you rather make one person happy forever or make millions happy for just a day?",
+    "If you could have any superpower for just 24 hours, what would you pick?",
+    "If you had to give up one of your five senses, which would it be?",
+    "If you were a superhero, what would your hero name be?",
+    "If you could shapeshift into any animal, which would you choose?",
+    "Would you want the ability to read minds if it meant you couldn’t turn it off?",
+    "If you had a time machine, would you go to the past or the future?",
+    "Would you rather be able to breathe underwater or survive in space?",
+    "If you could instantly master one skill, what would it be?",
+    "If you could snap your fingers and change one thing about the world, what would it be?",
+    "If you had a superpower but it only worked once a week, what would it be?",
+    "If you could create your own video game power-up, what would it do?",
+    "If you could talk to animals, what’s the first thing you’d ask them?",
+    "If you could be immortal but couldn’t tell anyone, would you do it?",
+    "If you could swap lives with a fictional character, who would you pick?",
+    "If you could live in any fantasy universe, which one would it be?",
+    "What's the weirdest food combination you secretly enjoy?",
+    "What's a song that instantly puts you in a good mood?",
+    "If you could swap lives with someone for a day, who would it be?",
+    "What's the best advice you've ever received?",
+    "What's one conspiracy theory you secretly think could be true?",
+    "What's something small that instantly annoys you?",
+    "What's a childhood memory that still makes you laugh?",
+    "If you could meet any historical figure, who would it be?",
+    "What's the most random fact you know?",
+    "What's one thing you'd change about the world if you could?",
+    "What's a guilty pleasure show or game you enjoy?",
+    "If aliens visited Earth tomorrow, what would you show them first?",
+    "What's the funniest meme you’ve seen recently?",
+    "What's the scariest movie or game you’ve played?",
+    "What's the most useless talent you have?",
+    "What's something embarrassing you did but still laugh about?",
+    "If you could instantly learn a language, which would you choose?",
+    "What’s your dream vacation spot?",
+    "What’s one invention you wish existed?",
+    "What’s the most trouble you’ve ever gotten into?",
+    "What’s your favorite childhood cartoon?",
+    "If money didn’t matter, what job would you do?",
+    "What's the best concert you've ever been to?",
+    "Who's your favorite music artist or band?",
+    "What's a movie you can watch over and over again?",
+    "What’s your favorite streaming show right now?",
+    "If you could bring back any TV show, what would it be?",
+    "What’s your all-time favorite meme?",
+    "If you could hang out with any celebrity for a day, who would it be?",
+    "What’s your guilty pleasure song?",
+    "Which actor would play you in a movie about your life?",
+    "If you could make a cameo in any movie or show, which one would it be?",
+    "Do you prefer sweet or salty snacks?",
+    "What’s the weirdest thing you’ve ever eaten?",
+    "If you could only eat one meal for the rest of your life, what would it be?",
+    "What’s your favorite fast food place?",
+    "Would you rather never eat pizza again or never eat burgers again?",
+    "What’s your favorite type of dessert?",
+    "Do you prefer coffee, tea, or neither?",
+    "What’s the spiciest thing you’ve ever eaten?",
+    "If you opened a restaurant, what would you serve?",
+    "What’s a food you hated as a kid but love now?",
+    "What’s your survival plan for a zombie apocalypse?",
+    "If you were stranded on a desert island, what three things would you bring?",
+    "If you won the lottery tomorrow, what’s the first thing you’d do?",
+    "If you could time travel but only once, when/where would you go?",
+    "If you woke up invisible, what’s the first thing you’d do?",
+    "If you had to live in a different country, where would you move?",
+    "If you could swap lives with a character from a book, who would it be?",
+    "If you had to give up the internet or TV forever, which would you choose?",
+    "What would you do if you were the last person on Earth?",
+    "If you could live in any time period, past or future, which would you choose?",
+    "If you were an animal, what would you be and why?",
+    "What’s your weirdest habit?",
+    "What’s your biggest pet peeve?",
+    "What’s something you’ve done that you’re really proud of?",
+    "What’s your love language?",
+    "Are you more of a morning person or a night owl?",
+    "What’s your spirit animal?",
+    "What’s the first thing you do when you wake up?",
+    "What’s your favorite holiday and why?",
+    "Do you prefer big parties or small hangouts?"
+];
 
+const qotdFile = './qotd.json';
+const qotdSettingsFile = './qotdSettings.json';
+
+let activeQotdChannels = new Set();
+let qotdIntervals = new Map(); // channelId -> setInterval
+let qotdSettings = {}; // { channelId: { everyone: true/false } }
+let sentQuestions = {}; // { channelId: [indices of sent questions] }
+
+// Load active channels
+if (fs.existsSync(qotdFile)) {
+  const channelArray = JSON.parse(fs.readFileSync(qotdFile, 'utf8'));
+  activeQotdChannels = new Set(channelArray);
+}
+
+// Load settings
+if (fs.existsSync(qotdSettingsFile)) {
+  qotdSettings = JSON.parse(fs.readFileSync(qotdSettingsFile, 'utf8'));
+}
+
+// Save functions
+function saveQotdState() {
+  fs.writeFileSync(qotdFile, JSON.stringify(Array.from(activeQotdChannels), null, 2));
+}
+
+function saveQotdSettings() {
+  fs.writeFileSync(qotdSettingsFile, JSON.stringify(qotdSettings, null, 2));
+}
+
+// Send a QOTD to a channel without repeating until all questions are used
 function sendQuestion(channelId) {
   const channel = client.channels.cache.get(channelId);
   if (!channel) return;
 
   if (!sentQuestions[channelId]) sentQuestions[channelId] = [];
 
+  // Filter unused questions
   const unusedIndices = qotdQuestions
     .map((_, i) => i)
     .filter(i => !sentQuestions[channelId].includes(i));
 
+  // Reset if all questions have been sent
   if (unusedIndices.length === 0) {
     sentQuestions[channelId] = [];
     unusedIndices.push(...qotdQuestions.map((_, i) => i));
   }
 
+  // Pick random unused question
   const randomIndex = unusedIndices[Math.floor(Math.random() * unusedIndices.length)];
   sentQuestions[channelId].push(randomIndex);
 
-  const prefix = botData.qotdSettings[channelId]?.everyone ? '@everyone ' : '';
+  const prefix = qotdSettings[channelId]?.everyone ? '@everyone ' : '';
   const question = qotdQuestions[randomIndex];
   channel.send(`${prefix}**❓ Question of the Day:** ${question}`);
   
+  // Add the global log function call here
   logToGlobal(question, channel.guild.name, channel.name);
 }
 
+// Start QOTD for all active channels
 function startAllQotd() {
   if (activeQotdChannels.size === 0) {
     console.log("No QOTD channels to start.");
@@ -1045,13 +993,16 @@ function startAllQotd() {
   }
 
   activeQotdChannels.forEach(channelId => {
-    if (qotdIntervals.has(channelId)) return;
-    sendQuestion(channelId);
-    const interval = setInterval(() => sendQuestion(channelId), 24 * 60 * 60 * 1000);
+    if (qotdIntervals.has(channelId)) return; // already running
+
+    sendQuestion(channelId); // first question immediately
+
+    const interval = setInterval(() => sendQuestion(channelId), 24 * 60 * 60 * 1000); // every 24h
     qotdIntervals.set(channelId, interval);
   });
 }
 
+// Stop QOTD in a channel
 function stopQotd(channelId) {
   if (!activeQotdChannels.has(channelId)) return;
 
@@ -1062,17 +1013,63 @@ function stopQotd(channelId) {
   activeQotdChannels.delete(channelId);
   saveQotdState();
 
-  if (botData.qotdSettings[channelId]) {
-    delete botData.qotdSettings[channelId];
+  if (qotdSettings[channelId]) {
+    delete qotdSettings[channelId];
     saveQotdSettings();
   }
 
   if (sentQuestions[channelId]) delete sentQuestions[channelId];
 }
 
+// --- Welcome & Leave Messages Data ---
+const welcomeFile = './welcomeMessages.json';
+const leaveFile = './leaveMessages.json';
+let welcomeMessages = {};
+let leaveMessages = {};
+
+if (fs.existsSync(welcomeFile)) {
+  welcomeMessages = JSON.parse(fs.readFileSync(welcomeFile, 'utf8'));
+}
+
+if (fs.existsSync(leaveFile)) {
+  leaveMessages = JSON.parse(fs.readFileSync(leaveFile, 'utf8'));
+}
+
+function saveWelcomeMessages() {
+  fs.writeFileSync(welcomeFile, JSON.stringify(welcomeMessages, null, 2));
+}
+
+function saveLeaveMessages() {
+  fs.writeFileSync(leaveFile, JSON.stringify(leaveMessages, null, 2));
+}
+
 // ---- Permanent Global Log Channel ----
 const PERMANENT_LOG_CHANNEL_ID = '1411247548240232540';
+// ---- Log Channel Storage ----
+const logChannelsFile = './logChannels.json';
+const masterLogFile = './masterLog.json';
+let logChannels = {};
+let masterLog = { channelId: null, enabled: false };
 
+// Load existing log channels and master log channel.
+if (fs.existsSync(logChannelsFile)) {
+  logChannels = JSON.parse(fs.readFileSync(logChannelsFile, 'utf8'));
+}
+if (fs.existsSync(masterLogFile)) {
+  masterLog = JSON.parse(fs.readFileSync(masterLogFile, 'utf8'));
+}
+
+// Function to save the log channels.
+function saveLogChannels() {
+  fs.writeFileSync(logChannelsFile, JSON.stringify(logChannels, null, 2));
+}
+
+// Function to save the master log channel.
+function saveMasterLog() {
+  fs.writeFileSync(masterLogFile, JSON.stringify(masterLog, null, 2));
+}
+
+// Function to log a message to the permanent global log channel.
 async function logToGlobal(qotd, serverName, channelName) {
   try {
     const logChannel = client.channels.cache.get(PERMANENT_LOG_CHANNEL_ID);
@@ -1082,7 +1079,9 @@ async function logToGlobal(qotd, serverName, channelName) {
         title: `New QOTD in ${serverName}`,
         description: `**Channel:** #${channelName}\n**Question:** ${qotd}`,
         timestamp: new Date(),
-        footer: { text: 'Logged by QOTD Bot' },
+        footer: {
+          text: 'Logged by QOTD Bot',
+        },
       };
       logChannel.send({ embeds: [embed] });
     }
@@ -1091,18 +1090,21 @@ async function logToGlobal(qotd, serverName, channelName) {
   }
 }
 
-// --- ANTI-RAID HELPER FUNCTIONS ---
+// --- ANTI-RAID HELPER FUNCTIONS (NEW) ---
+
 async function engageAntiRaid(guild, alertChannel, author = null) {
-    if (antiRaidActive.has(guild.id)) return false;
+    if (antiRaidActive.has(guild.id)) return false; // Already active
 
     antiRaidActive.add(guild.id);
     originalVerificationLevels.set(guild.id, guild.verificationLevel);
 
+    // [NEW] Store original channel permissions
     const permsToStore = [];
     guild.channels.cache.forEach(channel => {
         if (channel.isTextBased()) {
             const everyoneRole = guild.roles.everyone;
             const currentPerms = channel.permissionOverwrites.cache.get(everyoneRole.id);
+            // Store the current SendMessages state (true, false, or null if not set)
             permsToStore.push({
                 channelId: channel.id,
                 sendMessages: currentPerms ? currentPerms.allow.has(PermissionsBitField.Flags.SendMessages) ? true : currentPerms.deny.has(PermissionsBitField.Flags.SendMessages) ? false : null : null
@@ -1110,24 +1112,25 @@ async function engageAntiRaid(guild, alertChannel, author = null) {
         }
     });
     originalChannelPermissions.set(guild.id, permsToStore);
+    // [END NEW]
 
     try {
-        await guild.setVerificationLevel(4);
+        await guild.setVerificationLevel(4); // Highest
 
         guild.channels.cache.forEach(async (channel) => {
-            if (channel.isTextBased()) {
+            if (channel.isTextBased()) { // Only lock text-based channels
                  await channel.permissionOverwrites.edit(guild.roles.everyone, {
                     SendMessages: false
                 }).catch(err => console.error(`Failed to lock channel ${channel.name}:`, err));
             }
         });
 
-        if (author) {
+        if (author) { // Manual trigger
             await sendLog(guild.id, `\`[SECURITY]\` **${author.tag}** has engaged ANTI-RAID mode.`);
             if (alertChannel) {
                 await alertChannel.send("🚨ANTI-RAID PROTOCOL  ENGAGED🚨THIS IS NOT A DRILL. All security measures are live. Unauthorized accounts will be IDENTIFIED, TRACKED and ELIMINATED. Channels are locked, posting is restricted, and verification is mandatory. Attempts to bypass will result in immediate bans and permanent removal from the server. Moderators: Engage intruders.");
             }
-        } else {
+        } else { // Automatic trigger
              await sendLog(guild.id, `\`[SECURITY]\` **AUTOMATIC ANTI-RAID** has been engaged due to rapid joins.`);
             if (alertChannel) {
                 await alertChannel.send("🚨**AUTO-TRIGGER**🚨ANTI-RAID PROTOCOL  ENGAGED🚨THIS IS NOT A DRILL. All security measures are live. Unauthorized accounts will be IDENTIFIED, TRACKED and ELIMINATED. Channels are locked, posting is restricted, and verification is mandatory. Attempts to bypass will result in immediate bans and permanent removal from the server. Moderators: Engage intruders.");
@@ -1136,8 +1139,8 @@ async function engageAntiRaid(guild, alertChannel, author = null) {
         return true;
     } catch (err) {
         console.error("Anti-Raid ON Error:", err);
-        antiRaidActive.delete(guild.id);
-        originalChannelPermissions.delete(guild.id);
+        antiRaidActive.delete(guild.id); // Revert state if failed
+        originalChannelPermissions.delete(guild.id); // [NEW] Clear stored perms on failure
         return false;
     }
 }
@@ -1153,12 +1156,13 @@ async function disengageAntiRaid(guild, replyChannel) {
     const savedPerms = originalChannelPermissions.get(guild.id);
 
     originalVerificationLevels.delete(guild.id);
-    originalChannelPermissions.delete(guild.id);
+    originalChannelPermissions.delete(guild.id); // Clean up the stored permissions
 
     try {
         await guild.setVerificationLevel(originalLevel);
 
         if (savedPerms) {
+            // [MODIFIED] Restore permissions from the saved state
             for (const perm of savedPerms) {
                 const channel = guild.channels.cache.get(perm.channelId);
                 if (channel && channel.isTextBased()) {
@@ -1168,6 +1172,7 @@ async function disengageAntiRaid(guild, replyChannel) {
                 }
             }
         } else {
+            // Fallback for safety, in case the bot restarted and lost the map data
             console.warn(`[Anti-Raid] No saved permissions found for guild ${guild.id}. Using default unlock.`);
             guild.channels.cache.forEach(async (channel) => {
                 if (channel.isTextBased()) {
@@ -1177,6 +1182,7 @@ async function disengageAntiRaid(guild, replyChannel) {
                 }
             });
         }
+
 
         if (replyChannel) {
             await replyChannel.send('✅ Anti-raid mode has been disengaged. All systems and channel permissions have been restored to their previous state.');
@@ -1193,22 +1199,28 @@ async function disengageAntiRaid(guild, replyChannel) {
 
 // --- Welcome & Leave Event Handlers ---
 client.on('guildMemberAdd', async member => {
-    if (!antiRaidActive.has(member.guild.id)) {
+    // --- AUTO ANTI-RAID TRIGGER (NEW) ---
+    if (!antiRaidActive.has(member.guild.id)) { // Only check if not already active
         const now = Date.now();
         const thirtySecondsAgo = now - 30000;
+
         const timestamps = joinTimestamps.get(member.guild.id) || [];
         const recentTimestamps = timestamps.filter(ts => ts > thirtySecondsAgo);
+
         recentTimestamps.push(now);
         joinTimestamps.set(member.guild.id, recentTimestamps);
 
         if (recentTimestamps.length >= 10) {
             console.log(`[Anti-Raid Trigger] Detected ${recentTimestamps.length} joins in 30s for guild ${member.guild.name}. Engaging...`);
-            const logChannelId = botData.logChannels[member.guild.id]?.channelId;
+            // Find a channel to post the alert: log channel > system channel
+            const logChannelId = logChannels[member.guild.id]?.channelId;
             const alertChannel = logChannelId ? member.guild.channels.cache.get(logChannelId) : member.guild.systemChannel;
-            await engageAntiRaid(member.guild, alertChannel);
+            
+            await engageAntiRaid(member.guild, alertChannel); // Auto-trigger, no author
         }
     }
     
+    // --- ANTI-RAID KICK ---
     if (antiRaidActive.has(member.guild.id)) {
         try {
             await member.send('You were unable to join the server because it is currently in anti-raid mode. Please try again later.');
@@ -1217,10 +1229,10 @@ client.on('guildMemberAdd', async member => {
         }
         await member.kick('Kicked by anti-raid system.');
         await sendLog(member.guild.id, `\`[ANTI-RAID]\` Kicked new member **${member.user.tag}**.`);
-        return;
+        return; // Stop further processing (like welcome messages)
     }
 
-    const welcomeData = botData.welcomeMessages[member.guild.id];
+    const welcomeData = welcomeMessages[member.guild.id];
     if (welcomeData) {
         const channel = member.guild.channels.cache.get(welcomeData.channelId);
         if (channel) {
@@ -1236,7 +1248,7 @@ client.on('guildMemberAdd', async member => {
 
 
 client.on('guildMemberRemove', async member => {
-  const leaveData = botData.leaveMessages[member.guild.id];
+  const leaveData = leaveMessages[member.guild.id];
   if (leaveData) {
     const channel = member.guild.channels.cache.get(leaveData.channelId);
     if (channel) {
@@ -1253,19 +1265,22 @@ client.on('guildMemberRemove', async member => {
 
 // ---- Log Message Helper Function ----
 async function sendLog(guildId, messageContent) {
-  if (botData.logChannels[guildId]?.enabled && botData.logChannels[guildId]?.channelId) {
-    const channel = client.channels.cache.get(botData.logChannels[guildId].channelId);
+  // 1️⃣ Server-specific log
+  if (logChannels[guildId]?.enabled && logChannels[guildId]?.channelId) {
+    const channel = client.channels.cache.get(logChannels[guildId].channelId);
     if (channel) await channel.send(messageContent).catch(console.error);
   }
 
-  if (botData.masterLog.enabled && botData.masterLog.channelId) {
-    const channel = client.channels.cache.get(botData.masterLog.channelId);
+  // 2️⃣ Master log
+  if (masterLog.enabled && masterLog.channelId) {
+    const channel = client.channels.cache.get(masterLog.channelId);
     if (channel) {
       const serverName = client.guilds.cache.get(guildId)?.name || 'Unknown Server';
       await channel.send(`[${serverName}] ${messageContent}`).catch(console.error);
     }
   }
 
+  // 3️⃣ Permanent global log
   const permanentChannel = client.channels.cache.get(PERMANENT_LOG_CHANNEL_ID);
   if (permanentChannel) {
     const serverName = client.guilds.cache.get(guildId)?.name || 'Unknown Server';
@@ -1273,34 +1288,10 @@ async function sendLog(guildId, messageContent) {
   }
 }
 
-// ---- Bot Startup Event (`ready`) ----
-client.once('ready', async () => {
-  console.log("🚀 Bot starting up... Loading persistent data from JSONBin...");
-  await loadData();
-  
-  // This check now runs *after* data has been loaded from the bin.
-  if (!botData.storeData || Object.keys(botData.storeData).length === 0) {
-      console.log("🏬 Store data is empty. Initializing with default items...");
-      initializeStore(); // This will call saveData() automatically
-  }
-
+// ---- Ready ----
+client.once('ready', () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
-  
-  // Start systems that depend on loaded data.
-  startAllQotd();
-  
-  setInterval(runLotteryDraw, 600000);
-  console.log(`✅ Lottery check routine started.`);
-
-  if (!botData.lotteryData.drawDate) {
-      const nextSunday = new Date();
-      nextSunday.setDate(nextSunday.getDate() + (7 - nextSunday.getDay()) % 7);
-      nextSunday.setHours(10, 0, 0, 0); 
-      botData.lotteryData.drawDate = nextSunday.toISOString();
-      botData.lotteryData.isActive = true;
-      saveLotteryData();
-      console.log(`✅ Initial lottery draw date set for: ${nextSunday.toLocaleString()}`);
-  }
+  startAllQotd(); // Start all QOTD channels from the saved state
 });
 
 // ---- Log message updates and deletions ----
@@ -1308,30 +1299,48 @@ client.on('messageUpdate', async (oldMessage, newMessage) => {
   if (oldMessage.author.bot) return;
   if (oldMessage.content === newMessage.content) return;
 
-  const guildCountingData = botData.countingData[newMessage.guild.id];
+  // --- [NEW] COUNTING GAME EDIT DETECTION ---
+  const guildCountingData = countingData[newMessage.guild.id];
   if (guildCountingData && newMessage.channel.id === guildCountingData.channelId) {
     const nextNumber = guildCountingData.currentCount + 1;
-    const alertMessage = `⚠️ **EDIT DETECTED!**\n**User:** ${oldMessage.author}\n**Original Message:** \`${oldMessage.content}\`\n**Edited To:** \`${newMessage.content}\`\n\nTo avoid confusion, the next number is still **${nextNumber}**.`;
+    const alertMessage = `⚠️ **EDIT DETECTED!**
+**User:** ${oldMessage.author}
+**Original Message:** \`${oldMessage.content}\`
+**Edited To:** \`${newMessage.content}\`
+
+To avoid confusion, the next number is still **${nextNumber}**.`;
     await newMessage.channel.send(alertMessage);
   }
+  // --- END NEW CODE ---
 
-  const logMessage = `\`[EDITED]\` **${oldMessage.author.tag}** edited their message in <#${oldMessage.channel.id}>.\n**Before:** \`\`\`${oldMessage.content}\`\`\`\n**After:** \`\`\`${newMessage.content}\`\`\``;
+  const logMessage = `\`[EDITED]\` **${oldMessage.author.tag}** edited their message in <#${oldMessage.channel.id}>.
+**Before:** \`\`\`${oldMessage.content}\`\`\`
+**After:** \`\`\`${newMessage.content}\`\`\``;
+
   await sendLog(oldMessage.guild.id, logMessage);
 });
 
 client.on('messageDelete', async message => {
   if (message.author?.bot) return;
 
-  if (message.guild) {
-    const guildCountingData = botData.countingData[message.guild.id];
+  // --- [NEW] COUNTING GAME DELETE DETECTION ---
+  if (message.guild) { // Ensure guild context exists
+    const guildCountingData = countingData[message.guild.id];
     if (guildCountingData && message.channel.id === guildCountingData.channelId) {
         const nextNumber = guildCountingData.currentCount + 1;
-        const alertMessage = `⚠️ **DELETE DETECTED!**\n**User:** ${message.author || 'An unknown user'}\n**Deleted Message:** \`${message.content || '(Message content not available)'}\`\n\nTo avoid confusion, the next number is **${nextNumber}**.`;
+        const alertMessage = `⚠️ **DELETE DETECTED!**
+**User:** ${message.author || 'An unknown user'}
+**Deleted Message:** \`${message.content || '(Message content not available)'}\`
+
+To avoid confusion, the next number is **${nextNumber}**.`;
         await message.channel.send(alertMessage);
     }
   }
+  // --- END NEW CODE ---
 
-  const logMessage = `\`[DELETED]\` A message by **${message.author?.tag || 'Unknown User'}** was deleted in <#${message.channel.id}>.\n**Content:** \`\`\`${message.content || 'N/A'}\`\`\``;
+  const logMessage = `\`[DELETED]\` A message by **${message.author?.tag || 'Unknown User'}** was deleted in <#${message.channel.id}>.
+**Content:** \`\`\`${message.content || 'N/A'}\`\`\``;
+
   await sendLog(message.guild.id, logMessage);
 });
 
@@ -1339,14 +1348,20 @@ client.on('messageDelete', async message => {
 client.on('messageReactionAdd', async (reaction, user) => {
     if (user.bot) return;
 
+    // Handle partial messages
     if (reaction.partial) {
-        try { await reaction.fetch(); } 
-        catch (error) { console.error('Error fetching reaction:', error); return; }
+        try {
+            await reaction.fetch();
+        } catch (error) {
+            console.error('Error fetching reaction:', error);
+            return;
+        }
     }
     const battleKey = reaction.message.id;
 
-    if (botData.activeBattles[battleKey] && botData.activeBattles[battleKey].status === 'pending') {
-        const battle = botData.activeBattles[battleKey];
+    // --- Automated Battle System ---
+    if (activeBattles[battleKey] && activeBattles[battleKey].status === 'pending') {
+        const battle = activeBattles[battleKey];
         if (user.id === battle.defender && reaction.emoji.name === '⚔️') {
             battle.status = 'accepted';
             saveBattles();
@@ -1356,9 +1371,11 @@ client.on('messageReactionAdd', async (reaction, user) => {
         return;
     }
 
-    const dwGame = botData.activeDWGames[battleKey];
+    // --- [NEW] Turn-based "Deadliest Warrior" Battle System ---
+    const dwGame = activeDWGames[battleKey];
     if (!dwGame) return;
 
+    // Challenge acceptance
     if (dwGame.status === 'pending') {
         if (user.id === dwGame.p2.id && reaction.emoji.name === '⚔️') {
             await startDWBattle(reaction.message, dwGame);
@@ -1366,9 +1383,11 @@ client.on('messageReactionAdd', async (reaction, user) => {
         return;
     }
 
+    // Active game turn handling
     if (dwGame.status === 'active') {
         const currentPlayer = dwGame.turn === dwGame.p1.id ? dwGame.p1 : dwGame.p2;
         if (user.id !== currentPlayer.id) {
+             // Remove the reaction if it's not the player's turn
             await reaction.users.remove(user.id).catch(err => console.error("Failed to remove reaction:", err));
             return;
         }
@@ -1377,6 +1396,7 @@ client.on('messageReactionAdd', async (reaction, user) => {
         const action = actionMap[reaction.emoji.name];
 
         if (action) {
+            // Remove all reactions to prevent multiple inputs
             await reaction.message.reactions.removeAll().catch(err => console.error("Failed to clear reactions:", err));
             await processDWTurn(battleKey, action);
         }
@@ -1429,6 +1449,7 @@ async function startBattle(channel, challengerId, defenderId, battleKey) {
       const attacker = fighters[i];
       const target = fighters[1 - i];
 
+      // Check if using throwable this round (30% chance)
       if (attacker.throwable && Math.random() < 0.3) {
         const throwResult = await executeThrowable(attacker, target, roundLog);
         roundLog += throwResult.log;
@@ -1444,6 +1465,7 @@ async function startBattle(channel, challengerId, defenderId, battleKey) {
       }
     }
 
+    // Apply status effects
     for (let fighter of fighters) {
       if (fighter.effects.burn && fighter.effects.burn > 0) {
         const burnDamage = 8;
@@ -1467,9 +1489,11 @@ async function startBattle(channel, challengerId, defenderId, battleKey) {
 
     await channel.send(roundLog);
     await new Promise(resolve => setTimeout(resolve, 2000));
+
     round++;
   }
 
+  // Determine winner
   let resultLog = `\n**━━━ BATTLE END ━━━**\n`;
   let winnerId, winnerName, reward = 500;
 
@@ -1477,7 +1501,7 @@ async function startBattle(channel, challengerId, defenderId, battleKey) {
     winnerId = challengerId;
     winnerName = challenger.username;
     resultLog += `🏆 **${challenger.username}** wins with ${p1Data.health.toFixed(0)} HP remaining!\n`;
-  } else if (p2Data.health > p1Data.health) {
+  } else if (p2Data.health > p2Data.health) {
     winnerId = defenderId;
     winnerName = defender.username;
     resultLog += `🏆 **${defender.username}** wins with ${p2Data.health.toFixed(0)} HP remaining!\n`;
@@ -1498,21 +1522,29 @@ async function startBattle(channel, challengerId, defenderId, battleKey) {
   }
 
   await channel.send(resultLog);
-  delete botData.activeBattles[battleKey];
+
+  delete activeBattles[battleKey];
   saveBattles();
+  // We don't save player data because health should reset after battle
 }
 
 async function executeAttack(attacker, target) {
   let log = '';
   const weapon = attacker.weapon;
   const baseDamage = weapon.damage || 10;
+
+  // Check for miss
   let missChance = weapon.missChance || 10;
-  if (attacker.effects.blind && attacker.effects.blind > 0) missChance += 30;
+  if (attacker.effects.blind && attacker.effects.blind > 0) {
+    missChance += 30;
+  }
 
   if (Math.random() * 100 < missChance) {
     log += `❌ **${attacker.user.username}** missed with ${weapon.name}!\n`;
     return log;
   }
+
+  // Check for headshot
   if (Math.random() * 100 < (weapon.headshotChance || 5)) {
     const headshotDamage = baseDamage * 2;
     const actualDamage = Math.max(1, headshotDamage - (target.armor ? target.armor.defense * 0.4 : 0));
@@ -1520,6 +1552,8 @@ async function executeAttack(attacker, target) {
     log += `🎯 **HEADSHOT!** **${attacker.user.username}** hits **${target.user.username}** with ${weapon.name} for ${actualDamage.toFixed(1)} damage!\n`;
     return log;
   }
+
+  // Check for critical hit
   if (Math.random() * 100 < (weapon.critChance || 10)) {
     const critDamage = baseDamage * 1.5;
     const actualDamage = Math.max(1, critDamage - (target.armor ? target.armor.defense * 0.5 : 0));
@@ -1527,9 +1561,12 @@ async function executeAttack(attacker, target) {
     log += `💥 **CRITICAL HIT!** **${attacker.user.username}** strikes **${target.user.username}** with ${weapon.name} for ${actualDamage.toFixed(1)} damage!\n`;
     return log;
   }
+
+  // Normal hit
   const actualDamage = Math.max(1, baseDamage - (target.armor ? target.armor.defense * 0.6 : 0));
   target.data.health -= actualDamage;
   log += `⚔️ **${attacker.user.username}** hits **${target.user.username}** with ${weapon.name} for ${actualDamage.toFixed(1)} damage!\n`;
+
   return log;
 }
 
@@ -1538,18 +1575,31 @@ async function executeThrowable(attacker, target, currentLog) {
   let log = `💣 **${attacker.user.username}** throws ${throwable.name}!\n`;
   let instantDeath = false;
 
+  // Base damage
   if (throwable.damage > 0) {
     const actualDamage = Math.max(1, throwable.damage - (target.armor ? target.armor.defense * 0.3 : 0));
     target.data.health -= actualDamage;
     log += `💥 ${throwable.name} deals ${actualDamage.toFixed(1)} damage to **${target.user.username}**!\n`;
   }
 
+  // Apply effects
   if (throwable.effect && Math.random() * 100 < (throwable.effectChance || 50)) {
     switch (throwable.effect) {
-      case 'blind': target.effects.blind = throwable.duration || 2; log += `😵 **${target.user.username}** is blinded! Miss chance increased!\n`; break;
-      case 'stun': log += `⚡ **${target.user.username}** is stunned!\n`; break;
-      case 'burn': target.effects.burn = throwable.duration || 3; log += `🔥 **${target.user.username}** is burning!\n`; break;
-      case 'bleed': target.effects.bleed = throwable.duration || 2; log += `🩸 **${target.user.username}** is bleeding!\n`; break;
+      case 'blind':
+        target.effects.blind = throwable.duration || 2;
+        log += `😵 **${target.user.username}** is blinded! Miss chance increased!\n`;
+        break;
+      case 'stun':
+        log += `⚡ **${target.user.username}** is stunned!\n`;
+        break;
+      case 'burn':
+        target.effects.burn = throwable.duration || 3;
+        log += `🔥 **${target.user.username}** is burning!\n`;
+        break;
+      case 'bleed':
+        target.effects.bleed = throwable.duration || 2;
+        log += `🩸 **${target.user.username}** is bleeding!\n`;
+        break;
       case 'death':
         if (Math.random() < 0.7) {
           target.data.health = 0;
@@ -1561,11 +1611,13 @@ async function executeThrowable(attacker, target, currentLog) {
         break;
     }
   }
+
   return { log, instantDeath };
 }
 
 
-// ---- DEADLIEST WARRIOR FUNCTIONS ----
+// ---- [NEW] DEADLIEST WARRIOR FUNCTIONS ----
+
 async function startDWBattle(message, game) {
     game.status = 'active';
     game.p1.health = 100;
@@ -1574,7 +1626,7 @@ async function startDWBattle(message, game) {
     game.p2.healsLeft = 3;
     game.p1.inCover = false;
     game.p2.inCover = false;
-    game.p1.effects = {};
+    game.p1.effects = {}; // stun, blind, burn, bleed
     game.p2.effects = {};
     game.round = 1;
     game.turn = game.p1.id;
@@ -1585,7 +1637,7 @@ async function startDWBattle(message, game) {
 }
 
 async function updateDWEmbed(channel, messageId) {
-    const game = botData.activeDWGames[messageId];
+    const game = activeDWGames[messageId];
     if (!game) return;
 
     const message = await channel.messages.fetch(messageId);
@@ -1604,19 +1656,22 @@ async function updateDWEmbed(channel, messageId) {
             { name: `🔴 ${game.p1.name}`, value: `**HP:** ${game.p1.health.toFixed(0)}/100\n**Heals:** ${game.p1.healsLeft}\n**Cover:** ${game.p1.inCover ? 'Yes' : 'No'}\n**Effects:** ${p1Effects}`, inline: true },
             { name: `🔵 ${game.p2.name}`, value: `**HP:** ${game.p2.health.toFixed(0)}/100\n**Heals:** ${game.p2.healsLeft}\n**Cover:** ${game.p2.inCover ? 'Yes' : 'No'}\n**Effects:** ${p2Effects}`, inline: true }
         )
-        .setImage('https://i.imgur.com/8f1V3gI.gif')
+        .setImage('https://i.imgur.com/8f1V3gI.gif') // General battle GIF
         .setFooter({ text: '⚔️ Attack | 🛡️ Take Cover | ❤️ Heal | 💣 Use Throwable' });
 
     await message.edit({ embeds: [embed], content: `<@${currentPlayer.id}>, it's your turn!` });
     
+    // Add reactions for the current player
     await message.react('⚔️');
     await message.react('🛡️');
     await message.react('❤️');
-    if (currentPlayer.throwable) await message.react('💣');
+    if (currentPlayer.throwable) { // Only show throwable if they have one
+        await message.react('💣');
+    }
 }
 
 async function processDWTurn(messageId, action) {
-    const game = botData.activeDWGames[messageId];
+    const game = activeDWGames[messageId];
     if (!game) return;
 
     const channel = await client.channels.fetch(game.channelId);
@@ -1624,8 +1679,9 @@ async function processDWTurn(messageId, action) {
     const target = game.turn === game.p1.id ? game.p2 : game.p1;
     let actionLog = '';
     let gameOver = false;
-    let preTurnLog = '';
 
+    // --- Apply Status Effects at start of turn ---
+    let preTurnLog = '';
     if (attacker.effects.burn > 0) {
         const burnDamage = 8;
         attacker.health -= burnDamage;
@@ -1647,7 +1703,7 @@ async function processDWTurn(messageId, action) {
         preTurnLog += `😵 **${attacker.name}** is stunned and skips their turn!`;
         attacker.effects.stun--;
         game.log = preTurnLog;
-        game.turn = target.id;
+        game.turn = target.id; // Switch turns
         if (game.turn === game.p1.id) game.round++;
         if (game.round > 30) {
             await endDWBattle(channel, messageId, null, null, true);
@@ -1658,6 +1714,8 @@ async function processDWTurn(messageId, action) {
         return;
     }
 
+
+    // Reset attacker's cover status at the start of their turn
     attacker.inCover = false;
 
     switch (action) {
@@ -1669,7 +1727,7 @@ async function processDWTurn(messageId, action) {
             } else {
                 let missChance = weapon.missChance || 10;
                 if(attacker.effects.blind > 0) {
-                    missChance += 30;
+                    missChance += 30; // Harder to hit when blind
                     attacker.effects.blind--;
                 }
 
@@ -1679,6 +1737,7 @@ async function processDWTurn(messageId, action) {
                     let damage = weapon.damage || 10;
                     let hitType = '';
 
+                    // Check for headshot first
                     if (Math.random() * 100 < (weapon.headshotChance || 5)) {
                         damage *= 2;
                         hitType = '🎯 **HEADSHOT!** ';
@@ -1688,7 +1747,7 @@ async function processDWTurn(messageId, action) {
                     }
 
                     if (target.inCover) {
-                        damage *= 0.5;
+                        damage *= 0.5; // 50% damage reduction
                         actionLog += `🛡️ **${target.name}** was in cover and took reduced damage!\n`;
                     }
                     const defense = target.armor ? target.armor.defense * 0.4 : 0;
@@ -1727,11 +1786,13 @@ async function processDWTurn(messageId, action) {
                 target.health = Math.max(0, target.health - actualDamage);
                 actionLog = `💣 **${attacker.name}** used **${throwable.name}**, dealing **${actualDamage.toFixed(1)}** damage!\n`;
 
+                 // Apply effects
                 if (throwable.effect && Math.random() * 100 < (throwable.effectChance || 50)) {
                     target.effects[throwable.effect] = (target.effects[throwable.effect] || 0) + throwable.duration;
                      actionLog += `...and inflicted **${throwable.effect.toUpperCase()}** on **${target.name}**!`;
                 }
-                attacker.throwable = null;
+
+                attacker.throwable = null; // Throwable is consumed
             }
             break;
         }
@@ -1739,27 +1800,28 @@ async function processDWTurn(messageId, action) {
 
     game.log = preTurnLog + actionLog;
 
+    // Check for win/loss
     if (target.health <= 0) {
         gameOver = true;
         await endDWBattle(channel, messageId, attacker, target);
-    } else if (game.turn === game.p2.id) {
+    } else if (game.turn === game.p2.id) { // End of a full round
         game.round++;
     }
 
     if (game.round > 30 && !gameOver) {
         gameOver = true;
-        await endDWBattle(channel, messageId, null, null, true);
+        await endDWBattle(channel, messageId, null, null, true); // It's a draw
     }
 
     if (!gameOver) {
-        game.turn = target.id;
+        game.turn = target.id; // Switch turns
         saveDWBattles();
         await updateDWEmbed(channel, messageId);
     }
 }
 
 async function endDWBattle(channel, messageId, winner, loser, isDraw = false) {
-    const game = botData.activeDWGames[messageId];
+    const game = activeDWGames[messageId];
     if (!game) return;
 
     let embed;
@@ -1793,41 +1855,55 @@ async function endDWBattle(channel, messageId, winner, loser, isDraw = false) {
         await channel.send({ embeds: [embed] });
     }
 
-    delete botData.activeDWGames[messageId];
+
+    delete activeDWGames[messageId];
     saveDWBattles();
 }
 
 client.on('channelUpdate', async (oldChannel, newChannel) => {
   let changes = [];
-  if (oldChannel.name !== newChannel.name) changes.push(`Name: \`\`${oldChannel.name}\`\` -> \`\`${newChannel.name}\`\``);
-  if (oldChannel.topic !== newChannel.topic) changes.push(`Topic: \`\`${oldChannel.topic || 'N/A'}\`\` -> \`\`${newChannel.topic || 'N/A'}\`\``);
+  if (oldChannel.name !== newChannel.name) {
+    changes.push(`Name: \`\`${oldChannel.name}\`\` -> \`\`${newChannel.name}\`\``);
+  }
+  if (oldChannel.topic !== newChannel.topic) {
+    changes.push(`Topic: \`\`${oldChannel.topic || 'N/A'}\`\` -> \`\`${newChannel.topic || 'N/A'}\`\``);
+  }
   if (changes.length > 0) {
-    const logMessage = `\`[CHANNEL UPDATE]\` Channel **#${newChannel.name}** was updated.\n${changes.join('\n')}`;
+    const logMessage = `\`[CHANNEL UPDATE]\` Channel **#${newChannel.name}** was updated.
+${changes.join('\n')}`;
     await sendLog(newChannel.guild.id, logMessage);
   }
 });
 
 const PREFIX = '$';
-
-// ---- Main Message Handler (`messageCreate`) ----
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
+    // ---- [NEW] ECONOMY - EARN FOR CHATTING ----
     if (!message.content.startsWith(PREFIX)) {
         const now = Date.now();
         const lastMessage = messageCooldowns.get(message.author.id);
         if (!lastMessage || now - lastMessage > MESSAGE_COOLDOWN) {
-            updateBalance(message.author.id, 1);
+            updateBalance(message.author.id, 1); // Award 1 Gold Coin
             messageCooldowns.set(message.author.id, now);
             saveEconomyData();
         }
     }
 
-    const guildCountingData = botData.countingData[message.guild.id];
+
+    // ---- COUNTING GAME LOGIC ----
+    const guildCountingData = countingData[message.guild.id];
     if (guildCountingData && message.channel.id === guildCountingData.channelId) {
-        if (!message.content.startsWith(PREFIX)) {
+        // Allow commands to pass through
+        if (message.content.startsWith(PREFIX)) {
+            // Do nothing, let command handler below take over
+        } else {
             const number = parseInt(message.content);
-            if (isNaN(number)) return; 
+
+            // Ignore non-numeric messages
+            if (isNaN(number)) {
+                return; 
+            }
 
             let failed = false;
             if (number !== guildCountingData.currentCount + 1 || message.author.id === guildCountingData.lastUserId) {
@@ -1835,8 +1911,10 @@ client.on('messageCreate', async (message) => {
                 const reason = number !== correctNextNumber 
                     ? `Wrong number noob! Learn to count.The next number was **${correctNextNumber}**.` 
                     : `You can't count twice in a row you noob smh. Pay attention !`;
+
                 await message.react('❌');
                 await message.channel.send(`**Count Reset!** ${message.author} ruined it at **${guildCountingData.currentCount}**. ${reason} The count starts back at **1**.`);
+
                 guildCountingData.currentCount = 0;
                 guildCountingData.lastUserId = null;
                 failed = true;
@@ -1847,11 +1925,14 @@ client.on('messageCreate', async (message) => {
                 if (guildCountingData.currentCount > (guildCountingData.highScore || 0)) {
                     guildCountingData.highScore = guildCountingData.currentCount;
                 }
+
                 const userId = message.author.id;
                 guildCountingData.leaderboard[userId] = (guildCountingData.leaderboard[userId] || 0) + 1;
                 
-                updateBalance(message.author.id, 5);
+                // [NEW] ECONOMY - EARN FOR COUNTING
+                updateBalance(message.author.id, 5); // Award 5 Gold Coins
                 saveEconomyData();
+
                 await message.react('✅');
             }
             saveCountingData();
@@ -1859,19 +1940,22 @@ client.on('messageCreate', async (message) => {
         }
     }
 
+
     if (!message.content.startsWith(PREFIX) && !message.mentions.users.has(client.user.id)) return;
 
     const args = message.content.slice(PREFIX.length).trim().split(/ +/);
     const command = message.content.startsWith(PREFIX) ? args.shift().toLowerCase() : null;
 
     if (command) {
+        // ---- [NEW] ECONOMY - EARN FOR USING COMMANDS ----
         const now = Date.now();
         const lastCommand = commandCooldowns.get(message.author.id);
         if (!lastCommand || now - lastCommand > COMMAND_COOLDOWN) {
-            updateBalance(message.author.id, 2);
+            updateBalance(message.author.id, 2); // Award 2 Gold Coins
             commandCooldowns.set(message.author.id, now);
             saveEconomyData();
         }
+
         await sendLog(message.guild.id, `\`[COMMAND]\` **${message.author.tag}** used command \`\`${message.content}\`\``);
     }
 
@@ -1883,17 +1967,130 @@ client.on('messageCreate', async (message) => {
         return true;
     }
 
-// ---- COMMANDS START HERE ----
-
+// ---- Help Command ----
 if (command === 'help') {
-  const embed1 = new EmbedBuilder().setTitle('📖 Bot Commands – Utility & Fun').setColor(0x39FF14).setDescription( `📌 **Utility Commands**\n` + `• \`${PREFIX}prefix\` – Show the bot prefix\n` + `• \`${PREFIX}ping\` – Check bot response time\n` + `• \`${PREFIX}stats\` – Server member stats\n` + `• \`${PREFIX}uptime\` – Bot active time\n` + `• \`${PREFIX}botinfo\` – Info about the bot\n` + `• \`${PREFIX}invite\` – Get bot invite link\n` + `• \`${PREFIX}setwelcome\` / \`${PREFIX}clearwelcome\` – Set/clear welcome message\n` + `• \`${PREFIX}setleave\` / \`${PREFIX}clearleave\` – Set/clear leave message\n\n` + `🪙 **Fun & Games**\n` + `• \`${PREFIX}flip\` – Flip a coin\n` + `• \`${PREFIX}8ball [question]\` – Magic 8-ball\n` + `• \`${PREFIX}dice\` – Roll a die\n` + `• \`${PREFIX}rate @user\` – Rate someone\n` + `• \`${PREFIX}howgay @user\` – Gay meter\n` + `• \`${PREFIX}sus @user\` – Sus meter\n` + `• \`${PREFIX}truth\` – Truth question\n` + `• \`${PREFIX}dare\` – Dare\n` + `• \`${PREFIX}roast @user\` – Roast\n` + `• \`${PREFIX}compliment @user\` – Compliment\n` + `• \`${PREFIX}meme\` – Random meme\n` + `• \`${PREFIX}nsfw-meme\` – Random NSFW meme (NSFW channels only)\n` + `• \`${PREFIX}haunt\` / \`${PREFIX}unhaunt\` – Haunting\n` + `• \`${PREFIX}blackjack\`, \`${PREFIX}hit\`, \`${PREFIX}stand\` – Play Blackjack` );
-  const embed2 = new EmbedBuilder().setTitle('🎯 Moderation & Logging').setColor(0x39FF14).setDescription( `🎉 **Moderation Commands**\n` + `• \`${PREFIX}giveaway <duration> <prize>\` – Start a giveaway\n` + `• \`${PREFIX}kick @user [reason]\` – Kick a user\n` + `• \`${PREFIX}ban @user [reason]\` – Ban a user\n` + `• \`${PREFIX}mute @user [time]\` – Mute a user\n` + `• \`${PREFIX}unmute @user\` – Unmute a user\n` + `• \`${PREFIX}warn @user [reason]\` – Warn a user\n` + `• \`${PREFIX}warnings @user\` – Show warnings\n` + `• \`${PREFIX}clear [number]\` – Delete messages\n` + `• \`${PREFIX}lock\` / \`${PREFIX}unlock\` – Lock/unlock channel\n` + `• \`${PREFIX}antiraid on/off\` – Engage/disengage server lockdown\n` + `• \`${PREFIX}slowmode [seconds]\` – Set slowmode\n` + `• \`${PREFIX}role add/remove @user <role>\` – Manage roles\n` + `• \`${PREFIX}unauthorized\` – Unauthorized response\n` + `• \`${PREFIX}nuke delete [count]\` – Delete bulk channels\n` + `• \`${PREFIX}nuke rename <n> [count]\` – Rename bulk channels\n\n` + `🖥️ **Log Mode Commands**\n` + `• \`${PREFIX}logmode on [#channel]\` – Enable logging\n` + `• \`${PREFIX}logmode off\` – Disable logging\n` + `• \`${PREFIX}logmode setmaster <channelID>\` – Set master log (Owner only)\n` + `• \`${PREFIX}logmode masteron/off\` – Enable/disable master log (Owner only)` );
-  const embed3 = new EmbedBuilder().setTitle('🔢 QOTD, Counting, Economy & Battle').setColor(0x39FF14).setDescription( `❓ **Question of the Day**\n` + `• \`${PREFIX}qotd on/off\` – Enable/disable QOTD in channel\n` + `• \`${PREFIX}qotd everyone on/off\` – Enable/disable @everyone ping\n\n` + `🔢 **Counting Game**\n` + `• \`${PREFIX}counting set [#channel]\` – Set counting channel\n` + `• \`${PREFIX}counting off\` – Disable counting game\n` + `• \`${PREFIX}counting leaderboard\` – Show global leaderboard\n\n` + `🧑‍💼 **Info & Tools**\n` + `• \`${PREFIX}userinfo\` – User info\n` + `• \`${PREFIX}avatar @user\` – Avatar\n` + `• \`${PREFIX}serverinfo\` – Server info\n` + `• \`${PREFIX}shout [msg]\` – Shout\n` + `• \`${PREFIX}spoiler [msg]\` – Spoiler\n` + `• \`${PREFIX}say [msg]\` – Echo\n` + `• \`${PREFIX}send <channelID> <message>\` – Send elsewhere\n\n` + `🤖 **AI Commands**\n` + `• \`${PREFIX}ai <prompt>\` – Ask Google Gemini AI\n` + `• \`@bot <prompt>\` – Ask OpenRouter AI\n\n` + `💰 **Economy Commands**\n` + `• \`${PREFIX}balance [@user]\` – Check balance\n` + `• \`${PREFIX}pay @user <amount>\` – Pay coins\n` + `• \`${PREFIX}give/take @user <amount>\` – Owner & Immune only\n\n` + `🪖 **Battle System**\n` + `• \`${PREFIX}store [buy <item_id>]\` – Shop\n` + `• \`${PREFIX}inventory [@user]\` – View inventory\n` + `• \`${PREFIX}loadout [equip/unequip <item_id>]\` – Manage loadout\n` + `• \`${PREFIX}battle @user\` – Automated 1v1 battle\n` + `• \`${PREFIX}dw @user\` – Turn-based "Deadliest Warrior" battle\n\n` + `👑 **Owner & Immune Commands**\n` + `• \`${PREFIX}promote/demote @user <rank>\` – Grant/revoke immunity\n` + `• \`${PREFIX}serverlist\` – List servers\n` + `• \`${PREFIX}store add/remove ...\` – Manage shop\n\n` + `🏅 **Immunity Ranks:** 2LT, 1LT, CPT, MAJ, LTC, COL, BG, MG, LTG, GEN\n\n` + `💰 **Economy Permissions:**\n` + `• Bot Owner: Full control\n` + `• Immune Users: Give/take except owner\n` + `• Normal Users: Can only pay coins` ).setFooter({ text: 'Use $help for full command list 📖' }).setImage('https://i.imgur.com/NAneRS5.gif');
+  // 1️⃣ Utility & Fun/Games
+  const embed1 = new EmbedBuilder()
+    .setTitle('📖 Bot Commands – Utility & Fun')
+    .setColor(0x39FF14)
+    .setDescription(
+      `📌 **Utility Commands**\n` +
+      `• \`${PREFIX}prefix\` – Show the bot prefix\n` +
+      `• \`${PREFIX}ping\` – Check bot response time\n` +
+      `• \`${PREFIX}stats\` – Server member stats\n` +
+      `• \`${PREFIX}uptime\` – Bot active time\n` +
+      `• \`${PREFIX}botinfo\` – Info about the bot\n` +
+      `• \`${PREFIX}invite\` – Get bot invite link\n` +
+      `• \`${PREFIX}setwelcome\` / \`${PREFIX}clearwelcome\` – Set/clear welcome message\n` +
+      `• \`${PREFIX}setleave\` / \`${PREFIX}clearleave\` – Set/clear leave message\n\n` +
+
+      `🪙 **Fun & Games**\n` +
+      `• \`${PREFIX}flip\` – Flip a coin\n` +
+      `• \`${PREFIX}8ball [question]\` – Magic 8-ball\n` +
+      `• \`${PREFIX}dice\` – Roll a die\n` +
+      `• \`${PREFIX}rate @user\` – Rate someone\n` +
+      `• \`${PREFIX}howgay @user\` – Gay meter\n` +
+      `• \`${PREFIX}sus @user\` – Sus meter\n` +
+      `• \`${PREFIX}truth\` – Truth question\n` +
+      `• \`${PREFIX}dare\` – Dare\n` +
+      `• \`${PREFIX}roast @user\` – Roast\n` +
+      `• \`${PREFIX}compliment @user\` – Compliment\n` +
+      `• \`${PREFIX}meme\` – Random meme\n` +
+      `• \`${PREFIX}nsfw-meme\` – Random NSFW meme (NSFW channels only)\n` +
+      `• \`${PREFIX}haunt\` / \`${PREFIX}unhaunt\` – Haunting\n` +
+      `• \`${PREFIX}blackjack\`, \`${PREFIX}hit\`, \`${PREFIX}stand\` – Play Blackjack`
+    );
+
+  // 2️⃣ Moderation & Log Mode
+  const embed2 = new EmbedBuilder()
+    .setTitle('🎯 Moderation & Logging')
+    .setColor(0x39FF14)
+    .setDescription(
+      `🎉 **Moderation Commands**\n` +
+      `• \`${PREFIX}giveaway <duration> <prize>\` – Start a giveaway\n` +
+      `• \`${PREFIX}kick @user [reason]\` – Kick a user\n` +
+      `• \`${PREFIX}ban @user [reason]\` – Ban a user\n` +
+      `• \`${PREFIX}mute @user [time]\` – Mute a user\n` +
+      `• \`${PREFIX}unmute @user\` – Unmute a user\n` +
+      `• \`${PREFIX}warn @user [reason]\` – Warn a user\n` +
+      `• \`${PREFIX}warnings @user\` – Show warnings\n` +
+      `• \`${PREFIX}clear [number]\` – Delete messages\n` +
+      `• \`${PREFIX}lock\` / \`${PREFIX}unlock\` – Lock/unlock channel\n` +
+      `• \`${PREFIX}antiraid on/off\` – Engage/disengage server lockdown\n` +
+      `• \`${PREFIX}slowmode [seconds]\` – Set slowmode\n` +
+      `• \`${PREFIX}role add/remove @user <role>\` – Manage roles\n` +
+      `• \`${PREFIX}unauthorized\` – Unauthorized response\n` +
+      `• \`${PREFIX}nuke delete [count]\` – Delete bulk channels\n` +
+      `• \`${PREFIX}nuke rename <n> [count]\` – Rename bulk channels\n\n` +
+
+      `🖥️ **Log Mode Commands**\n` +
+      `• \`${PREFIX}logmode on [#channel]\` – Enable logging\n` +
+      `• \`${PREFIX}logmode off\` – Disable logging\n` +
+      `• \`${PREFIX}logmode setmaster <channelID>\` – Set master log (Owner only)\n` +
+      `• \`${PREFIX}logmode masteron/off\` – Enable/disable master log (Owner only)`
+    );
+
+  // 3️⃣ QOTD, Counting, Info, AI, Economy, Battle, Owner
+  const embed3 = new EmbedBuilder()
+    .setTitle('🔢 QOTD, Counting, Economy & Battle')
+    .setColor(0x39FF14)
+    .setDescription(
+      `❓ **Question of the Day**\n` +
+      `• \`${PREFIX}qotd on/off\` – Enable/disable QOTD in channel\n` +
+      `• \`${PREFIX}qotd everyone on/off\` – Enable/disable @everyone ping\n\n` +
+
+      `🔢 **Counting Game**\n` +
+      `• \`${PREFIX}counting set [#channel]\` – Set counting channel\n` +
+      `• \`${PREFIX}counting off\` – Disable counting game\n` +
+      `• \`${PREFIX}counting leaderboard\` – Show global leaderboard\n\n` +
+
+      `🧑‍💼 **Info & Tools**\n` +
+      `• \`${PREFIX}userinfo\` – User info\n` +
+      `• \`${PREFIX}avatar @user\` – Avatar\n` +
+      `• \`${PREFIX}serverinfo\` – Server info\n` +
+      `• \`${PREFIX}shout [msg]\` – Shout\n` +
+      `• \`${PREFIX}spoiler [msg]\` – Spoiler\n` +
+      `• \`${PREFIX}say [msg]\` – Echo\n` +
+      `• \`${PREFIX}send <channelID> <message>\` – Send elsewhere\n\n` +
+
+      `🤖 **AI Commands**\n` +
+      `• \`${PREFIX}ai <prompt>\` – Ask Google Gemini AI\n` +
+      `• \`@bot <prompt>\` – Ask OpenRouter AI\n\n` +
+
+      `💰 **Economy Commands**\n` +
+      `• \`${PREFIX}balance [@user]\` – Check balance\n` +
+      `• \`${PREFIX}pay @user <amount>\` – Pay coins\n` +
+      `• \`${PREFIX}give/take @user <amount>\` – Owner & Immune only\n\n` +
+
+      `🪖 **Battle System**\n` +
+      `• \`${PREFIX}store [buy <item_id>]\` – Shop\n` +
+      `• \`${PREFIX}inventory [@user]\` – View inventory\n` +
+      `• \`${PREFIX}loadout [equip/unequip <item_id>]\` – Manage loadout\n` +
+      `• \`${PREFIX}battle @user\` – Automated 1v1 battle\n` +
+      `• \`${PREFIX}dw @user\` – Turn-based "Deadliest Warrior" battle\n\n` +
+
+      `👑 **Owner & Immune Commands**\n` +
+      `• \`${PREFIX}promote/demote @user <rank>\` – Grant/revoke immunity\n` +
+      `• \`${PREFIX}serverlist\` – List servers\n` +
+      `• \`${PREFIX}store add/remove ...\` – Manage shop\n\n` +
+
+      `🏅 **Immunity Ranks:** 2LT, 1LT, CPT, MAJ, LTC, COL, BG, MG, LTG, GEN\n\n` +
+
+      `💰 **Economy Permissions:**\n` +
+      `• Bot Owner: Full control\n` +
+      `• Immune Users: Give/take except owner\n` +
+      `• Normal Users: Can only pay coins`
+    )
+    .setFooter({ text: 'Use $help for full command list 📖' })
+    .setImage('https://i.imgur.com/NAneRS5.gif'); // permanent image
+
+  // Send embeds
   await message.channel.send({ embeds: [embed1] });
   await message.channel.send({ embeds: [embed2] });
   await message.channel.send({ embeds: [embed3] });
 }
 
+// ---- COUNTING GAME COMMANDS ----
 else if (command === 'counting' || command === 'c') {
     const subcommand = args[0]?.toLowerCase();
 
@@ -1901,12 +2098,12 @@ else if (command === 'counting' || command === 'c') {
         if (!checkPermission(PermissionsBitField.Flags.ManageChannels)) return;
         const channel = message.mentions.channels.first() || message.channel;
 
-        botData.countingData[message.guild.id] = {
+        countingData[message.guild.id] = {
             channelId: channel.id,
             currentCount: 0,
             lastUserId: null,
-            highScore: botData.countingData[message.guild.id]?.highScore || 0,
-            leaderboard: botData.countingData[message.guild.id]?.leaderboard || {}
+            highScore: countingData[message.guild.id]?.highScore || 0, // Preserve high score on re-set
+            leaderboard: countingData[message.guild.id]?.leaderboard || {} // Preserve user score leaderboard on re-set
         };
         saveCountingData();
         return message.reply(`✅ Counting channel has been set to ${channel}. The next number is **1**.`);
@@ -1914,20 +2111,23 @@ else if (command === 'counting' || command === 'c') {
 
     if (subcommand === 'off') {
         if (!checkPermission(PermissionsBitField.Flags.ManageChannels)) return;
-        if (!botData.countingData[message.guild.id]) {
+        if (!countingData[message.guild.id]) {
             return message.reply('❌ Counting is not active in this server.');
         }
-        delete botData.countingData[message.guild.id].channelId;
+        // Keep the data but remove the active channel
+        delete countingData[message.guild.id].channelId;
         saveCountingData();
         return message.reply('✅ Counting game has been disabled for this server. All data is saved.');
     }
 
     if (subcommand === 'leaderboard' || subcommand === 'lb') {
         const serverHighScores = [];
-        for (const [guildId, guildData] of Object.entries(botData.countingData)) {
+
+        for (const [guildId, guildData] of Object.entries(countingData)) {
+            // Only include servers with a recorded high score
             if (guildData.highScore && guildData.highScore > 0) {
                 const guild = client.guilds.cache.get(guildId);
-                if (guild) {
+                if (guild) { // Ensure the bot is still in the guild
                     serverHighScores.push({
                         name: guild.name,
                         score: guildData.highScore
@@ -1935,52 +2135,92 @@ else if (command === 'counting' || command === 'c') {
                 }
             }
         }
+
         if (serverHighScores.length === 0) {
             return message.reply('The global leaderboard is empty. No high scores have been set yet!');
         }
+
+        // Sort from highest score to lowest
         serverHighScores.sort((a, b) => b.score - a.score);
+
         const leaderboardEmbed = {
           color: 0x0099ff,
           title: '🏆 Global High Score Leaderboard',
-          description: serverHighScores.slice(0, 20).map((entry, index) => `${index + 1}. **${entry.name}**: ${entry.score}`).join('\n'),
+          description: serverHighScores
+            .slice(0, 20) // Show top 20 servers
+            .map((entry, index) => 
+              `${index + 1}. **${entry.name}**: ${entry.score}`
+          ).join('\n'),
           footer: { text: 'Highest number reached in each server' }
         };
+
         return message.channel.send({ embeds: [leaderboardEmbed] });
     }
 
     return message.reply('❌ Invalid subcommand. Use `$counting set`, `$counting off`, or `$counting leaderboard`.');
 }
 
+// ====================================================================
+// ---- HIGHER OR LOWER GAME COMMAND ($hl) ----
+// ====================================================================
 else if (command === 'hl') {
     const game = higherLowerGames.get(message.guild.id);
     const reward = 100;
-    const gifUrl = 'https://i.imgur.com/rN99D4p.png';
+    const gifUrl = 'https://i.imgur.com/rN99D4p.png'; // Placeholder
     
     if (args.length === 0) {
+        // Start a new game
         if (game) {
             return message.reply(`❌ A Higher or Lower game is already active! Guess \`higher\` or \`lower\` to continue, or wait for it to expire.`);
         }
-        const initialNumber = Math.floor(Math.random() * 100) + 1;
+
+        const initialNumber = Math.floor(Math.random() * 100) + 1; // 1-100
         const nextNumber = Math.floor(Math.random() * 100) + 1;
-        const startEmbed = new EmbedBuilder().setTitle('⬆️⬇️ Higher or Lower').setDescription(`**Starting Number:** \`${initialNumber}\`\n\nWill the next number be **Higher** or **Lower** than \`${initialNumber}\`?`).addFields({ name: '💰 Potential Win', value: `\`${reward} Gold Coins\``, inline: true }).setFooter({ text: 'Reply with "higher" or "lower" to guess. Game expires in 30 seconds.' }).setColor(0x0099FF).setImage(gifUrl);
+        
+        const startEmbed = new EmbedBuilder()
+            .setTitle('⬆️⬇️ Higher or Lower')
+            .setDescription(`**Starting Number:** \`${initialNumber}\`\n\nWill the next number be **Higher** or **Lower** than \`${initialNumber}\`?`)
+            .addFields(
+                { name: '💰 Potential Win', value: `\`${reward} Gold Coins\``, inline: true }
+            )
+            .setFooter({ text: 'Reply with "higher" or "lower" to guess. Game expires in 30 seconds.' })
+            .setColor(0x0099FF)
+            .setImage(gifUrl);
+
         const gameMessage = await message.channel.send({ embeds: [startEmbed] });
-        const newGame = { messageId: gameMessage.id, number: nextNumber, attempts: 1, player: message.author.id, initialNumber: initialNumber };
+
+        const newGame = {
+            messageId: gameMessage.id,
+            number: nextNumber,
+            attempts: 1,
+            player: message.author.id,
+            initialNumber: initialNumber
+        };
         higherLowerGames.set(message.guild.id, newGame);
+
+        // Auto-expire game after 30 seconds
         setTimeout(() => {
             if (higherLowerGames.get(message.guild.id)?.messageId === gameMessage.id) {
                 higherLowerGames.delete(message.guild.id);
-                gameMessage.edit({ embeds: [startEmbed.setFooter({ text: 'Game expired due to inactivity.' }).setColor(0xAAAAAA)] }).catch(() => {});
+                gameMessage.edit({ 
+                    embeds: [startEmbed.setFooter({ text: 'Game expired due to inactivity.' }).setColor(0xAAAAAA)]
+                }).catch(() => {});
             }
-        }, 30000);
+        }, 30000); // 30 seconds
+        
     } else if (game && game.player === message.author.id) {
+        // Player is making a guess
         const guess = args[0].toLowerCase();
         if (guess !== 'higher' && guess !== 'lower') {
             return message.reply('❌ Invalid guess. Please reply with `higher` or `lower`.');
         }
+
         const currentNumber = game.initialNumber;
         const nextNumber = game.number;
+        
         let didWin = false;
         let resultMessage = '';
+
         if (guess === 'higher') {
             didWin = nextNumber > currentNumber;
             resultMessage = didWin ? `🎉 **Higher!** \`${nextNumber}\` is greater than \`${currentNumber}\`.` : `💔 **Lower!** \`${nextNumber}\` is not greater than \`${currentNumber}\`.`;
@@ -1988,93 +2228,181 @@ else if (command === 'hl') {
             didWin = nextNumber < currentNumber;
             resultMessage = didWin ? `🎉 **Lower!** \`${nextNumber}\` is less than \`${currentNumber}\`.` : `💔 **Higher!** \`${nextNumber}\` is not less than \`${currentNumber}\`.`;
         }
-        higherLowerGames.delete(message.guild.id);
-        const finalEmbed = new EmbedBuilder().setTitle('⬆️⬇️ Higher or Lower: Result').setDescription(resultMessage).setImage(gifUrl);
+        
+        higherLowerGames.delete(message.guild.id); // End game after one guess
+        
+        const finalEmbed = new EmbedBuilder()
+            .setTitle('⬆️⬇️ Higher or Lower: Result')
+            .setDescription(resultMessage)
+            .setImage(gifUrl);
+            
         if (didWin) {
             const newBalance = updateBalance(message.author.id, reward);
             saveEconomyData();
-            finalEmbed.setColor(0x00FF00).addFields({ name: '💰 Winnings', value: `+${reward} Gold Coins`, inline: true }, { name: '💸 New Balance', value: `\`${newBalance}\` Gold Coins`, inline: true });
+            finalEmbed.setColor(0x00FF00)
+                      .addFields(
+                          { name: '💰 Winnings', value: `+${reward} Gold Coins`, inline: true },
+                          { name: '💸 New Balance', value: `\`${newBalance}\` Gold Coins`, inline: true }
+                      );
         } else {
-            finalEmbed.setColor(0xFF0000).addFields({ name: '😭 Loss', value: 'The game has ended.' });
+            finalEmbed.setColor(0xFF0000)
+                      .addFields({ name: '😭 Loss', value: 'The game has ended.' });
         }
+        
         message.channel.send({ embeds: [finalEmbed] });
     }
 }
 
+// ====================================================================
+// ---- GUESS THE NUMBER GAME COMMAND ($gtn) ----
+// ====================================================================
 else if (command === 'gtn') {
     const game = guessNumberGames.get(message.channel.id);
     const reward = 10000;
-    const gifUrl = 'https://i.imgur.com/rN99D4p.png';
+    const gifUrl = 'https://i.imgur.com/rN99D4p.png'; // Placeholder
 
     if (args.length === 0) {
+        // Start a new game
         if (game) {
             return message.reply(`❌ A Guess the Number game is already active in this channel!`);
         }
+        
+        // Generate number between 1 and 100
         const targetNumber = Math.floor(Math.random() * 100) + 1;
-        guessNumberGames.set(message.channel.id, { number: targetNumber, player: null, attempts: 0 });
-        const startEmbed = new EmbedBuilder().setTitle('🔢 Guess The Number (1-100)').setDescription('I have chosen a secret number between **1 and 100**. Start guessing!').addFields({ name: '🏆 Jackpot', value: `**${reward} Gold Coins**`, inline: true }).setFooter({ text: 'First user to guess correctly wins!' }).setColor(0x3498DB).setImage(gifUrl);
+        
+        guessNumberGames.set(message.channel.id, {
+            number: targetNumber,
+            player: null, // Any user can participate
+            attempts: 0
+        });
+
+        const startEmbed = new EmbedBuilder()
+            .setTitle('🔢 Guess The Number (1-100)')
+            .setDescription('I have chosen a secret number between **1 and 100**. Start guessing!')
+            .addFields(
+                { name: '🏆 Jackpot', value: `**${reward} Gold Coins**`, inline: true }
+            )
+            .setFooter({ text: 'First user to guess correctly wins!' })
+            .setColor(0x3498DB)
+            .setImage(gifUrl);
+            
         return message.channel.send({ embeds: [startEmbed] });
+
     } else {
+        // User is making a guess
         if (!game) {
             return message.reply('❌ No Guess the Number game is currently active. Start one with `$gtn`.');
         }
+        
         const guess = parseInt(args[0]);
         if (isNaN(guess) || guess < 1 || guess > 100) {
             return message.reply('❌ Please guess a valid number between 1 and 100.');
         }
+
         game.attempts++;
+
         let response = '';
         if (guess < game.number) {
             response = `⬆️ Too low! Try a higher number.`;
         } else if (guess > game.number) {
             response = `⬇️ Too high! Try a lower number.`;
         } else {
+            // Winner!
             const winner = message.author;
             guessNumberGames.delete(message.channel.id);
+            
             const newBalance = updateBalance(winner.id, reward);
             saveEconomyData();
-            const winEmbed = new EmbedBuilder().setTitle('🎉 GUESS THE NUMBER: WINNER! 🎉').setDescription(`Congratulations, <@${winner.id}>! You guessed the number **${game.number}** in **${game.attempts}** attempts!`).addFields({ name: '🏆 Winnings', value: `+${reward} Gold Coins`, inline: true }, { name: '💸 New Balance', value: `\`${newBalance}\` Gold Coins`, inline: true }).setColor(0x2ECC71).setImage(gifUrl);
+            
+            const winEmbed = new EmbedBuilder()
+                .setTitle('🎉 GUESS THE NUMBER: WINNER! 🎉')
+                .setDescription(`Congratulations, <@${winner.id}>! You guessed the number **${game.number}** in **${game.attempts}** attempts!`)
+                .addFields(
+                    { name: '🏆 Winnings', value: `+${reward} Gold Coins`, inline: true },
+                    { name: '💸 New Balance', value: `\`${newBalance}\` Gold Coins`, inline: true }
+                )
+                .setColor(0x2ECC71)
+                .setImage(gifUrl);
+
             return message.channel.send({ embeds: [winEmbed] });
         }
+
+        // Send feedback message for incorrect guess
         message.reply(response);
     }
 }
 
+// ====================================================================
+// ---- LOTTERY GAME COMMANDS ($lottery, $buyticket) ----
+// ====================================================================
 else if (command === 'lottery') {
-    const nextDraw = new Date(botData.lotteryData.drawDate);
-    const timeUntilDraw = Math.floor(nextDraw.getTime() / 1000);
-    const gifUrl = 'https://i.imgur.com/rN99D4p.png';
-    const infoEmbed = new EmbedBuilder().setTitle('🎟️ Weekly Lottery Information').setDescription('Match 7 unique numbers (1-99) to win the jackpot!').addFields({ name: '🏆 Jackpot Prize', value: `**${botData.lotteryData.prizePool.toLocaleString()} Gold Coins**`, inline: true }, { name: '⏰ Next Draw', value: `<t:${timeUntilDraw}:R> (on <t:${timeUntilDraw}:F>)`, inline: true }, { name: '🔢 Your Tickets', value: `${botData.lotteryData.entries[message.guild.id]?.[message.author.id]?.length || 0}`, inline: true }, { name: '💵 Cost to Enter', value: '1,000 Gold Coins per ticket', inline: true }, { name: '❓ How to Play', value: 'Use `$buyticket <num1> <num2> ... <num7>`', inline: false }).setColor(0x9B59B6).setImage(gifUrl).setFooter({ text: 'Good luck! All tickets reset after the draw.' });
+    const nextDraw = new Date(lotteryData.drawDate);
+    const timeUntilDraw = Math.floor(nextDraw.getTime() / 1000); // Unix timestamp for Discord's <t:X:R> format
+    const gifUrl = 'https://i.imgur.com/rN99D4p.png'; // Placeholder
+
+    const infoEmbed = new EmbedBuilder()
+        .setTitle('🎟️ Weekly Lottery Information')
+        .setDescription('Match 7 unique numbers (1-99) to win the jackpot!')
+        .addFields(
+            { name: '🏆 Jackpot Prize', value: `**${lotteryData.prizePool.toLocaleString()} Gold Coins**`, inline: true },
+            { name: '⏰ Next Draw', value: `<t:${timeUntilDraw}:R> (on <t:${timeUntilDraw}:F>)`, inline: true },
+            { name: '🔢 Your Tickets', value: `${lotteryData.entries[message.guild.id]?.[message.author.id]?.length || 0}`, inline: true },
+            { name: '💵 Cost to Enter', value: '1,000 Gold Coins per ticket', inline: true },
+            { name: '❓ How to Play', value: 'Use `$buyticket <num1> <num2> ... <num7>`', inline: false }
+        )
+        .setColor(0x9B59B6) // Purple
+        .setImage(gifUrl)
+        .setFooter({ text: 'Good luck! All tickets reset after the draw.' });
+
     message.channel.send({ embeds: [infoEmbed] });
 }
-
 else if (command === 'buyticket') {
     const ticketCost = 1000;
     const balance = getBalance(message.author.id);
+    
     if (balance < ticketCost) {
         return message.reply(`❌ Buying a ticket costs **${ticketCost} Gold Coins**, and you only have **${balance}**.`);
     }
+
     if (args.length !== 7) {
         return message.reply('❌ You must provide exactly 7 unique numbers between 1 and 99. Usage: `$buyticket 5 10 15 20 25 30 35`');
     }
+    
     const userNumbers = args.map(n => parseInt(n)).filter(n => !isNaN(n) && n >= 1 && n <= 99);
+    
     if (userNumbers.length !== 7 || new Set(userNumbers).size !== 7) {
         return message.reply('❌ All 7 numbers must be unique and between 1 and 99.');
     }
+    
+    // Deduct cost
     const newBalance = updateBalance(message.author.id, -ticketCost);
     saveEconomyData();
-    if (!botData.lotteryData.entries[message.guild.id]) {
-        botData.lotteryData.entries[message.guild.id] = {};
+    
+    // Store ticket
+    if (!lotteryData.entries[message.guild.id]) {
+        lotteryData.entries[message.guild.id] = {};
     }
-    if (!botData.lotteryData.entries[message.guild.id][message.author.id]) {
-        botData.lotteryData.entries[message.guild.id][message.author.id] = [];
+    if (!lotteryData.entries[message.guild.id][message.author.id]) {
+        lotteryData.entries[message.guild.id][message.author.id] = [];
     }
-    botData.lotteryData.entries[message.guild.id][message.author.id].push(userNumbers.sort((a, b) => a - b));
+    
+    // Store the ticket numbers
+    lotteryData.entries[message.guild.id][message.author.id].push(userNumbers.sort((a, b) => a - b));
     saveLotteryData();
-    const embed = new EmbedBuilder().setTitle('✅ Lottery Ticket Purchased!').setDescription(`Your ticket numbers: \`${userNumbers.join(', ')}\`\nGood luck!`).addFields({ name: '💵 Cost', value: `-${ticketCost} Gold Coins`, inline: true }, { name: '💸 New Balance', value: `\`${newBalance}\` Gold Coins`, inline: true }).setColor(0x27AE60);
+    
+    const embed = new EmbedBuilder()
+        .setTitle('✅ Lottery Ticket Purchased!')
+        .setDescription(`Your ticket numbers: \`${userNumbers.join(', ')}\`\nGood luck!`)
+        .addFields(
+            { name: '💵 Cost', value: `-${ticketCost} Gold Coins`, inline: true },
+            { name: '💸 New Balance', value: `\`${newBalance}\` Gold Coins`, inline: true }
+        )
+        .setColor(0x27AE60);
+
     message.channel.send({ embeds: [embed] });
 }
   
+// ---- ECONOMY COMMANDS ----
 else if (command === 'balance' || command === 'bal') {
     const target = message.mentions.users.first() || message.author;
     const balance = getBalance(target.id);
@@ -2084,13 +2412,18 @@ else if (command === 'balance' || command === 'bal') {
 else if (command === 'give' || command === 'add') {
     const target = message.mentions.users.first();
     const amount = parseInt(args[1]);
+
     if (!target) return message.reply('❌ Please mention a user.');
     if (isNaN(amount) || amount <= 0) return message.reply('❌ Please provide a valid positive amount of Gold Coins.');
+    
+    // Owner can give to anyone including themselves
     if (message.author.id === OWNER_ID) {
         updateBalance(target.id, amount);
         saveEconomyData();
         return message.reply(`✅ Gave **${amount}** Gold Coins to **${target.username}**.`);
     }
+    
+    // Immune users can give to anyone EXCEPT the owner
     if (isImmune(message.author)) {
         if (target.id === OWNER_ID) {
             return message.reply('❌ You cannot modify the owner\'s balance.');
@@ -2099,19 +2432,26 @@ else if (command === 'give' || command === 'add') {
         saveEconomyData();
         return message.reply(`✅ Gave **${amount}** Gold Coins to **${target.username}**.`);
     }
+    
+    // Normal users cannot use this command
     return message.reply('❌ You do not have permission to use this command.');
 }
 
 else if (['take', 'remove', 'subtract'].includes(command)) {
     const target = message.mentions.users.first();
     const amount = parseInt(args[1]);
+
     if (!target) return message.reply('❌ Please mention a user.');
     if (isNaN(amount) || amount <= 0) return message.reply('❌ Please provide a valid positive amount of Gold Coins.');
+
+    // Owner can take from anyone including themselves
     if (message.author.id === OWNER_ID) {
         updateBalance(target.id, -amount);
         saveEconomyData();
         return message.reply(`✅ Took **${amount}** Gold Coins from **${target.username}**.`);
     }
+    
+    // Immune users can take from anyone EXCEPT the owner
     if (isImmune(message.author)) {
         if (target.id === OWNER_ID) {
             return message.reply('❌ You cannot modify the owner\'s balance.');
@@ -2120,79 +2460,111 @@ else if (['take', 'remove', 'subtract'].includes(command)) {
         saveEconomyData();
         return message.reply(`✅ Took **${amount}** Gold Coins from **${target.username}**.`);
     }
+    
+    // Normal users cannot use this command
     return message.reply('❌ You do not have permission to use this command.');
 }
 
+// NEW: Pay command for normal users
 else if (command === 'pay') {
     const target = message.mentions.users.first();
     const amount = parseInt(args[1]);
+
     if (!target) return message.reply('❌ Please mention a user to pay.');
     if (target.id === message.author.id) return message.reply('❌ You cannot pay yourself.');
     if (target.bot) return message.reply('❌ You cannot pay bots.');
     if (isNaN(amount) || amount <= 0) return message.reply('❌ Please provide a valid positive amount.');
+    
     const senderBalance = getBalance(message.author.id);
     if (senderBalance < amount) {
         return message.reply(`❌ You don't have enough Gold Coins. You have **${senderBalance}**, but tried to pay **${amount}**.`);
     }
+    
     updateBalance(message.author.id, -amount);
     updateBalance(target.id, amount);
     saveEconomyData();
+    
     message.reply(`✅ You paid **${amount}** Gold Coins to **${target.username}**.`);
 }
   
+// ---- [NEW] STORE, INVENTORY, LOADOUT COMMANDS ----
 else if (command === 'store') {
     const subcommand = args[0]?.toLowerCase();
+
+    // Immune-only commands to manage the store
     if (subcommand === 'add') {
         if (!isImmune(message.author)) return message.reply('❌ You are not authorized to manage the store.');
+        
         const [_, category, itemId, price, ...nameParts] = args;
         const itemName = nameParts.join(' ');
         const priceNum = parseInt(price);
+
         if (!category || !itemId || !price || !itemName) {
             return message.reply('❌ Usage: `$store add <category> <item_id> <price> <name>`');
         }
         if (isNaN(priceNum) || priceNum < 0) return message.reply('❌ Invalid price.');
-        if (!botData.storeData[category]) return message.reply(`❌ Invalid category. Valid categories are: ${Object.keys(botData.storeData).join(', ')}`);
+        if (!storeData[category]) return message.reply(`❌ Invalid category. Valid categories are: ${Object.keys(storeData).join(', ')}`);
         if (findItem(itemId)) return message.reply('❌ An item with that ID already exists.');
-        botData.storeData[category][itemId] = { name: itemName, price: priceNum, description: "Added via command.", stats: {}, effects: [] };
+
+        storeData[category][itemId] = { name: itemName, price: priceNum, description: "Added via command.", stats: {}, effects: [] };
         saveStoreData();
         return message.reply(`✅ Added **${itemName}** (\`${itemId}\`) to the store for **${priceNum}** Gold Coins.`);
     }
+
     if (subcommand === 'remove') {
         if (!isImmune(message.author)) return message.reply('❌ You are not authorized to manage the store.');
         const itemId = args[1];
         if (!itemId) return message.reply('❌ Usage: `$store remove <item_id>`');
+
         const item = findItem(itemId);
         if (!item) return message.reply('❌ Item not found.');
-        delete botData.storeData[item.category][item.id];
+
+        delete storeData[item.category][item.id];
         saveStoreData();
         return message.reply(`✅ Removed **${item.name}** (\`${itemId}\`) from the store.`);
     }
+
     if (subcommand === 'buy') {
         const itemId = args[1];
         if (!itemId) return message.reply('❌ Please specify an item ID to buy. Example: `$store buy glock19`');
+
         const item = findItem(itemId);
         if (!item) return message.reply('❌ That item does not exist.');
+
         const balance = getBalance(message.author.id);
         if (balance < item.price) {
             return message.reply(`❌ You don't have enough Gold Coins. You need **${item.price}**, but you only have **${balance}**.`);
         }
+
         const userPData = getPlayerData(message.author.id);
         if (userPData.inventory.includes(itemId)) {
             return message.reply('❌ You already own this item.');
         }
+
         updateBalance(message.author.id, -item.price);
-        const actualPlayerData = botData.playerData[message.author.id] || getPlayerData(message.author.id);
+        
+        // This is a bit tricky, we need to modify the actual player data, not the copy
+        const actualPlayerData = playerData[message.author.id] || getPlayerData(message.author.id);
         actualPlayerData.inventory.push(itemId);
         savePlayerData();
+        
         saveEconomyData();
         return message.reply(`✅ You purchased **${item.name}** for **${item.price}** Gold Coins!`);
     }
-    const storeEmbed = { color: 0x0099ff, title: '🏪 Item Store', description: 'Use `$store buy <item_id>` to purchase an item.', fields: [] };
-    for (const category in botData.storeData) {
+
+    // Default: View store
+    const storeEmbed = {
+        color: 0x0099ff,
+        title: '🏪 Item Store',
+        description: 'Use `$store buy <item_id>` to purchase an item.',
+        fields: []
+    };
+
+    for (const category in storeData) {
         const categoryName = category.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
         let itemsText = '';
-        for (const itemId in botData.storeData[category]) {
-            const item = botData.storeData[category][itemId];
+        for (const itemId in storeData[category]) {
+            const item = storeData[category][itemId];
             itemsText += `**${item.name}** - ${item.price} 🪙\n*ID: \`${itemId}\`*\n`;
         }
         if (itemsText) {
@@ -2205,11 +2577,18 @@ else if (command === 'store') {
 else if (command === 'inventory' || command === 'inv') {
     const target = message.mentions.users.first() || message.author;
     const userPData = getPlayerData(target.id);
-    const invEmbed = { color: 0x34eb6b, title: `🛍️ ${target.username}'s Inventory`, description: '' };
+
+    const invEmbed = {
+        color: 0x34eb6b,
+        title: `🛍️ ${target.username}'s Inventory`,
+        description: ''
+    };
+    
     if (userPData.inventory.length === 0) {
         invEmbed.description = 'This inventory is empty.';
     } else {
         const categorizedItems = { weapon: [], armor: [], throwable: [], misc: [] };
+
         userPData.inventory.forEach(itemId => {
             const item = findItem(itemId);
             if(item && categorizedItems[item.type]) {
@@ -2218,114 +2597,195 @@ else if (command === 'inventory' || command === 'inv') {
                  categorizedItems.misc.push(`- **${item.name}** (\`${item.id}\`)`);
             }
         });
+        
         let desc = '';
         if (categorizedItems.weapon.length > 0) desc += `**Weapons**\n${categorizedItems.weapon.join('\n')}\n\n`;
         if (categorizedItems.armor.length > 0) desc += `**Armor**\n${categorizedItems.armor.join('\n')}\n\n`;
         if (categorizedItems.throwable.length > 0) desc += `**Throwables**\n${categorizedItems.throwable.join('\n')}\n\n`;
         if (categorizedItems.misc.length > 0) desc += `**Miscellaneous**\n${categorizedItems.misc.join('\n')}\n\n`;
+
         invEmbed.description = desc.trim();
     }
+
     return message.channel.send({ embeds: [invEmbed] });
 }
 
 else if (command === 'loadout') {
     const subcommand = args[0]?.toLowerCase();
     const itemId = args[1];
+
     if (subcommand === 'equip') {
         if (!itemId) return message.reply('❌ Usage: `$loadout equip <item_id>`');
+        
         const userPData = getPlayerData(message.author.id);
         if (!userPData.inventory.includes(itemId)) {
             return message.reply("❌ You don't own that item. Buy it from the store first.");
         }
+
         const item = findItem(itemId);
         if (!item || item.type === 'misc') return message.reply("❌ This item cannot be equipped.");
-        const actualPlayerData = botData.playerData[message.author.id];
+
+        // Modify the actual player data
+        const actualPlayerData = playerData[message.author.id];
         actualPlayerData.loadout[item.type] = item.id;
         savePlayerData();
         return message.reply(`✅ Equipped **${item.name}**.`);
     }
+
     if (subcommand === 'unequip') {
         const slot = args[1]?.toLowerCase();
         if (!['weapon', 'armor', 'throwable'].includes(slot)) {
             return message.reply("❌ Usage: `$loadout unequip <weapon|armor|throwable>`");
         }
-        const actualPlayerData = botData.playerData[message.author.id];
+        
+        // Modify the actual player data
+        const actualPlayerData = playerData[message.author.id];
         const equippedItemId = actualPlayerData.loadout[slot];
         if (!equippedItemId) return message.reply(`❌ You don't have a ${slot} equipped.`);
+
         const item = findItem(equippedItemId);
         actualPlayerData.loadout[slot] = null;
         savePlayerData();
         return message.reply(`✅ Unequipped **${item.name}**.`);
     }
+
+    // Default: View loadout
     const target = message.mentions.users.first() || message.author;
     const userPData = getPlayerData(target.id);
     const loadout = userPData.loadout;
+
     const weapon = loadout.weapon ? findItem(loadout.weapon) : null;
     const armor = loadout.armor ? findItem(loadout.armor) : null;
     const throwable = loadout.throwable ? findItem(loadout.throwable) : null;
-    const loadoutEmbed = { color: 0xf5b042, title: `⚔️ ${target.username}'s Loadout`, fields: [ { name: '❤️ Health', value: `${userPData.health}/${userPData.maxHealth}`, inline: false }, { name: '🔫 Weapon', value: weapon ? `**${weapon.name}** (\`${weapon.id}\`)` : 'None', inline: true }, { name: '🛡️ Armor', value: armor ? `**${armor.name}** (\`${armor.id}\`)` : 'None', inline: true }, { name: '💣 Throwable', value: throwable ? `**${throwable.name}** (\`${throwable.id}\`)` : 'None', inline: true }, ], footer: { text: "Use `$loadout equip <id>` or `$loadout unequip <slot>`" } };
+    
+    const loadoutEmbed = {
+        color: 0xf5b042,
+        title: `⚔️ ${target.username}'s Loadout`,
+        fields: [
+            { name: '❤️ Health', value: `${userPData.health}/${userPData.maxHealth}`, inline: false },
+            { name: '🔫 Weapon', value: weapon ? `**${weapon.name}** (\`${weapon.id}\`)` : 'None', inline: true },
+            { name: '🛡️ Armor', value: armor ? `**${armor.name}** (\`${armor.id}\`)` : 'None', inline: true },
+            { name: '💣 Throwable', value: throwable ? `**${throwable.name}** (\`${throwable.id}\`)` : 'None', inline: true },
+        ],
+        footer: { text: "Use `$loadout equip <id>` or `$loadout unequip <slot>`" }
+    };
+
     return message.channel.send({ embeds: [loadoutEmbed] });
 }
 
+// ---- Automated Battle Command ----
 else if (command === 'battle' || command === '1v1') {
     const target = message.mentions.users.first();
+
     if (!target) return message.reply('❌ Please mention someone to battle! Example: `$battle @user`');
     if (target.id === message.author.id) return message.reply('❌ You cannot battle yourself!');
     if (target.bot) return message.reply('❌ You cannot battle a bot!');
+
     const challengerData = getPlayerData(message.author.id);
     const defenderData = getPlayerData(target.id);
+
     if (!challengerData.loadout.weapon) return message.reply('❌ You need to equip a weapon first! Use `$loadout equip <item_id>`');
     if (!defenderData.loadout.weapon) return message.reply(`❌ ${target.username} doesn't have a weapon equipped!`);
-    const challengeEmbed = new EmbedBuilder().setColor(0xff0000).setTitle('⚔️ AUTOMATED BATTLE CHALLENGE ⚔️').setDescription(`**${message.author.username}** has challenged **${target.username}** to an automated 1v1 battle!\n\n` + `**${target.username}**, react with ⚔️ to accept the challenge!\n\n` + `This battle will resolve automatically.`).addFields({ name: `${message.author.username}'s Loadout`, value: `🔫 ${challengerData.loadout.weapon ? findItem(challengerData.loadout.weapon).name : 'None'}`, inline: true }, { name: `${target.username}'s Loadout`, value: `🔫 ${defenderData.loadout.weapon ? findItem(defenderData.loadout.weapon).name : 'None'}`, inline: true }).setImage("https://i.imgur.com/yourTopBattle.gif").setFooter({ text: 'Challenge expires in 60 seconds' });
+
+    const challengeEmbed = new EmbedBuilder()
+        .setColor(0xff0000)
+        .setTitle('⚔️ AUTOMATED BATTLE CHALLENGE ⚔️')
+        .setDescription(`**${message.author.username}** has challenged **${target.username}** to an automated 1v1 battle!\n\n` +
+                        `**${target.username}**, react with ⚔️ to accept the challenge!\n\n` +
+                        `This battle will resolve automatically.`)
+        .addFields(
+            { name: `${message.author.username}'s Loadout`, value: `🔫 ${challengerData.loadout.weapon ? findItem(challengerData.loadout.weapon).name : 'None'}`, inline: true },
+            { name: `${target.username}'s Loadout`, value: `🔫 ${defenderData.loadout.weapon ? findItem(defenderData.loadout.weapon).name : 'None'}`, inline: true }
+        )
+        .setImage("https://i.imgur.com/yourTopBattle.gif")
+        .setFooter({ text: 'Challenge expires in 60 seconds' });
+
     const challengeMsg = await message.channel.send({ embeds: [challengeEmbed] });
     await challengeMsg.react('⚔️');
-    botData.activeBattles[challengeMsg.id] = { challenger: message.author.id, defender: target.id, status: 'pending', timestamp: Date.now() };
+
+    // Store battle data
+    activeBattles[challengeMsg.id] = {
+        challenger: message.author.id,
+        defender: target.id,
+        status: 'pending',
+        timestamp: Date.now()
+    };
     saveBattles();
+
+    // Auto-cancel after 60 seconds
     setTimeout(() => {
-        if (botData.activeBattles[challengeMsg.id] && botData.activeBattles[challengeMsg.id].status === 'pending') {
-            delete botData.activeBattles[challengeMsg.id];
+        if (activeBattles[challengeMsg.id] && activeBattles[challengeMsg.id].status === 'pending') {
+            delete activeBattles[challengeMsg.id];
             saveBattles();
             message.channel.send(`⏱️ The automated battle challenge from **${message.author.username}** to **${target.username}** has expired.`);
         }
     }, 60000);
 }
 
+// ---- [NEW] DEADLIEST WARRIOR BATTLE COMMAND ----
 else if (command === 'dw' || command === 'deadliestwarrior') {
     const target = message.mentions.users.first();
+
     if (!target) return message.reply('❌ Please mention someone to battle! Example: `$dw @user`');
     if (target.id === message.author.id) return message.reply('❌ You cannot battle yourself!');
     if (target.bot) return message.reply('❌ You cannot battle a bot!');
+
     const challengerData = getPlayerData(message.author.id);
     const defenderData = getPlayerData(target.id);
+
     if (!challengerData.loadout.weapon) return message.reply('❌ You need to equip a weapon first! Use `$loadout equip <item_id>`');
     if (!defenderData.loadout.weapon) return message.reply(`❌ ${target.username} doesn't have a weapon equipped!`);
-    const challengeEmbed = new EmbedBuilder().setColor('#8B0000').setTitle("🔥 TX SOLDIER'S DEADLIEST WARRIOR 🔥").setDescription(`**${message.author.username}** has challenged **${target.username}** to a turn-based duel to the death!\n\n` + `**${target.username}**, react with ⚔️ to accept the challenge!\n\n` + `This is a turn-based battle. You will choose your actions each round.`).addFields({ name: `${message.author.username}'s Loadout`, value: `🔫 ${challengerData.loadout.weapon ? findItem(challengerData.loadout.weapon).name : 'None'}\n🛡️ ${challengerData.loadout.armor ? findItem(challengerData.loadout.armor).name : 'None'}\n💣 ${challengerData.loadout.throwable ? findItem(challengerData.loadout.throwable).name : 'None'}`, inline: true }, { name: `${target.username}'s Loadout`, value: `🔫 ${defenderData.loadout.weapon ? findItem(defenderData.loadout.weapon).name : 'None'}\n🛡️ ${defenderData.loadout.armor ? findItem(defenderData.loadout.armor).name : 'None'}\n💣 ${defenderData.loadout.throwable ? findItem(defenderData.loadout.throwable).name : 'None'}`, inline: true }).setImage('https://i.imgur.com/eT824xG.gif').setFooter({ text: 'Challenge expires in 60 seconds' });
+
+    const challengeEmbed = new EmbedBuilder()
+        .setColor('#8B0000')
+        .setTitle("🔥 TX SOLDIER'S DEADLIEST WARRIOR 🔥")
+        .setDescription(`**${message.author.username}** has challenged **${target.username}** to a turn-based duel to the death!\n\n` +
+                        `**${target.username}**, react with ⚔️ to accept the challenge!\n\n` +
+                        `This is a turn-based battle. You will choose your actions each round.`)
+        .addFields(
+            { name: `${message.author.username}'s Loadout`, value: `🔫 ${challengerData.loadout.weapon ? findItem(challengerData.loadout.weapon).name : 'None'}\n🛡️ ${challengerData.loadout.armor ? findItem(challengerData.loadout.armor).name : 'None'}\n💣 ${challengerData.loadout.throwable ? findItem(challengerData.loadout.throwable).name : 'None'}`, inline: true },
+            { name: `${target.username}'s Loadout`, value: `🔫 ${defenderData.loadout.weapon ? findItem(defenderData.loadout.weapon).name : 'None'}\n🛡️ ${defenderData.loadout.armor ? findItem(defenderData.loadout.armor).name : 'None'}\n💣 ${defenderData.loadout.throwable ? findItem(defenderData.loadout.throwable).name : 'None'}`, inline: true }
+        )
+        .setImage('https://i.imgur.com/eT824xG.gif')
+        .setFooter({ text: 'Challenge expires in 60 seconds' });
+
     const challengeMsg = await message.channel.send({ embeds: [challengeEmbed] });
     await challengeMsg.react('⚔️');
-    botData.activeDWGames[challengeMsg.id] = { channelId: message.channel.id, status: 'pending', p1: { id: message.author.id, name: message.author.username, weapon: findItem(challengerData.loadout.weapon), armor: findItem(challengerData.loadout.armor), throwable: findItem(challengerData.loadout.throwable) }, p2: { id: target.id, name: target.username, weapon: findItem(defenderData.loadout.weapon), armor: findItem(defenderData.loadout.armor), throwable: findItem(defenderData.loadout.throwable) }, };
+
+    activeDWGames[challengeMsg.id] = {
+        channelId: message.channel.id,
+        status: 'pending',
+        p1: { id: message.author.id, name: message.author.username, weapon: findItem(challengerData.loadout.weapon), armor: findItem(challengerData.loadout.armor), throwable: findItem(challengerData.loadout.throwable) },
+        p2: { id: target.id, name: target.username, weapon: findItem(defenderData.loadout.weapon), armor: findItem(defenderData.loadout.armor), throwable: findItem(defenderData.loadout.throwable) },
+    };
     saveDWBattles();
+
+    // Auto-cancel after 60 seconds
     setTimeout(() => {
-        if (botData.activeDWGames[challengeMsg.id] && botData.activeDWGames[challengeMsg.id].status === 'pending') {
-            delete botData.activeDWGames[challengeMsg.id];
+        if (activeDWGames[challengeMsg.id] && activeDWGames[challengeMsg.id].status === 'pending') {
+            delete activeDWGames[challengeMsg.id];
             saveDWBattles();
             message.channel.send(`⏱️ The Deadliest Warrior challenge from **${message.author.username}** to **${target.username}** has expired.`);
         }
     }, 60000);
 }
-  
-else if (command === 'logmode') {
+
+
+  // ---- Log Mode Commands ----
+  else if (command === 'logmode') {
     if (!checkPermission(PermissionsBitField.Flags.ManageGuild)) return;
     const subcommand = args[0];
     const channel = message.mentions.channels.first() || message.channel;
+
     if (subcommand === 'on') {
-      botData.logChannels[message.guild.id] = { channelId: channel.id, enabled: true };
+      logChannels[message.guild.id] = { channelId: channel.id, enabled: true };
       saveLogChannels();
       message.reply(`✅ Log mode has been **enabled** in ${channel}.`);
     } else if (subcommand === 'off') {
-      if (!botData.logChannels[message.guild.id]) {
+      if (!logChannels[message.guild.id]) {
         return message.reply('❌ Log mode is not enabled in this server.');
       }
-      botData.logChannels[message.guild.id].enabled = false;
+      logChannels[message.guild.id].enabled = false;
       saveLogChannels();
       message.reply('✅ Log mode has been **disabled** for this server.');
     } else if (subcommand === 'setmaster') {
@@ -2336,44 +2796,49 @@ else if (command === 'logmode') {
       if (!masterChannelId) {
         return message.reply('❌ Please provide the master log channel ID.');
       }
+
       const masterChannel = client.channels.cache.get(masterChannelId);
       if (!masterChannel || !masterChannel.isTextBased()) {
         return message.reply('❌ Invalid channel ID or I cannot access it.');
       }
-      botData.masterLog.channelId = masterChannelId;
+
+      masterLog.channelId = masterChannelId;
       saveMasterLog();
       message.reply(`✅ Master log channel has been set to ${masterChannel}.`);
     } else if (subcommand === 'masteron') {
       if (message.author.id !== OWNER_ID) {
         return message.reply('❌ Only the bot owner can manage the master log.');
       }
-      if (!botData.masterLog.channelId) {
+      if (!masterLog.channelId) {
         return message.reply('❌ Master log channel is not set. Use `$logmode setmaster <channelID>`.');
       }
-      botData.masterLog.enabled = true;
+      masterLog.enabled = true;
       saveMasterLog();
       message.reply('✅ Master log has been **enabled**.');
     } else if (subcommand === 'masteroff') {
       if (message.author.id !== OWNER_ID) {
         return message.reply('❌ Only the bot owner can manage the master log.');
       }
-      if (!botData.masterLog.channelId) {
+      if (!masterLog.channelId) {
         return message.reply('❌ Master log channel is not set.');
       }
-      botData.masterLog.enabled = false;
+      masterLog.enabled = false;
       saveMasterLog();
       message.reply('✅ Master log has been **disabled**.');
     } else {
       message.reply('❌ Usage: `$logmode on [#channel]` or `$logmode off` or `$logmode setmaster <channelID>` or `$logmode masteron` or `$logmode masteroff`.');
     }
-}
+  }
 
-else if (command === 'promote') {
+  // ---- Owner & Immune Commands ----
+  else if (command === 'promote') {
     if (message.author.id !== OWNER_ID) {
         return message.reply('❌ You do not have permission to use this command.');
     }
+
     const target = message.mentions.users.first();
     const rank = args[1]?.toUpperCase();
+
     if (!target) {
         return message.reply('❌ Please mention a user to promote.');
     }
@@ -2383,19 +2848,22 @@ else if (command === 'promote') {
     if (!rank || !IMMUNITY_RANKS.includes(rank)) {
         return message.reply(`❌ Invalid rank. Please use one of: ${IMMUNITY_RANKS.join(', ')}`);
     }
-    botData.immuneUsers[target.id] = rank;
+
+    immuneUsers[target.id] = rank;
     saveImmunity();
+
     target.send(`🎉 You have been promoted to **${rank}**. You now have immunity.`).catch(err => {
         console.error(`Could not DM user ${target.tag}:`, err);
         message.channel.send(`⚠️ Could not DM ${target.tag}, but their promotion is successful.`);
     });
-    message.reply(`✅ **${target.tag}** has been promoted to **${rank}** and now has immunity.`);
-}
 
-else if (command === 'demote') {
+    message.reply(`✅ **${target.tag}** has been promoted to **${rank}** and now has immunity.`);
+  }
+  else if (command === 'demote') {
     if (message.author.id !== OWNER_ID) {
         return message.reply('❌ You do not have permission to use this command.');
     }
+
     const target = message.mentions.users.first();
     if (!target) {
         return message.reply('❌ Please mention a user to demote.');
@@ -2403,8 +2871,9 @@ else if (command === 'demote') {
     if (target.id === OWNER_ID) {
         return message.reply('❌ The owner cannot be demoted.');
     }
-    if (botData.immuneUsers[target.id]) {
-        delete botData.immuneUsers[target.id];
+
+    if (immuneUsers[target.id]) {
+        delete immuneUsers[target.id];
         saveImmunity();
         message.reply(`✅ **${target.tag}** has been demoted and no longer has immunity.`);
         target.send(`ℹ️ Your immunity status has been revoked.`).catch(err => {
@@ -2413,16 +2882,18 @@ else if (command === 'demote') {
     } else {
         message.reply(`❌ **${target.tag}** is not an immune user.`);
     }
-}
-
-else if (command === 'serverlist') {
+  }
+  else if (command === 'serverlist') {
     if (!isImmune(message.author)) {
         return message.reply('❌ You do not have permission to use this command.');
     }
+
     let serverList = '📜 **Server List**\n\n';
     client.guilds.cache.forEach(guild => {
         serverList += `**${guild.name}** - ${guild.memberCount} members (ID: ${guild.id})\n`;
     });
+
+    // Handle potential message length limit
     if (serverList.length > 2000) {
         const chunks = serverList.match(/[\s\S]{1,1990}/g) || [];
         for (const chunk of chunks) {
@@ -2431,98 +2902,147 @@ else if (command === 'serverlist') {
     } else {
         message.channel.send(serverList);
     }
-}
+  }
 
-else if (command === 'giveaway') {
+  // ---- GIVEAWAY CODE: Command Logic ----
+  else if (command === 'giveaway') {
     if (!checkPermission(PermissionsBitField.Flags.ManageGuild)) return;
+
     const durationStr = args[0];
     const prize = args.slice(1).join(' ');
+
     if (!durationStr || !prize) {
       return message.reply('❌ **Usage:** `$giveaway <duration> <prize>`\n**Example:** `$giveaway 10m A hug`\n**Durations:** `s` (seconds), `m` (minutes), `h` (hours), `d` (days)');
     }
+
     const durationMs = parseDuration(durationStr);
     if (!durationMs) {
       return message.reply('❌ **Invalid duration format!** Use `s`, `m`, `h`, or `d`.');
     }
+
     const endTime = Date.now() + durationMs;
-    const embed = { color: 0x0099FF, title: '🎉 **GIVEAWAY** 🎉', description: `React with 🎉 to enter!\n\n**Prize:** ${prize}`, footer: { text: 'Ends at' }, timestamp: new Date(endTime).toISOString(), };
+
+    const embed = {
+      color: 0x0099FF,
+      title: '🎉 **GIVEAWAY** 🎉',
+      description: `React with 🎉 to enter!\n\n**Prize:** ${prize}`,
+      footer: { text: 'Ends at' },
+      timestamp: new Date(endTime).toISOString(),
+    };
+
     const giveawayMessage = await message.channel.send({ embeds: [embed] });
     await giveawayMessage.react('🎉');
+
     setTimeout(async () => {
       try {
         const fetchedMessage = await message.channel.messages.fetch(giveawayMessage.id);
         const reactions = fetchedMessage.reactions.cache.get('🎉');
         const users = await reactions.users.fetch();
         const entrants = users.filter(user => !user.bot);
+
         if (entrants.size === 0) {
-          const noWinnerEmbed = { color: 0xFF0000, title: '🎉 **GIVEAWAY ENDED** 🎉', description: `**Prize:** ${prize}\n\nNo one entered the giveaway. 😢`, footer: { text: 'Ended at' }, timestamp: new Date().toISOString(), };
+          const noWinnerEmbed = {
+            color: 0xFF0000,
+            title: '🎉 **GIVEAWAY ENDED** 🎉',
+            description: `**Prize:** ${prize}\n\nNo one entered the giveaway. 😢`,
+            footer: { text: 'Ended at' },
+            timestamp: new Date().toISOString(),
+          };
           return giveawayMessage.edit({ embeds: [noWinnerEmbed] });
         }
+
         const winner = entrants.random();
-        const winnerEmbed = { color: 0x00FF00, title: '🎉 **GIVEAWAY ENDED** 🎉', description: `**Prize:** ${prize}\n**Winner:** ${winner}!`, footer: { text: 'Ended at' }, timestamp: new Date().toISOString(), };
+        
+        const winnerEmbed = {
+          color: 0x00FF00,
+          title: '🎉 **GIVEAWAY ENDED** 🎉',
+          description: `**Prize:** ${prize}\n**Winner:** ${winner}!`,
+          footer: { text: 'Ended at' },
+          timestamp: new Date().toISOString(),
+        };
+
         await giveawayMessage.edit({ embeds: [winnerEmbed] });
         message.channel.send(`Congratulations ${winner}! You won the **${prize}**!`);
+
       } catch (error) {
         console.error("Giveaway ending error:", error);
         message.channel.send('❌ There was an error determining the giveaway winner.');
       }
     }, durationMs);
-}
+  }
 
-else if (command === 'ping') {
+
+  // ---- Utility Commands ----
+  else if (command === 'ping') {
     const sent = await message.channel.send({ content: "🏓 Pinging..." });
-    const pingEmbed = { color: 0x39FF14, title: "🏓 Pong!", description: `Latency is **${sent.createdTimestamp - message.createdTimestamp}ms**\nAPI Latency is **${Math.round(client.ws.ping)}ms**`, thumbnail: { url: "https://i.imgur.com/Abo2D8x.gif" } };
+    const pingEmbed = {
+      color: 0x39FF14,
+      title: "🏓 Pong!",
+      description: `Latency is **${sent.createdTimestamp - message.createdTimestamp}ms**\nAPI Latency is **${Math.round(client.ws.ping)}ms**`,
+      thumbnail: { url: "https://i.imgur.com/Abo2D8x.gif" } // shows GIF in corner
+    };
     await sent.edit({ content: "", embeds: [pingEmbed] });
-}
-
-else if (command === 'stats') {
+  } else if (command === 'stats') {
     message.channel.send(`📊 Server has ${message.guild.memberCount} members.`);
-}
-
-else if (command === 'uptime') {
+  } else if (command === 'uptime') {
     const uptime = Math.floor(process.uptime());
     message.channel.send(`⏱️ Bot uptime: ${uptime} seconds.`);
-}
-
-else if (command === 'botinfo') {
-    const botInfoEmbed = new EmbedBuilder().setColor(0x00FFFF).setTitle(`🤖 ${client.user.tag} — Bot Info`).setDescription(`📡 [SECURE TRANSMISSION] 📡\n\n**Unit:** Discord Bot\n**Creator / Operator:** TX_SOLDIER\n**Status:** Mission-Ready. Armed.`).addFields({ name: 'Capabilities', value: `**Defense:** Active protection for allied servers.\n` + `**Offense:** Engage threats if provoked or mission parameters require.\n` + `**Recon:** Logging and monitoring activities\n` + `**Special Operations:** Classified.` }).setImage("https://i.imgur.com/yourTopGif.gif").setFooter({ text: 'End Transmission.', iconURL: "https://i.imgur.com/yourBottomGif.gif" });
+  } else if (command === 'botinfo') {
+    const botInfoEmbed = new EmbedBuilder()
+      .setColor(0x00FFFF) // Cyan color, you can change
+      .setTitle(`🤖 ${client.user.tag} — Bot Info`)
+      .setDescription(`📡 [SECURE TRANSMISSION] 📡\n\n**Unit:** Discord Bot\n**Creator / Operator:** TX_SOLDIER\n**Status:** Mission-Ready. Armed.`)
+      .addFields(
+        { name: 'Capabilities', value: 
+          `**Defense:** Active protection for allied servers.\n` +
+          `**Offense:** Engage threats if provoked or mission parameters require.\n` +
+          `**Recon:** Logging and monitoring activities\n` +
+          `**Special Operations:** Classified.` }
+      )
+      .setImage("https://i.imgur.com/yourTopGif.gif") // Top GIF
+      .setFooter({ text: 'End Transmission.', iconURL: "https://i.imgur.com/yourBottomGif.gif" }); // Bottom GIF in footer
     message.channel.send({ embeds: [botInfoEmbed] });
-}
-
-else if (command === 'invite') {
+  } else if (command === 'invite') {
     message.channel.send(`🔗 Invite me: https://discord.com/api/oauth2/authorize?client_id=${client.user.id}&permissions=8&scope=bot%20applications.commands`);
-}
-
-else if (command === 'prefix') {
+  } else if (command === 'prefix') {
     message.channel.send(`📌 The current prefix is: \`${PREFIX}\` `);
-}
+  }
 
-else if (command === 'flip') {
+// ---- Fun & Games Commands ----
+  else if (command === 'flip') { // The normal, simple flip
     const result = Math.random() < 0.5 ? 'Heads' : 'Tails';
     message.channel.send(`🪙 You flipped **${result}**!`);
 } 
-
+// ---- Coin Flip (Single-Player Betting) ----
 else if (command === 'flipbet') {
     const [sideArg, amountArg] = args;
     const side = sideArg ? sideArg.toLowerCase() : null;
     const amount = parseInt(amountArg);
+
+    // 1. Validation Checks
     if (!side || (side !== 'heads' && side !== 'tails')) {
         return message.reply('❌ Invalid syntax. Use: `$flipbet <heads|tails> <amount>`');
     }
     if (isNaN(amount) || amount <= 0) {
         return message.reply('❌ The bet amount must be a positive number.');
     }
+
     const userId = message.author.id;
     const currentBalance = getBalance(userId);
+    
     if (amount > currentBalance) {
         return message.reply(`❌ You only have **${currentBalance}** Gold Coins. You cannot bet **${amount}**.`);
     }
+
+    // 2. Game Logic
     const flipResult = Math.random() < 0.5 ? 'heads' : 'tails';
     const resultSide = flipResult.charAt(0).toUpperCase() + flipResult.slice(1);
     const userSide = side.charAt(0).toUpperCase() + side.slice(1);
     const coinEmoji = '🪙';
+    
     let win = side === flipResult;
     let newBalance;
+
     if (win) {
         updateBalance(userId, amount);
         saveEconomyData();
@@ -2532,15 +3052,30 @@ else if (command === 'flipbet') {
         saveEconomyData();
         newBalance = getBalance(userId);
     }
-    const embed = new EmbedBuilder().setTitle(`${coinEmoji} Coin Flip Bet! ${coinEmoji}`).addFields({ name: 'Your Pick', value: userSide, inline: true }, { name: 'Bet Amount', value: `**${amount}** Gold Coins`, inline: true }, { name: 'Result', value: `The coin landed on **${resultSide}**!`, inline: false }).setTimestamp();
+
+    // 3. Create Embed
+    const embed = new EmbedBuilder()
+        .setTitle(`${coinEmoji} Coin Flip Bet! ${coinEmoji}`)
+        .addFields(
+            { name: 'Your Pick', value: userSide, inline: true },
+            { name: 'Bet Amount', value: `**${amount}** Gold Coins`, inline: true },
+            { name: 'Result', value: `The coin landed on **${resultSide}**!`, inline: false }
+        )
+        .setTimestamp();
+
     if (win) {
-        embed.setColor(0x00FF00).setDescription(`🎉 Congratulations, you won **${amount}** Gold Coins!`).setFooter({ text: `New Balance: ${newBalance} Gold Coins` });
+        embed.setColor(0x00FF00); // Green for Win
+        embed.setDescription(`🎉 Congratulations, you won **${amount}** Gold Coins!`);
+        embed.setFooter({ text: `New Balance: ${newBalance} Gold Coins` });
     } else {
-        embed.setColor(0xFF0000).setDescription(`😭 Too bad, you lost **${amount}** Gold Coins.`).setFooter({ text: `New Balance: ${newBalance} Gold Coins` });
+        embed.setColor(0xFF0000); // Red for Loss
+        embed.setDescription(`😭 Too bad, you lost **${amount}** Gold Coins.`);
+        embed.setFooter({ text: `New Balance: ${newBalance} Gold Coins` });
     }
+
     message.reply({ embeds: [embed] });
 }
-
+// ---- Coin Flip (PvP Challenge) ----
 else if (command === 'challengeflip') {
     const challengedUser = message.mentions.users.first();
     const amountArg = args[1];
@@ -2548,119 +3083,230 @@ else if (command === 'challengeflip') {
     const challenger = message.author;
     const challengerId = challenger.id;
     const challengedId = challengedUser ? challengedUser.id : null;
+
+    // 1. Basic Validation
     if (!challengedUser || challengedUser.bot || challengedId === challengerId) {
         return message.reply('❌ You must mention a valid, non-bot user to challenge.');
     }
     if (isNaN(amount) || amount <= 0) {
         return message.reply('❌ The bet amount must be a positive number.');
     }
+    // Check if either player is already in a game
     if (activeFlipChallenges.has(challengerId) || activeFlipChallenges.has(challengedId)) {
         return message.reply('❌ One of the players is already involved in a coin flip challenge.');
     }
+    
+    // 2. Balance Checks - Use the safe getBalance function
     const challengerBalance = getBalance(challengerId);
     if (amount > challengerBalance) {
         return message.reply(`❌ You only have **${challengerBalance}** Gold Coins. You cannot bet **${amount}**.`);
     }
+
+    // NEW: Check challenged user's balance immediately
     const challengedBalance = getBalance(challengedId);
     if (amount > challengedBalance) {
         return message.reply(`❌ **${challengedUser.tag}** only has **${challengedBalance}** Gold Coins and cannot cover the **${amount}** bet.`);
     }
+
+
+    // 3. Set up Challenge
     activeFlipChallenges.set(challengerId, challengedId);
     activeFlipChallenges.set(challengedId, challengerId);
+
+    // Temporarily deduct the bet from the challenger (the funds are "held")
     updateBalance(challengerId, -amount);
     saveEconomyData();
+    
     const pot = amount * 2;
-    const embed = new EmbedBuilder().setColor(0x0099ff).setTitle('🤝 Coin Flip Challenge Initiated!').setDescription(`${challengedUser}, **${challenger.tag}** has challenged you to a coin flip for **${amount}** Gold Coins!`).addFields({ name: 'Total Pot', value: `**${pot}** Gold Coins`, inline: true }, { name: 'To Accept', value: 'React with ✅ (You must have the funds)', inline: true }, { name: 'To Reject', value: 'React with ❌', inline: true }).setFooter({ text: 'Challenge expires in 60 seconds.' }).setTimestamp();
+
+    const embed = new EmbedBuilder()
+        .setColor(0x0099ff)
+        .setTitle('🤝 Coin Flip Challenge Initiated!')
+        .setDescription(`${challengedUser}, **${challenger.tag}** has challenged you to a coin flip for **${amount}** Gold Coins!`)
+        .addFields(
+            { name: 'Total Pot', value: `**${pot}** Gold Coins`, inline: true },
+            { name: 'To Accept', value: 'React with ✅ (You must have the funds)', inline: true },
+            { name: 'To Reject', value: 'React with ❌', inline: true }
+        )
+        .setFooter({ text: 'Challenge expires in 60 seconds.' })
+        .setTimestamp();
+    
     const challengeMessage = await message.reply({ embeds: [embed] });
+    
+    // React with the options
     await challengeMessage.react('✅').catch(err => console.error("Could not react with ✅:", err));
     await challengeMessage.react('❌').catch(err => console.error("Could not react with ❌:", err));
-    const filter = (reaction, user) => { return ['✅', '❌'].includes(reaction.emoji.name) && user.id === challengedId; };
+    
+    // 4. Reaction Collector
+    const filter = (reaction, user) => {
+        return ['✅', '❌'].includes(reaction.emoji.name) && user.id === challengedId;
+    };
+
     const collector = challengeMessage.createReactionCollector({ filter, time: 60000, max: 1 });
+
     collector.on('collect', async (reaction) => {
         collector.stop();
+
         if (reaction.emoji.name === '✅') {
+            // **ACCEPTED**
+            
+            // Re-check challenged user's balance one last time (in case they spent money during the initial wait)
             const finalChallengedBalance = getBalance(challengedId);
             if (amount > finalChallengedBalance) {
+                // If challenged user ran out of money, refund challenger
                 updateBalance(challengerId, amount); 
                 saveEconomyData();
                 activeFlipChallenges.delete(challengerId);
                 activeFlipChallenges.delete(challengedId);
-                return challengeMessage.edit({ embeds: [new EmbedBuilder().setColor(0xFF0000).setTitle('🛑 Challenge Failed: Insufficient Funds').setDescription(`**${challengedUser.tag}** no longer has **${amount}** Gold Coins. Challenge canceled and **${challenger.tag}** refunded.`)] }).catch(err => console.error("Error editing message after acceptance fail:", err));
+                return challengeMessage.edit({ 
+                    embeds: [new EmbedBuilder()
+                        .setColor(0xFF0000)
+                        .setTitle('🛑 Challenge Failed: Insufficient Funds')
+                        .setDescription(`**${challengedUser.tag}** no longer has **${amount}** Gold Coins. Challenge canceled and **${challenger.tag}** refunded.`)
+                    ]
+                }).catch(err => console.error("Error editing message after acceptance fail:", err));
             }
+
+            // Deduct bet from challenged user (the funds are "pooled")
             updateBalance(challengedId, -amount);
             saveEconomyData();
+            
+            // Determine winner AND the result of the flip
             const flipResult = Math.random() < 0.5 ? 'Heads' : 'Tails';
             const winnerId = Math.random() < 0.5 ? challengerId : challengedId;
+            
             const winner = winnerId === challengerId ? challenger : challengedUser;
             const loser = winner.id === challengerId ? challengedUser : challenger;
+            
+            // Award pot (2 * amount) to winner
             updateBalance(winner.id, pot); 
             saveEconomyData();
-            const resultEmbed = new EmbedBuilder().setColor(0x00FF00).setTitle('💰 Coin Flip Battle Concluded! 🥇').setDescription(`The coin was flipped! It landed on **${flipResult}**! The winner is **${winner.tag}**!`).addFields({ name: 'Challenger', value: challenger.tag, inline: true }, { name: 'Challenged', value: challengedUser.tag, inline: true }, { name: 'Prize', value: `**${pot}** Gold Coins`, inline: false }).setFooter({ text: `New Balances | Winner: ${getBalance(winner.id)} | Loser: ${getBalance(loser.id)}` }).setTimestamp();
+            
+            // Final Embed
+            const resultEmbed = new EmbedBuilder()
+                .setColor(0x00FF00)
+                .setTitle('💰 Coin Flip Battle Concluded! 🥇')
+                .setDescription(`The coin was flipped! It landed on **${flipResult}**! The winner is **${winner.tag}**!`)
+                .addFields(
+                    { name: 'Challenger', value: challenger.tag, inline: true },
+                    { name: 'Challenged', value: challengedUser.tag, inline: true },
+                    { name: 'Prize', value: `**${pot}** Gold Coins`, inline: false }
+                )
+                .setFooter({ 
+                    text: `New Balances | Winner: ${getBalance(winner.id)} | Loser: ${getBalance(loser.id)}` 
+                })
+                .setTimestamp();
+
             await challengeMessage.edit({ embeds: [resultEmbed] }).catch(err => console.error("Error editing message after winner declared:", err));
+            
         } else if (reaction.emoji.name === '❌') {
+            // **REJECTED**
+            
+            // Refund challenger's bet
             updateBalance(challengerId, amount); 
             saveEconomyData();
-            const rejectEmbed = new EmbedBuilder().setColor(0xFF0000).setTitle('⚔️ Coin Flip Challenge Rejected').setDescription(`**${challengedUser.tag}** has rejected the challenge. **${challenger.tag}** has been refunded **${amount}** Gold Coins.`);
+            
+            const rejectEmbed = new EmbedBuilder()
+                .setColor(0xFF0000)
+                .setTitle('⚔️ Coin Flip Challenge Rejected')
+                .setDescription(`**${challengedUser.tag}** has rejected the challenge. **${challenger.tag}** has been refunded **${amount}** Gold Coins.`);
+            
             await challengeMessage.edit({ embeds: [rejectEmbed] }).catch(err => console.error("Error editing message after rejection:", err));
         }
+        
+        // Clean up the challenge map
         activeFlipChallenges.delete(challengerId);
         activeFlipChallenges.delete(challengedId);
     });
+
     collector.on('end', collected => {
         if (collected.size === 0) {
+            // **TIMED OUT**
+            
+            // Refund challenger's bet
             updateBalance(challengerId, amount); 
             saveEconomyData();
+            
+            // Only update the message if the game is still active in the map (wasn't resolved by other means)
             if (activeFlipChallenges.has(challengerId)) {
-                const timeoutEmbed = new EmbedBuilder().setColor(0xFFA500).setTitle('⏳ Coin Flip Challenge Timed Out').setDescription(`**${challengedUser.tag}** did not respond in time. **${challenger.tag}** has been refunded **${amount}** Gold Coins.`);
+                const timeoutEmbed = new EmbedBuilder()
+                    .setColor(0xFFA500)
+                    .setTitle('⏳ Coin Flip Challenge Timed Out')
+                    .setDescription(`**${challengedUser.tag}** did not respond in time. **${challenger.tag}** has been refunded **${amount}** Gold Coins.`);
+                
                 challengeMessage.edit({ embeds: [timeoutEmbed] }).catch(err => console.error("Error editing message after timeout:", err));
+            
+                // Clean up the challenge map
                 activeFlipChallenges.delete(challengerId);
                 activeFlipChallenges.delete(challengedId);
             }
         }
     });
 }
-  
+  // ====================================================================
+// ---- ROULETTE GAME COMMAND ----
+// ====================================================================
 else if (command === 'roulette') {
     if (!message.guild) return message.reply('❌ This command can only be used in a server.');
+
     const betAmount = parseInt(args[0]);
     let betTarget = args[1]?.toLowerCase();
-    const gifUrl = 'https://i.imgur.com/G4Y2qXg.gif';
+    const gifUrl = 'https://i.imgur.com/G4Y2qXg.gif'; // Default GIF
+
     if (isNaN(betAmount) || betAmount <= 0) {
         return message.reply('❌ Please specify a valid bet amount greater than 0. Usage: `$roulette <amount> <number|red|black|even|odd> [optional_gif_url]`');
     }
+
     if (!betTarget) {
         return message.reply('❌ Please specify your bet target (e.g., `red`, `black`, `odd`, `even`, or a number from 0-36).');
     }
+
     const balance = getBalance(message.author.id);
     if (balance < betAmount) {
         return message.reply(`❌ You only have **${balance}** Gold Coins. You cannot bet **${betAmount}**.`);
     }
+
+    // --- Validate Bet Target ---
     let payoutMultiplier = 0;
     let betType = 'unknown';
+
+    // Handle number bets
     const numBet = parseInt(betTarget);
     if (!isNaN(numBet) && numBet >= 0 && numBet <= 36) {
         betType = 'number';
-        payoutMultiplier = 35;
+        payoutMultiplier = 35; // 35:1 for any single number (including 0)
     } 
+    // Handle color/parity bets
     else if (betTarget === 'red' || betTarget === 'black') {
         betType = 'color';
-        payoutMultiplier = 2;
+        payoutMultiplier = 2; // 1:1 payout (betAmount * 2 = total return)
     } else if (betTarget === 'even' || betTarget === 'odd') {
         betType = 'parity';
-        payoutMultiplier = 2;
+        payoutMultiplier = 2; // 1:1 payout
     } else {
         return message.reply('❌ Invalid bet target. Choose: `red`, `black`, `even`, `odd`, or a number from `0` to `36`.');
     }
-    const resultNumber = Math.floor(Math.random() * 37);
+    
+    // --- Determine Roulette Result ---
+    // Numbers 1-36: 18 Red, 18 Black. Number 0 is Green.
+    const resultNumber = Math.floor(Math.random() * 37); // 0 to 36
     let resultColor = 'green';
-    let isRed = (resultNumber % 2 !== 0 && resultNumber >= 1 && resultNumber <= 10) || (resultNumber % 2 === 0 && resultNumber >= 11 && resultNumber <= 18) || (resultNumber % 2 !== 0 && resultNumber >= 19 && resultNumber <= 28) || (resultNumber % 2 === 0 && resultNumber >= 29 && resultNumber <= 36);
+    let isRed = (resultNumber % 2 !== 0 && resultNumber >= 1 && resultNumber <= 10) || // 1, 3, 5, 7, 9
+                (resultNumber % 2 === 0 && resultNumber >= 11 && resultNumber <= 18) || // 12, 14, 16, 18
+                (resultNumber % 2 !== 0 && resultNumber >= 19 && resultNumber <= 28) || // 19, 21, 23, 25, 27
+                (resultNumber % 2 === 0 && resultNumber >= 29 && resultNumber <= 36);   // 30, 32, 34, 36
+    
     if (resultNumber !== 0) {
         resultColor = isRed ? 'red' : 'black';
     }
+
     const isEven = resultNumber !== 0 && resultNumber % 2 === 0;
     const resultParity = resultNumber === 0 ? 'green' : (isEven ? 'even' : 'odd');
+    
+    // --- Check Win Condition ---
     let win = false;
     let winDescription = '';
+
     if (betType === 'number' && numBet === resultNumber) {
         win = true;
         winDescription = `**Landed on your number!** ${resultNumber}`;
@@ -2671,27 +3317,47 @@ else if (command === 'roulette') {
         win = true;
         winDescription = `**Landed on your parity!** ${resultParity.toUpperCase()}`;
     }
+
+    // --- Calculate Winnings/Losses ---
     let newBalance;
     let finalMessage;
     let colorCode;
+    
     if (win) {
-        const winnings = betType === 'number' ? betAmount * payoutMultiplier : betAmount * (payoutMultiplier - 1);
+        const winnings = betType === 'number' ? betAmount * payoutMultiplier : betAmount * (payoutMultiplier - 1); // 35:1 is a 36x return, 1:1 is a 2x return
         newBalance = updateBalance(message.author.id, winnings);
         saveEconomyData();
         finalMessage = `🎉 **YOU WON!** You bet on **${betTarget.toUpperCase()}**.\n${winDescription}!\n**Payout:** +${winnings} Gold Coins`;
-        colorCode = 0x00FF00;
+        colorCode = 0x00FF00; // Green
     } else {
         newBalance = updateBalance(message.author.id, -betAmount);
         saveEconomyData();
         finalMessage = `😭 **YOU LOST!** You bet on **${betTarget.toUpperCase()}**.\nIt landed on **${resultNumber} ${resultColor.toUpperCase()}**.\n**Loss:** -${betAmount} Gold Coins`;
-        colorCode = 0xFF0000;
+        colorCode = 0xFF0000; // Red
     }
-    const resultEmbed = new EmbedBuilder().setColor(colorCode).setTitle(`🎰 Roulette: Spin Result`).setDescription(finalMessage).addFields({ name: '💰 Bet Amount', value: `\`${betAmount}\``, inline: true }, { name: '🎯 Bet Target', value: `\`${betTarget.toUpperCase()}\``, inline: true }, { name: '⚫ Result', value: `\`${resultNumber} ${resultColor.toUpperCase()}\``, inline: true }, { name: '💸 New Balance', value: `\`${newBalance}\` Gold Coins`, inline: false }).setImage(gifUrl);
+
+    // --- Send Embed Result ---
+    const resultEmbed = new EmbedBuilder()
+        .setColor(colorCode)
+        .setTitle(`🎰 Roulette: Spin Result`)
+        .setDescription(finalMessage)
+        .addFields(
+            { name: '💰 Bet Amount', value: `\`${betAmount}\``, inline: true },
+            { name: '🎯 Bet Target', value: `\`${betTarget.toUpperCase()}\``, inline: true },
+            { name: '⚫ Result', value: `\`${resultNumber} ${resultColor.toUpperCase()}\``, inline: true },
+            { name: '💸 New Balance', value: `\`${newBalance}\` Gold Coins`, inline: false }
+        )
+        .setImage(gifUrl);
+
     await message.channel.send({ embeds: [resultEmbed] });
 }
-
+// ====================================================================
+// ---- RUSSIAN ROULETTE COMMAND ----
+// ====================================================================
 else if (command === 'rr') {
     if (!message.guild || !message.member) return message.reply('❌ This command can only be used in a server.');
+    
+    // Check command cooldown
     if (rrCooldowns.has(message.author.id)) {
         const expirationTime = rrCooldowns.get(message.author.id) + RR_COOLDOWN_TIME;
         const timeLeft = expirationTime - Date.now();
@@ -2700,135 +3366,320 @@ else if (command === 'rr') {
             return message.reply(`⚠️ You must wait **${seconds}** seconds before playing Russian Roulette again.`);
         }
     }
+    
+    // Check if the bot can mute members
     if (!message.guild.members.me.permissions.has(PermissionsBitField.Flags.MuteMembers)) {
         return message.reply('❌ I need the **Mute Members** permission to enforce the penalty for this game.');
     }
+
     const players = [message.author];
     const mentionedUsers = message.mentions.users.filter(u => u.id !== client.user.id && u.id !== message.author.id);
+    
     if (mentionedUsers.size > 4) {
         return message.reply('❌ Russian Roulette is limited to 5 players (yourself + up to 4 others).');
     }
+    
     mentionedUsers.forEach(user => players.push(user));
+    
+    // --- The Game Logic ---
     const chamberCount = 6;
-    const bulletChamber = Math.floor(Math.random() * chamberCount);
-    const shotChamber = Math.floor(Math.random() * chamberCount);
-    const muteDurationMs = 60 * 60 * 1000;
+    const bulletChamber = Math.floor(Math.random() * chamberCount); // 0 to 5
+    const shotChamber = Math.floor(Math.random() * chamberCount); // The chamber that fires the shot
+
+    const muteDurationMs = 60 * 60 * 1000; // 1 hour in milliseconds
     const muteEndTimestamp = new Date(Date.now() + muteDurationMs).getTime();
-    const gifUrl = args[args.length - 1]?.startsWith('http') ? args[args.length - 1] : 'https://i.imgur.com/8QG9s0G.gif';
+    
+    const gifUrl = args[args.length - 1]?.startsWith('http') ? args[args.length - 1] : 'https://i.imgur.com/8QG9s0G.gif'; // Default RR GIF
+
+    // Check if anyone is immune using your existing function
     const immunePlayer = players.find(p => isImmune(p));
     if (immunePlayer) {
         return message.reply(`🛡️ **${immunePlayer.tag}** is immune and cannot be muted! The game is cancelled.`);
     }
+
     const playerList = players.map(p => `• <@${p.id}>`).join('\n');
-    const embed = new EmbedBuilder().setColor(0x333333).setTitle('🔫 Russian Roulette: The Cylinder Spins...').setDescription(`**Chamber:** ${chamberCount} \n**Players:**\n${playerList}\n\n**The shot will fire on chamber:** \`${shotChamber + 1}\``).setImage(gifUrl).setFooter({ text: 'One player will be muted for 1 hour.' });
+    
+    const embed = new EmbedBuilder()
+        .setColor(0x333333)
+        .setTitle('🔫 Russian Roulette: The Cylinder Spins...')
+        .setDescription(`**Chamber:** ${chamberCount} 
+**Players:**\n${playerList}
+\n**The shot will fire on chamber:** \`${shotChamber + 1}\``)
+        .setImage(gifUrl)
+        .setFooter({ text: 'One player will be muted for 1 hour.' });
+
     const gameMessage = await message.channel.send({ embeds: [embed] });
-    await new Promise(resolve => setTimeout(resolve, 3000));
+
+    await new Promise(resolve => setTimeout(resolve, 3000)); // Wait for suspense
+
     if (bulletChamber === shotChamber) {
+        // --- LOSER LOGIC (MUTE) ---
         const loser = players[Math.floor(Math.random() * players.length)];
         const loserMember = await message.guild.members.fetch(loser.id);
+
         try {
+            // Discord.js v13/v14 uses timeout() for muting/timing out
             await loserMember.timeout(muteDurationMs, `Lost a game of Russian Roulette (Chamber ${shotChamber + 1}/${chamberCount})`);
-            const loseEmbed = new EmbedBuilder().setColor(0xFF0000).setTitle('💥 BANG! The Chamber Fires!').setDescription(`The bullet was in chamber **${bulletChamber + 1}**!\n\n**💀 LOSER:** <@${loser.id}>\n**PENALTY:** You have been muted (timed out) for **1 hour**!`).setImage(gifUrl);
+
+            const loseEmbed = new EmbedBuilder()
+                .setColor(0xFF0000)
+                .setTitle('💥 BANG! The Chamber Fires!')
+                .setDescription(`The bullet was in chamber **${bulletChamber + 1}**!\n
+                **💀 LOSER:** <@${loser.id}>
+                **PENALTY:** You have been muted (timed out) for **1 hour**!
+                `)
+                .setImage(gifUrl);
+
             await message.channel.send({ embeds: [loseEmbed] });
+            
+            // Apply cooldown
             rrCooldowns.set(message.author.id, Date.now());
             setTimeout(() => rrCooldowns.delete(message.author.id), RR_COOLDOWN_TIME);
+
         } catch (error) {
             console.error(`Error muting ${loser.tag}:`, error);
             await message.channel.send(`❌ **FATAL ERROR:** I couldn't mute <@${loser.id}>. I might be missing permissions, or their role is higher than mine. **The game results are void.**`);
         }
+
     } else {
-        const winEmbed = new EmbedBuilder().setColor(0x00FF00).setTitle('✅ CLICK. The Chamber is Empty.').setDescription(`The bullet was in chamber **${bulletChamber + 1}**, but the cylinder was spun!\n            \n**🎉 EVERYONE WINS!** No one was muted today. You all live to spin another day.`).setImage(gifUrl);
+        // --- WINNER LOGIC (NO MUTE) ---
+        const winEmbed = new EmbedBuilder()
+            .setColor(0x00FF00)
+            .setTitle('✅ CLICK. The Chamber is Empty.')
+            .setDescription(`The bullet was in chamber **${bulletChamber + 1}**, but the cylinder was spun!
+            
+            **🎉 EVERYONE WINS!** No one was muted today. You all live to spin another day.`)
+            .setImage(gifUrl);
+
         await message.channel.send({ embeds: [winEmbed] });
+
+        // Apply cooldown
         rrCooldowns.set(message.author.id, Date.now());
         setTimeout(() => rrCooldowns.delete(message.author.id), RR_COOLDOWN_TIME);
     }
 }
-
-else if (command === '8ball') {
+else if (command === '8ball') { // <--- Note the correct 'else if' connection
     const responses = ['Yes.', 'No.', 'Maybe.', 'Ask again later.', 'Definitely!', 'I dont think so.'];
     if (!args.length) return message.reply('🎱 Ask me a question.');
     message.channel.send(`🎱 ${responses[Math.floor(Math.random() * responses.length)]}`);
-}
-
-else if (command === 'dice') {
+  } else if (command === 'dice') {
     const roll = Math.floor(Math.random() * 6) + 1;
     message.channel.send(`🎲 You rolled a **${roll}**!`);
-}
-
-else if (command === 'rate') {
+  } else if (command === 'rate') {
     const user = message.mentions.users.first() || message.author;
     const rating = Math.floor(Math.random() * 11);
     message.channel.send(`🎯 I rate ${user.username} a **${rating}/10**!`);
-}
-
-else if (command === 'howgay') {
+  } else if (command === 'howgay') {
     const user = message.mentions.users.first() || message.author;
     const gayness = Math.floor(Math.random() * 101);
     message.channel.send(`🌈 ${user.username} is **${gayness}%** gay!`);
-}
-
-else if (command === 'sus') {
+  } else if (command === 'sus') {
     const user = message.mentions.users.first() || message.author;
     const sus = Math.floor(Math.random() * 101);
     message.channel.send(`🕵️ ${user.username} is **${sus}%** sus!`);
-}
-
-else if (command === 'truth') {
+  } else if (command === 'truth') {
     message.channel.send(`💬 Truth: ${spicyTruths[Math.floor(Math.random() * spicyTruths.length)]}`);
-}
-
-else if (command === 'dare') {
+  } else if (command === 'dare') {
     message.channel.send(`😈 Dare: ${spicyDares[Math.floor(Math.random() * spicyDares.length)]}`);
-}
-
-else if (command === 'roast') {
+  } else if (command === 'roast') {
     const user = message.mentions.users.first();
     if (!user) return message.reply('🔥 Tag someone to roast.');
+    const roasts = [
+      'You bring people joy… by leaving.',
+      'You make onions cry out of pity.',
+      'You look like a before picture.',
+      'Bro thinks he is the main character, but ur not even in the opening credits.',
+      'You have got more filler than a Naruto flashback.',
+      'You talk big, but your aura screams background NPC.',
+      'Ur the type of villain who gets defeated in one episode just to hype the real boss.',
+      'U aim like a stormtrooper on low sensitivity.',
+      'Youre basically the tutorial boss—easy, forgettable, and only there so others can learn the game.',
+      'You die faster than my Wi-Fi when I need it most.',
+      'You camp harder than a free-to-play Fortnite kid with no skins.',
+      'Your KD ratio is a cry for help.',
+      'Youve got more missed messages than actual friends.',
+      'Your mic quality sounds like youre calling in from the Shadow Realm.',
+      'Even Google cant search up who asked.',
+      'Your comebacks load slower than Roblox on a school Chromebook.',
+      'Respawn and try again.',
+      'Alt+F4 your personality.',
+      'Lag is your only excuse.',
+      'Fuck you.',      
+      'Game over. Insert skill to continue.',    
+      'Your secrets are safe with me. I never listen anyway.',
+      'You have something on your face… oh wait, that’s just your face.',
+      'You bring everyone down to your IQ level, and then still lose.',
+      'You’re proof that even evolution makes mistakes.',
+      'You have something most people don’t: a personality no one asked for.',
+      'You’re like a software bug—annoying, pointless, and impossible to remove.',
+      'You’re as useless as a white crayon.',
+      'You bring people closer… to the exit.',
+      'You’re like a phone with no signal—nothing but dead weight.',
+      'You’re proof that not everyone deserves participation trophies.',
+      'You have something in common with a cloud: when you disappear, it’s finally nice outside.',
+      'You’re the human version of a headache.',
+      'You’re like Wi-Fi with one bar—barely functioning and always frustrating.',
+      'You’re proof that birth certificates can be returned.',
+      'You bring disappointment like it’s a full-time job.',
+      'You’re like expired milk—bad smell, worse taste, and no use.',
+      'You bring the kind of energy that makes batteries give up.',
+      'You’re like a broken pencil—pointless, messy, and not worth the effort.',
+      'You’re proof that intelligence skips generations.',
+      'You’re like an alarm clock that doesn’t go off—completely unreliable.',
+      'You bring people together… to laugh at you.',
+      'You’re like dial-up internet—annoying noises and zero speed.',
+      'You’re proof that natural selection sometimes gets lazy.',
+      'You’re like the flu—nobody wants you, and you make everyone feel worse.',
+      'You’re like a video game tutorial—unskippable and hated.',
+      'You bring the vibe of a Monday morning.',
+      'You’re like a printer—always jammed, loud, and nobody misses you when you’re gone.',
+      'You’re proof that not all babies are blessings.',
+      'You’re like an expired coupon—useless and embarrassing to use.',
+      'You’re like a popup ad—loud, desperate, and ignored instantly.',
+      'You’re proof that common sense isn’t common.',
+      'You’re like a math problem with no answer—pointless and irritating.',
+      'You bring nothing to the table but crumbs.',
+      'You’re like a mosquito—small, annoying, and everyone wants to slap you.',
+      'You’re proof that mistakes can walk and talk.',
+      'You’re like a virus—unwanted, contagious, and hard to get rid of.',
+      'You’re like a broken light bulb—dim, fragile, and useless in the dark.',
+      'You’re like the bottom of the barrel—literally what’s left over.',
+      'You’re proof that the gene pool has a shallow end.',
+      'You’re like a bad haircut—embarrassing and hard to ignore.',
+      'You’re like an alarm set for PM instead of AM—completely useless when needed.',
+      'You’re proof that practice doesn’t always make perfect.',
+      'You’re like diet water—fake and pointless.',
+      'You’re the reason warning labels exist.',
+      'You’re like a cloud full of hot air—loud and empty.',
+      'You’re proof that not every story has a happy ending.',
+      'You’re living proof that even trash gets recycled sometimes.',
+      'You’re like a software glitch—nobody asked for you, and everyone hates dealing with you.',
+      'You have two brain cells, and they’re both fighting for third place.',
+      'You’re like a cloud of smoke—bad for everyone around you and gone with a breeze.',
+      'You bring the IQ of the server down just by typing.',
+      'You look like a failed character creation screen.',
+      'You’re like an unpaid bill—everyone avoids you.',
+      'You’re like expired medicine—worthless and possibly dangerous.',
+      'You’re like a parking ticket—unwanted and makes everyone angry.',
+      'You’re living proof that birth control should be free.',
+      'You’re like a broken condom—an accident that nobody wanted.',
+      'You’re like a test nobody studied for—confusing, unwanted, and stressful.',
+      'You’re like a clown without makeup—still a clown.',
+      'You’re the human equivalent of a speed bump—pointless and irritating.',
+      'You’re like a smoke detector with low battery—annoying, loud, and useless.',
+      'You’re like a sequel nobody asked for—worse than the original.',
+      'You’re like a knockoff brand—cheap, fake, and disappointing.',
+      'You’re like a puzzle with missing pieces—frustrating and incomplete.',
+      'You’re proof that not every cry for attention deserves a reply.',
+      'You’re like malware—slow, annoying, and nobody wants you installed.',
+      'You’re like the Titanic—loud, overhyped, and destined to sink.',
+      'You’re like fast food—cheap, greasy, and makes everyone feel sick afterwards.',
+      'You’re like an error message nobody can fix.',
+      'You’re like roadkill—unpleasant to look at and better ignored.',
+      'You’re like a screen crack—ugly, distracting, and makes everything worse.',
+      'You’re like wet socks—disgusting and uncomfortable to be around.',
+      'You’re like a bad tattoo—permanent regret.',
+      'You’re like spoiled meat—bad smell, bad taste, and dangerous to consume.',
+      'You’re like a GPS with no signal—lost and completely useless.',
+      'You’re like homework—nobody wants you, and you ruin free time.',
+      'You’re like mold—grows where it’s not wanted and stinks up the place.',
+      'You’re like an unpaid intern—doing nothing, but somehow still in the way.',
+      'You’re like a prison sentence—nobody wants to deal with you and time feels longer when they do.',
+      'You’re like chewing tinfoil—unpleasant and painful.',
+      'You’re like a scratch on a CD—annoying, repetitive, and ruins everything.',
+      'You’re like a splinter—small but makes everyone hate you.',
+      'You’re like spam calls—relentless, irritating, and better blocked.',
+      'You’re like bad Wi-Fi—every interaction with you is frustrating.',
+      'You’re like a nightmare—nobody wants you, and everyone is relieved when you’re gone.',
+      'You’re like a side quest nobody cares about.',
+      'You’re like a pothole—unexpected, annoying, and ruins the ride.',
+      'You’re like burnt toast—useless and leaves a bad taste.',
+      'You’re like background noise—distracting and unwanted.',
+      'You’re like a rumor—worthless and spreads too easily.',
+      'You’re like a scam call—persistent, fake, and nobody falls for you.',
+      'You’re like rotten fruit—ugly on the outside and worse on the inside.',
+      'You’re like a bad driver—dangerous, clueless, and always in the way.',
+      'You’re like a horror movie sequel—predictable, cheap, and nobody asked for it.',
+      'You’re like sand in shoes—irritating and impossible to get rid of.',
+      'You’re like a bad memory—always there and never wanted.',
+      'You’re proof that dumb fucks can still learn to type.',
+      'You bring the same energy as a broken condom, useless shit.',
+      'You’re like Wi-Fi in hell—slow as fuck and painful to deal with.',
+      'You’re the human version of dog shit—everyone avoids you.',
+      'You’ve got two brain cells left, and one of them is on fucking break.',
+      'You’re like a clown, but somehow less funny and more pathetic as fuck.',
+      'You’re a walking “fuck this” moment.',
+      'You’re like spam mail—annoying as fuck and instantly deleted.',
+      'You’re the kind of idiot who could fuck up a free lunch.',
+      'You’re proof that evolution sometimes takes a giant fucking step backward.'
+];
     message.channel.send(`🔥 ${user.username}, ${roasts[Math.floor(Math.random() * roasts.length)]}`);
-}
-
-else if (command === 'compliment') {
+  } else if (command === 'compliment') {
     const user = message.mentions.users.first();
     if (!user) return message.reply('💖 Tag someone to compliment.');
     message.channel.send(`💖 ${user.username}, ${compliments[Math.floor(Math.random() * compliments.length)]}`);
-}
+  }
 
-else if (command === 'meme') {
+  // ---- Meme Command ----
+  else if (command === 'meme') {
     try {
         await message.channel.sendTyping();
         const response = await fetch('https://meme-api.com/gimme');
         const data = await response.json();
+
         if (!data.url) {
             return message.reply('❌ Could not fetch a meme. Please try again.');
         }
-        const embed = { color: 0xFF5733, title: data.title, url: data.postLink, image: { url: data.url }, footer: { text: `From r/${data.subreddit} | 👍 ${data.ups}`}, };
+
+        const embed = {
+          color: 0xFF5733,
+          title: data.title,
+          url: data.postLink,
+          image: { url: data.url },
+          footer: { text: `From r/${data.subreddit} | 👍 ${data.ups}`},
+        };
+
         await message.channel.send({ embeds: [embed] });
+
     } catch (error) {
         console.error('Meme command error:', error);
         message.reply('❌ An error occurred while fetching a meme.');
     }
-}
+  }
 
-else if (command === 'nsfw-meme') {
+  // ---- NSFW Meme Command ----
+  else if (command === 'nsfw-meme') {
     if (!message.channel.nsfw) {
         return message.reply('❌ This command can only be used in NSFW channels.');
     }
+
     try {
         await message.channel.sendTyping();
         const response = await fetch('https://meme-api.com/gimme/nsfwmemes');
         const data = await response.json();
+
         if (!data.url) {
             return message.reply('❌ Could not fetch an NSFW meme. The subreddit might be private or unavailable.');
         }
-        const embed = { color: 0xFF0000, title: data.title, url: data.postLink, image: { url: data.url }, footer: { text: `From r/${data.subreddit} | 👍 ${data.ups}`}, };
+
+        const embed = {
+          color: 0xFF0000,
+          title: data.title,
+          url: data.postLink,
+          image: { url: data.url },
+          footer: { text: `From r/${data.subreddit} | 👍 ${data.ups}`},
+        };
+
         await message.channel.send({ embeds: [embed] });
+
     } catch (error) {
         console.error('NSFW Meme command error:', error);
         message.reply('❌ An error occurred while fetching an NSFW meme.');
     }
-}
+  }
 
-else if (command === 'haunt') {
+  // ---- Haunt ----
+  else if (command === 'haunt') {
     if (hauntedChannels.has(message.channel.id)) return message.channel.send('👻 Already haunting this channel!');
     hauntedChannels.add(message.channel.id);
     message.channel.send('💀 The haunting has begun...');
@@ -2837,28 +3688,28 @@ else if (command === 'haunt') {
       message.channel.send(spookyMessages[Math.floor(Math.random() * spookyMessages.length)]);
     }, 30000);
     hauntIntervals.set(message.channel.id, interval);
-}
-
-else if (command === 'unhaunt') {
+  } else if (command === 'unhaunt') {
     hauntedChannels.delete(message.channel.id);
     if (hauntIntervals.has(message.channel.id)) {
       clearInterval(hauntIntervals.get(message.channel.id));
       hauntIntervals.delete(message.channel.id);
     }
     message.channel.send('🕯️ The spirits have left...');
-}
+  }
 
-else if (command === 'blackjack') {
+  // ---- Blackjack ----
+  else if (command === 'blackjack') {
     if (blackjackGames.has(message.author.id)) return message.reply('⚠️ You already have a game! Use `$hit` or `$stand`');
     const playerHand = [drawCard(), drawCard()];
     const dealerHand = [drawCard(), drawCard()];
     blackjackGames.set(message.author.id, { playerHand, dealerHand });
     const playerTotal = handValue(playerHand);
-    const msg = `🃏 **Blackjack Started!** 🃏\n\n` + `**Your hand:** ${formatHand(playerHand)} (Total: ${playerTotal})\n` + `**Dealer’s hand:** ${dealerHand[0].value}${dealerHand[0].suit} ??\n\n` + `👉 Type \`$hit\` or \`$stand\``;
+    const msg = `🃏 **Blackjack Started!** 🃏\n\n` +
+      `**Your hand:** ${formatHand(playerHand)} (Total: ${playerTotal})\n` +
+      `**Dealer’s hand:** ${dealerHand[0].value}${dealerHand[0].suit} ??\n\n` +
+      `👉 Type \`$hit\` or \`$stand\``;
     message.channel.send(msg);
-}
-
-else if (command === 'hit') {
+  } else if (command === 'hit') {
     const game = blackjackGames.get(message.author.id);
     if (!game) return message.reply('⚠️ No active game. Start one with `$blackjack`');
     game.playerHand.push(drawCard());
@@ -2871,9 +3722,7 @@ else if (command === 'hit') {
       msg += `\n👉 Type \`$hit\` or \`$stand\``;
     }
     message.channel.send(msg);
-}
-
-else if (command === 'stand') {
+  } else if (command === 'stand') {
     const game = blackjackGames.get(message.author.id);
     if (!game) return message.reply('⚠️ No active game. Start one with `$blackjack`');
     const dealerHand = game.dealerHand;
@@ -2883,7 +3732,8 @@ else if (command === 'stand') {
       dealerTotal = handValue(dealerHand);
     }
     const playerTotal = handValue(game.playerHand);
-    let result = `**Your hand:** ${formatHand(game.playerHand)} (Total: ${playerTotal})\n` + `**Dealer’s hand:** ${formatHand(dealerHand)} (Total: ${dealerTotal})\n\n`;
+    let result = `**Your hand:** ${formatHand(game.playerHand)} (Total: ${playerTotal})\n` +
+      `**Dealer’s hand:** ${formatHand(dealerHand)} (Total: ${dealerTotal})\n\n`;
     if (playerTotal > 21) {
         result += `💥 You busted! Dealer wins.`;
     } else if (dealerTotal > 21) {
@@ -2901,100 +3751,127 @@ else if (command === 'stand') {
     }
     blackjackGames.delete(message.author.id);
     message.channel.send(result);
-}
+  }
 
-else if (!command && message.mentions.users.has(client.user.id)) {
+  // ---- AI Chat with OpenRouter (Bot Mention) ----
+  else if (!command && message.mentions.users.has(client.user.id)) {
     const prompt = message.content.replace(new RegExp(`<@!?${client.user.id}>`, 'g'), '').trim();
     if (!prompt) return message.reply('❓ What would you like to ask?');
     if (prompt.length > 300) {
       return message.reply('❌ Your question is too long. Please keep it under 300 characters.');
     }
+
     try {
       await message.channel.sendTyping();
+
       const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
-        headers: { "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ model: "deepseek/deepseek-chat-v3.1:free", messages: [{ role: "user", content: prompt }] })
+        headers: {
+          "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: "deepseek/deepseek-chat-v3.1:free",
+          messages: [{ role: "user", content: prompt }]
+        })
       });
+
       const data = await response.json();
+
       if (data.error) {
         return message.reply(`🚫 OpenRouter Error: ${data.error.message}`);
       }
+
       const reply = data.choices?.[0]?.message?.content || "⚠️ Sorry, I couldn’t generate a reply.";
+
       if (reply.length > 2000) {
         await message.reply(reply.slice(0, 1997) + '...');
       } else {
         await message.reply(reply);
       }
+
     } catch (err) {
       console.error('❌ OpenRouter request failed:', err);
       await message.reply('🚫 Error talking to the AI. Try again later.');
     }
-}
+  }
 
-else if (command === 'ai') {
+  // ---- AI Chat with Google Gemini ----
+  else if (command === 'ai') {
     const prompt = args.join(' ');
     if (!prompt) return message.reply('❓ Please provide a prompt. Example: `$ai tell me a story`');
+
     try {
       await message.channel.sendTyping();
+
       const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
       const result = await model.generateContent(prompt);
+
       let reply = result.response?.text?.();
       if (!reply || reply.trim().length === 0) {
         console.warn("⚠️ Gemini refusal details:", JSON.stringify(result.response, null, 2));
         reply = "⚠️ Gemini couldn’t answer that. Try rephrasing your question.";
       }
+
       if (reply.length > 2000) {
         await message.reply(reply.slice(0, 1997) + '...');
       } else {
         await message.reply(reply);
       }
+
     } catch (err) {
       console.error('❌ Gemini AI request failed:', err);
       await message.reply('🚫 Error talking to the AI. Try again later.');
     }
-}
+  }
 
-else if (command === 'kick') {
+  // ---- Moderation Commands ----
+  else if (command === 'kick') {
     const target = message.mentions.members.first();
     if (!target) return message.reply('🔨 Tag a user to kick.');
     if (isImmune(target.user)) return message.reply('❌ This user is immune!');
     if (!checkPermission(PermissionsBitField.Flags.KickMembers)) return;
     const reason = args.join(' ') || 'No reason provided';
-    target.kick(reason).then(() => message.reply(`✅ Kicked ${target.user.tag}. Reason: ${reason}`)).catch(() => message.reply('❌ Cannot kick this user.'));
-}
-
-else if (command === 'ban') {
+    target.kick(reason)
+      .then(() => message.reply(`✅ Kicked ${target.user.tag}. Reason: ${reason}`))
+      .catch(() => message.reply('❌ Cannot kick this user.'));
+  } else if (command === 'ban') {
     const target = message.mentions.members.first();
     if (!target) return message.reply('🚫 Tag a user to ban.');
     if (isImmune(target.user)) return message.reply('❌ This user is immune!');
     if (!checkPermission(PermissionsBitField.Flags.BanMembers)) return;
     const reason = args.join(' ') || 'No reason provided';
-    target.ban({ reason }).then(() => message.reply(`✅ Banned ${target.user.tag}. Reason: ${reason}`)).catch(() => message.reply('❌ Cannot ban this user.'));
-}
-
-else if (command === 'mute') {
+    target.ban({ reason })
+      .then(() => message.reply(`✅ Banned ${target.user.tag}. Reason: ${reason}`))
+      .catch(() => message.reply('❌ Cannot ban this user.'));
+  } else if (command === 'mute') {
     const target = message.mentions.members.first();
     if (!target) return message.reply('🤐 Tag a user to mute.');
     if (isImmune(target.user)) return message.reply('❌ This user is immune!');
     if (!checkPermission(PermissionsBitField.Flags.ModerateMembers)) return;
     const time = args[1] ? parseInt(args[1]) * 1000 : 600000;
-    target.timeout(time, 'Muted by bot').then(() => message.reply(`✅ Muted ${target.user.tag}${time ? ` for ${args[1]} seconds` : ''}.`)).catch(() => message.reply('❌ Cannot mute this user.'));
-}
-
-else if (command === 'unmute') {
+    target.timeout(time, 'Muted by bot')
+      .then(() => message.reply(`✅ Muted ${target.user.tag}${time ? ` for ${args[1]} seconds` : ''}.`))
+      .catch(() => message.reply('❌ Cannot mute this user.'));
+  } else if (command === 'unmute') {
     const target = message.mentions.members.first();
     if (!target) return message.reply('🔊 Tag a user to unmute.');
     if (isImmune(target.user)) return message.reply('❌ This user is immune!');
     if (!checkPermission(PermissionsBitField.Flags.ModerateMembers)) return;
-    target.timeout(null, 'Unmuted by bot').then(() => message.reply(`✅ Unmuted ${target.user.tag}.`)).catch(() => message.reply('❌ Cannot unmute this user.'));
-}
+    target.timeout(null, 'Unmuted by bot')
+      .then(() => message.reply(`✅ Unmuted ${target.user.tag}.`))
+      .catch(() => message.reply('❌ Cannot unmute this user.'));
+  }
 
-else if (command === 'antiraid') {
+  // ---- ANTI-RAID COMMAND (REFACTORED & SECURED) ----
+  else if (command === 'antiraid') {
+      // [MODIFIED] Check if the user is the owner or has an immunity rank
       if (!isImmune(message.author)) {
           return message.reply('❌ You do not have permission to manage the anti-raid system.');
       }
+      
       const subcommand = args[0]?.toLowerCase();
+
       if (subcommand === 'on') {
           const success = await engageAntiRaid(message.guild, message.channel, message.author);
           if (!success) {
@@ -3012,20 +3889,28 @@ else if (command === 'antiraid') {
       } else {
           message.reply('❌ Usage: `$antiraid on` or `$antiraid off`.');
       }
-}
+  }
 
-else if (command === 'nuke') {
+  // ---- Nuke Command ----
+  else if (command === 'nuke') {
     if (!checkPermission(PermissionsBitField.Flags.ManageChannels)) return;
+
     const subcommand = args.shift()?.toLowerCase();
     const count = parseInt(args[0]) || 1;
+
     if (subcommand === 'delete') {
       if (count < 1 || count > 50) {
         return message.reply('❌ Please specify a number between 1 and 50 to delete.');
       }
-      const channelsToDelete = message.guild.channels.cache.filter(channel => channel.type === 0 && channel.deletable).first(count);
+
+      const channelsToDelete = message.guild.channels.cache
+        .filter(channel => channel.type === 0 && channel.deletable) // 0 is GuildText
+        .first(count);
+
       if (channelsToDelete.length === 0) {
         return message.reply('❌ No text channels found to delete.');
       }
+
       try {
         for (const channel of channelsToDelete) {
           await channel.delete('Nuke command executed');
@@ -3043,10 +3928,15 @@ else if (command === 'nuke') {
       if (count < 1 || count > 50) {
         return message.reply('❌ Please specify a number between 1 and 50 to rename.');
       }
-      const channelsToRename = message.guild.channels.cache.filter(channel => channel.type === 0 && channel.manageable).first(count);
+
+      const channelsToRename = message.guild.channels.cache
+        .filter(channel => channel.type === 0 && channel.manageable) // 0 is GuildText
+        .first(count);
+
       if (channelsToRename.length === 0) {
         return message.reply('❌ No text channels found to rename.');
       }
+
       try {
         for (const channel of channelsToRename) {
           await channel.setName(newName, 'Nuke command executed');
@@ -3059,95 +3949,106 @@ else if (command === 'nuke') {
     } else {
       message.reply('❌ Usage: `$nuke delete [count]` or `$nuke rename <new-name> [count]`');
     }
-}
+  }
 
-else if (command === 'userinfo') {
+  // ---- Info & Tools ----
+  else if (command === 'userinfo') {
     const user = message.mentions.users.first() || message.author;
     const member = message.guild.members.cache.get(user.id);
-    message.channel.send(`🧑 User Info:\nUsername: ${user.username}\nTag: ${user.tag}\nID: ${user.id}\nJoined Server: ${member.joinedAt.toDateString()}\nAccount Created: ${user.createdAt.toDateString()}`);
-}
-
-else if (command === 'avatar') {
+    message.channel.send(`🧑 User Info:
+Username: ${user.username}
+Tag: ${user.tag}
+ID: ${user.id}
+Joined Server: ${member.joinedAt.toDateString()}
+Account Created: ${user.createdAt.toDateString()}`);
+  }
+  else if (command === 'avatar') {
     const user = message.mentions.users.first() || message.author;
     message.channel.send(`${user.username}'s Avatar: ${user.displayAvatarURL({ dynamic: true, size: 1024 })}`);
-}
-
-else if (command === 'serverinfo') {
+  }
+  else if (command === 'serverinfo') {
     const guild = message.guild;
-    message.channel.send(`🏠 Server Info:\nName: ${guild.name}\nID: ${guild.id}\nMembers: ${guild.memberCount}\nCreated: ${guild.createdAt.toDateString()}`);
-}
-
-else if (command === 'shout') {
+    message.channel.send(`🏠 Server Info:
+Name: ${guild.name}
+ID: ${guild.id}
+Members: ${guild.memberCount}
+Created: ${guild.createdAt.toDateString()}`);
+  }
+  else if (command === 'shout') {
     if (!args.length) return message.reply('📢 Provide a message to shout.');
     message.channel.send(args.join(' ').toUpperCase());
-}
-
-else if (command === 'spoiler') {
+  }
+  else if (command === 'spoiler') {
     if (!args.length) return message.reply('🤐 Provide a message to hide as spoiler.');
     message.channel.send(`||${args.join(' ')}||`);
-}
-
-else if (command === 'say') {
+  }
+  else if (command === 'say') {
     if (!args.length) return message.reply('📣 Provide a message to echo.');
     message.channel.send(args.join(' '));
-}
-
-else if (command === 'send') {
+  }
+  else if (command === 'send') {
     if (args.length < 2) return message.reply('✉️ Usage: $send <channelID> <message>');
     const channel = client.channels.cache.get(args[0]);
     if (!channel) return message.reply('❌ Channel not found or I do not have access.');
     if (!channel.isTextBased()) return message.reply('❌ That channel is not a text channel.');
     const botMember = channel.guild.members.me;
     if (!channel.permissionsFor(botMember)?.has('SendMessages')) return message.reply('❌ I do not have permission to send messages in that channel.');
-    channel.send(args.slice(1).join(' ')).then(() => message.reply(`✅ Message sent to #${channel.name} in ${channel.guild.name}.`)).catch(err => message.reply(`❌ Failed to send message. Error: ${err.message}`));
-}
+    channel.send(args.slice(1).join(' '))
+      .then(() => message.reply(`✅ Message sent to #${channel.name} in ${channel.guild.name}.`))
+      .catch(err => message.reply(`❌ Failed to send message. Error: ${err.message}`));
+  }
 
-else if (command === 'warn') {
+  // ---- Persistent Warnings ----
+  else if (command === 'warn') {
     const target = message.mentions.members.first();
     if (!target) return message.reply('⚠️ Tag a user to warn.');
     if (isImmune(target.user)) return message.reply('❌ This user is immune!');
     if (!checkPermission(PermissionsBitField.Flags.KickMembers)) return;
     const reason = args.slice(1).join(' ') || 'No reason provided';
-    if (!botData.warnings[target.id]) botData.warnings[target.id] = [];
-    botData.warnings[target.id].push({ reason, date: new Date().toISOString(), mod: message.author.tag });
+    if (!warnings[target.id]) warnings[target.id] = [];
+    warnings[target.id].push({ reason, date: new Date().toISOString(), mod: message.author.tag });
     saveWarnings();
     message.reply(`⚠️ Warned ${target.user.tag}. Reason: ${reason}`);
-}
-
-else if (command === 'warnings') {
+  }
+  else if (command === 'warnings') {
     const target = message.mentions.members.first() || message.member;
-    const userWarnings = botData.warnings[target.id] || [];
+    const userWarnings = warnings[target.id] || [];
     if (!userWarnings.length) return message.reply('ℹ️ No warnings found.');
     let text = `⚠️ Warnings for ${target.user.tag}:\n`;
     userWarnings.forEach((w, i) => text += `${i + 1}. [${w.date}] ${w.mod}: ${w.reason}\n`);
     message.channel.send(text);
-}
+  }
 
-else if (command === 'clear') {
+  // ---- Clear, Lock, Unlock, Slowmode, Role ----
+  else if (command === 'clear') {
     if (!checkPermission(PermissionsBitField.Flags.ManageMessages)) return;
     const count = parseInt(args[0]);
     if (!count || count < 1 || count > 100) return message.reply('❌ Enter a number between 1-100.');
-    message.channel.bulkDelete(count, true).then(() => message.reply(`🧹 Deleted ${count} messages.`)).catch(() => message.reply('❌ Cannot delete messages.'));
-}
-
-else if (command === 'lock') {
+    message.channel.bulkDelete(count, true)
+      .then(() => message.reply(`🧹 Deleted ${count} messages.`))
+      .catch(() => message.reply('❌ Cannot delete messages.'));
+  }
+  else if (command === 'lock') {
     if (!checkPermission(PermissionsBitField.Flags.ManageChannels)) return;
-    message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: false }).then(() => message.reply('🔒 Channel locked.')).catch(() => message.reply('❌ Cannot lock this channel.'));
-}
-
-else if (command === 'unlock') {
+    message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: false })
+      .then(() => message.reply('🔒 Channel locked.'))
+      .catch(() => message.reply('❌ Cannot lock this channel.'));
+  }
+  else if (command === 'unlock') {
     if (!checkPermission(PermissionsBitField.Flags.ManageChannels)) return;
-    message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: true }).then(() => message.reply('🔓 Channel unlocked.')).catch(() => message.reply('❌ Cannot unlock this channel.'));
-}
-
-else if (command === 'slowmode') {
+    message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: true })
+      .then(() => message.reply('🔓 Channel unlocked.'))
+      .catch(() => message.reply('❌ Cannot unlock this channel.'));
+  }
+  else if (command === 'slowmode') {
     if (!checkPermission(PermissionsBitField.Flags.ManageChannels)) return;
     const time = parseInt(args[0]);
     if (isNaN(time) || time < 0 || time > 21600) return message.reply('❌ Enter a valid number (0-21600 seconds).');
-    message.channel.setRateLimitPerUser(time).then(() => message.reply(`🐌 Slowmode set to ${time} seconds.`)).catch(() => message.reply('❌ Cannot set slowmode.'));
-}
-
-else if (command === 'role') {
+    message.channel.setRateLimitPerUser(time)
+      .then(() => message.reply(`🐌 Slowmode set to ${time} seconds.`))
+      .catch(() => message.reply('❌ Cannot set slowmode.'));
+  }
+  else if (command === 'role') {
     const subcommand = args.shift();
     const target = message.mentions.members.first();
     if (!target) return message.reply('🏷️ Tag a user.');
@@ -3157,150 +4058,116 @@ else if (command === 'role') {
     if (!role) return message.reply('❌ Role not found.');
     if (!checkPermission(PermissionsBitField.Flags.ManageRoles)) return;
     if (subcommand === 'add') {
-      target.roles.add(role).then(() => message.reply(`✅ Added role ${role.name} to ${target.user.tag}.`)).catch(() => message.reply('❌ Cannot add role.'));
+      target.roles.add(role)
+        .then(() => message.reply(`✅ Added role ${role.name} to ${target.user.tag}.`))
+        .catch(() => message.reply('❌ Cannot add role.'));
     } else if (subcommand === 'remove') {
-      target.roles.remove(role).then(() => message.reply(`✅ Removed role ${role.name} from ${target.user.tag}.`)).catch(() => message.reply('❌ Cannot remove role.'));
+      target.roles.remove(role)
+        .then(() => message.reply(`✅ Removed role ${role.name} from ${target.user.tag}.`))
+        .catch(() => message.reply('❌ Cannot remove role.'));
     } else {
       message.reply('❌ Use `$role add @user <role>` or `$role remove @user <role>`');
     }
-}
+  }
 
-else if (command === 'qotd') {
+  // ---- QOTD Command (Updated) ----
+  else if (command === 'qotd') {
     if (!checkPermission(PermissionsBitField.Flags.ManageChannels)) return;
     const subcommand = args[0];
     const channelId = message.channel.id;
+
     if (subcommand === 'on') {
       if (activeQotdChannels.has(channelId)) {
         return message.reply('❓ QOTD is already active in this channel.');
       }
+
       activeQotdChannels.add(channelId);
       saveQotdState();
       message.reply('✅ Question of the Day has been enabled in this channel!');
+
       const channel = message.channel;
-      const sendInitialQuestion = () => {
+      const sendQuestion = () => {
         const question = qotdQuestions[Math.floor(Math.random() * qotdQuestions.length)];
         channel.send(`**❓ Question of the Day:** ${question}`);
+        
+        // Add the global log function call here
         logToGlobal(question, message.guild.name, channel.name);
       };
-      sendInitialQuestion();
-      const interval = setInterval(() => sendQuestion(channelId), 24 * 60 * 60 * 1000);
+      sendQuestion();
+      const interval = setInterval(sendQuestion, 24 * 60 * 60 * 1000);
       qotdIntervals.set(channelId, interval);
+
     } else if (subcommand === 'off') {
       if (!activeQotdChannels.has(channelId)) {
         return message.reply('❌ QOTD is not currently active in this channel.');
       }
-      stopQotd(channelId); // Use the helper function
-      message.reply('✅ Question of the Day has been disabled in this channel.');
-    } else if (subcommand === 'everyone') {
-        const toggle = args[1]?.toLowerCase();
-        if (toggle !== 'on' && toggle !== 'off') {
-            return message.reply('❌ Usage: `$qotd everyone <on|off>`');
-        }
-        botData.qotdSettings[channelId] = { everyone: toggle === 'on' };
-        saveQotdSettings();
-        message.reply(`✅ @everyone pings for QOTD have been turned **${toggle}** in this channel.`);
-    } else {
-      message.reply('❌ Usage: `$qotd on`, `$qotd off`, or `$qotd everyone <on|off>`.');
-    }
-}
 
-else if (command === 'setwelcome') {
+      activeQotdChannels.delete(channelId);
+      saveQotdState();
+      message.reply('✅ Question of the Day has been disabled in this channel.');
+
+      if (qotdIntervals.has(channelId)) {
+        clearInterval(qotdIntervals.get(channelId));
+        qotdIntervals.delete(channelId);
+      }
+    } else {
+      message.reply('❌ Usage: `$qotd on` or `$qotd off`.');
+    }
+  }
+
+  // --- Welcome & Leave Commands ---
+  else if (command === 'setwelcome') {
     if (!checkPermission(PermissionsBitField.Flags.ManageGuild)) return;
     const channel = message.mentions.channels.first() || message.channel;
     const welcomeMessage = args.slice(1).join(' ');
     if (!welcomeMessage) return message.reply('❌ Please provide a message. Example: `$setwelcome #general Welcome, {user}!`');
-    botData.welcomeMessages[message.guild.id] = { channelId: channel.id, message: welcomeMessage };
+
+    welcomeMessages[message.guild.id] = {
+      channelId: channel.id,
+      message: welcomeMessage
+    };
     saveWelcomeMessages();
     message.reply(`✅ Welcome message set for ${channel}. Use \`{user}\` to tag the user, \`{server}\` for the server name, and \`{membercount}\` for the member count.`);
-}
-
-else if (command === 'clearwelcome') {
+  }
+  else if (command === 'clearwelcome') {
     if (!checkPermission(PermissionsBitField.Flags.ManageGuild)) return;
-    if (!botData.welcomeMessages[message.guild.id]) {
+    if (!welcomeMessages[message.guild.id]) {
       return message.reply('❌ No welcome message is currently set for this server.');
     }
-    delete botData.welcomeMessages[message.guild.id];
+    delete welcomeMessages[message.guild.id];
     saveWelcomeMessages();
     message.reply('✅ Welcome message has been cleared for this server.');
-}
-
-else if (command === 'setleave') {
+  }
+  else if (command === 'setleave') {
     if (!checkPermission(PermissionsBitField.Flags.ManageGuild)) return;
     const channel = message.mentions.channels.first() || message.channel;
     const leaveMessage = args.slice(1).join(' ');
     if (!leaveMessage) return message.reply('❌ Please provide a message. Example: `$setleave #general {user} has left the server.`');
-    botData.leaveMessages[message.guild.id] = { channelId: channel.id, message: leaveMessage };
+
+    leaveMessages[message.guild.id] = {
+      channelId: channel.id,
+      message: leaveMessage
+    };
     saveLeaveMessages();
     message.reply(`✅ Leave message set for ${channel}. Use \`{user}\` for the user's tag, \`{server}\` for the server name, and \`{membercount}\` for the member count.`);
-}
-
-else if (command === 'clearleave') {
+  }
+  else if (command === 'clearleave') {
     if (!checkPermission(PermissionsBitField.Flags.ManageGuild)) return;
-    if (!botData.leaveMessages[message.guild.id]) {
+    if (!leaveMessages[message.guild.id]) {
       return message.reply('❌ No leave message is currently set for this server.');
     }
-    delete botData.leaveMessages[message.guild.id];
+    delete leaveMessages[message.guild.id];
     saveLeaveMessages();
     message.reply('✅ Leave message has been cleared for this server.');
-} 
+  }
 
-});
-
-// Track how many times data has been saved this session
-
-client.on("messageCreate", async (message) => {
-  if (message.author.bot) return;
-
-  const prefix = "$"; // Your bot's prefix
-  if (!message.content.startsWith(prefix)) return;
-
-  const args = message.content.slice(prefix.length).trim().split(/ +/);
-  const command = args.shift().toLowerCase();
-
-  // ---- Force Save Command ----
-  if (command === "forcesave") {
-    // Only the bot owner or immune users can use this
-    if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
-      return message.reply("❌ You don’t have permission to force save.");
+  // ---- Unknown command ----
+  else {
+    if (message.content.startsWith('$') && command) { // Check if it was a command attempt
+      message.reply('❌ Unknown command or you do not have permission.');
     }
-
-    try {
-      const before = Date.now();
-      await saveData();
-      const duration = ((Date.now() - before) / 1000).toFixed(2);
-
-      saveCount++;
-      lastSaveTime = new Date().toLocaleTimeString();
-
-      // Build an info message
-      const infoMsg = `💾 **Force Save Complete!**  
-**User:** ${message.author.tag} (${message.author.id})
-**Save Count (this session):** ${saveCount}
-**Last Save:** ${lastSaveTime}
-**Duration:** ${duration}s`;
-
-      await message.reply(infoMsg);
-
-      // --- Log it globally and/or to master log ---
-      const logMsg = `💾 **Force Save Triggered**
-👤 User: **${message.author.tag}** (${message.author.id})
-🏠 Server: **${message.guild?.name || 'DM'}**
-🕒 Time: ${lastSaveTime}
-💾 Total Saves This Session: ${saveCount}
-⚙️ Duration: ${duration}s`;
-
-      await sendLog(message.guild?.id, logMsg);
-      console.log(`[DATA] Force save by ${message.author.tag} (${duration}s) — total saves: ${saveCount}`);
-    } catch (err) {
-      console.error("Force save failed:", err);
-      message.reply("⚠️ Failed to save data. Check console for details.");
-    }
-
-    // ✅ Stop here after handling $forcesave
-    return;
   }
 
 }); // ---- End of messageCreate ----
 
-// ---- Login ----
 client.login(process.env.BOT_TOKEN);
