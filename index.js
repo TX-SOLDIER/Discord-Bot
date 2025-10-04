@@ -1070,7 +1070,7 @@ async function logToGlobal(qotd, serverName, channelName) {
     if (logChannel) {
       const embed = {
         color: 0x0099ff,
-        title: `New QOTD in ${serverName}`,
+        title: "New QOTD in " + serverName,
         description: `**Channel:** #${channelName}\n**Question:** ${qotd}`,
         timestamp: new Date(),
         footer: { text: 'Logged by QOTD Bot' },
