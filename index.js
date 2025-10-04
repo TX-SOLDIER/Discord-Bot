@@ -1071,7 +1071,7 @@ async function logToGlobal(qotd, serverName, channelName) {
       const embed = {
         color: 0x0099ff,
         title: "New QOTD in " + serverName,
-        description: `**Channel:** #${channelName}\n**Question:** ${qotd}`,
+        description: "**Channel:** #" + channelName + "\n**Question:** " + qotd,
         timestamp: new Date(),
         footer: { text: 'Logged by QOTD Bot' },
       };
@@ -1109,12 +1109,12 @@ async function engageAntiRaid(guild, alertChannel, author = null) {
             if (channel.isTextBased()) {
                  await channel.permissionOverwrites.edit(guild.roles.everyone, {
                     SendMessages: false
-                }).catch(err => console.error(`Failed to lock channel ${channel.name}:`, err));
+                }).catch(err => console.error("Failed to lock channel " + channel.name + ":", err));
             }
         });
 
         if (author) {
-            await sendLog(guild.id, `\`[SECURITY]\` **${author.tag}** has engaged ANTI-RAID mode.`);
+            await sendLog(guild.id, "`[SECURITY]` **" + author.tag + "** has engaged ANTI-RAID mode.");
             if (alertChannel) {
                 await alertChannel.send("🚨ANTI-RAID PROTOCOL  ENGAGED🚨THIS IS NOT A DRILL. All security measures are live. Unauthorized accounts will be IDENTIFIED, TRACKED and ELIMINATED. Channels are locked, posting is restricted, and verification is mandatory. Attempts to bypass will result in immediate bans and permanent removal from the server. Moderators: Engage intruders.");
             }
