@@ -1,3 +1,9 @@
+// ============================================================================
+// DISCORD BOT - ORGANIZED STRUCTURE
+// ============================================================================
+// All data arrays are grouped together at the top for easy access and editing
+// ============================================================================
+
 require('dotenv').config();
 const { Client, GatewayIntentBits, PermissionsBitField, EmbedBuilder } = require('discord.js');
 const fetch = require('node-fetch');
@@ -469,6 +475,12 @@ const spookyMessages = [
 ];
 
 // ---- Truth Questions ----
+
+// ============================================================================
+// DATA ARRAYS - ALL CONTENT IN ONE PLACE
+// ============================================================================
+
+// ---- Spicy Truths (Truth or Dare) ----
 const spicyTruths = [
   "What’s your most embarrassing moment?",
   "Who was your first crush?",
@@ -547,6 +559,8 @@ const spicyTruths = [
 ];
 
 // ---- Spicy Dares ----
+
+// ---- Spicy Dares (Truth or Dare) ----
 const spicyDares = [
   "Change your nickname to something silly for 10 minutes.",
   "Type your next 3 messages in ALL CAPS.",
@@ -620,6 +634,8 @@ const spicyDares = [
   "Talk like a news anchor for 2 messages.",
   "Send a message complimenting someone in the chat."
 ];
+
+// ---- Compliments ----
 
 // ---- Compliments ----
 const compliments = [
@@ -700,51 +716,7 @@ const compliments = [
   "You have a presence that makes everyone want to get closer."
 ];
 
-// ---- Persistent Warnings ----
-const warningsFile = './warnings.json';
-let warnings = {};
-
-if (fs.existsSync(warningsFile)) {
-  warnings = JSON.parse(fs.readFileSync(warningsFile, 'utf8'));
-}
-
-function saveWarnings() {
-  fs.writeFileSync(warningsFile, JSON.stringify(warnings, null, 2));
-}
-
-// ---- Blackjack Game ----
-const blackjackGames = new Map();
-
-function drawCard() {
-  const suits = ['♠️', '♥️', '♦️', '♣️'];
-  const values = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
-  return {
-    suit: suits[Math.floor(Math.random() * suits.length)],
-    value: values[Math.floor(Math.random() * values.length)],
-  };
-}
-
-function cardValue(card) {
-  if (['J', 'Q', 'K'].includes(card.value)) return 10;
-  if (card.value === 'A') return 11;
-  return parseInt(card.value);
-}
-
-function handValue(hand) {
-  let total = hand.reduce((sum, c) => sum + cardValue(c), 0);
-  let aces = hand.filter(c => c.value === 'A').length;
-  while (total > 21 && aces > 0) {
-    total -= 10;
-    aces--;
-  }
-  return total;
-}
-
-function formatHand(hand) {
-  return hand.map(c => `${c.value}${c.suit}`).join(' ');
-}
-
-// ---- Question of the Day ----
+// ---- Question of the Day (QOTD) ----
 const qotdQuestions = [
     "What's the best movie you've seen recently?",
     "If you could have any superpower, what would it be?",
@@ -926,6 +898,188 @@ const qotdQuestions = [
     "What’s your favorite holiday and why?",
     "Do you prefer big parties or small hangouts?"
 ];
+
+// ---- Roasts ----
+    const roasts = [
+      'You bring people joy… by leaving.',
+      'You make onions cry out of pity.',
+      'You look like a before picture.',
+      'Bro thinks he is the main character, but ur not even in the opening credits.',
+      'You have got more filler than a Naruto flashback.',
+      'You talk big, but your aura screams background NPC.',
+      'Ur the type of villain who gets defeated in one episode just to hype the real boss.',
+      'U aim like a stormtrooper on low sensitivity.',
+      'Youre basically the tutorial boss—easy, forgettable, and only there so others can learn the game.',
+      'You die faster than my Wi-Fi when I need it most.',
+      'You camp harder than a free-to-play Fortnite kid with no skins.',
+      'Your KD ratio is a cry for help.',
+      'Youve got more missed messages than actual friends.',
+      'Your mic quality sounds like youre calling in from the Shadow Realm.',
+      'Even Google cant search up who asked.',
+      'Your comebacks load slower than Roblox on a school Chromebook.',
+      'Respawn and try again.',
+      'Alt+F4 your personality.',
+      'Lag is your only excuse.',
+      'Fuck you.',      
+      'Game over. Insert skill to continue.',    
+      'Your secrets are safe with me. I never listen anyway.',
+      'You have something on your face… oh wait, that’s just your face.',
+      'You bring everyone down to your IQ level, and then still lose.',
+      'You’re proof that even evolution makes mistakes.',
+      'You have something most people don’t: a personality no one asked for.',
+      'You’re like a software bug—annoying, pointless, and impossible to remove.',
+      'You’re as useless as a white crayon.',
+      'You bring people closer… to the exit.',
+      'You’re like a phone with no signal—nothing but dead weight.',
+      'You’re proof that not everyone deserves participation trophies.',
+      'You have something in common with a cloud: when you disappear, it’s finally nice outside.',
+      'You’re the human version of a headache.',
+      'You’re like Wi-Fi with one bar—barely functioning and always frustrating.',
+      'You’re proof that birth certificates can be returned.',
+      'You bring disappointment like it’s a full-time job.',
+      'You’re like expired milk—bad smell, worse taste, and no use.',
+      'You bring the kind of energy that makes batteries give up.',
+      'You’re like a broken pencil—pointless, messy, and not worth the effort.',
+      'You’re proof that intelligence skips generations.',
+      'You’re like an alarm clock that doesn’t go off—completely unreliable.',
+      'You bring people together… to laugh at you.',
+      'You’re like dial-up internet—annoying noises and zero speed.',
+      'You’re proof that natural selection sometimes gets lazy.',
+      'You’re like the flu—nobody wants you, and you make everyone feel worse.',
+      'You’re like a video game tutorial—unskippable and hated.',
+      'You bring the vibe of a Monday morning.',
+      'You’re like a printer—always jammed, loud, and nobody misses you when you’re gone.',
+      'You’re proof that not all babies are blessings.',
+      'You’re like an expired coupon—useless and embarrassing to use.',
+      'You’re like a popup ad—loud, desperate, and ignored instantly.',
+      'You’re proof that common sense isn’t common.',
+      'You’re like a math problem with no answer—pointless and irritating.',
+      'You bring nothing to the table but crumbs.',
+      'You’re like a mosquito—small, annoying, and everyone wants to slap you.',
+      'You’re proof that mistakes can walk and talk.',
+      'You’re like a virus—unwanted, contagious, and hard to get rid of.',
+      'You’re like a broken light bulb—dim, fragile, and useless in the dark.',
+      'You’re like the bottom of the barrel—literally what’s left over.',
+      'You’re proof that the gene pool has a shallow end.',
+      'You’re like a bad haircut—embarrassing and hard to ignore.',
+      'You’re like an alarm set for PM instead of AM—completely useless when needed.',
+      'You’re proof that practice doesn’t always make perfect.',
+      'You’re like diet water—fake and pointless.',
+      'You’re the reason warning labels exist.',
+      'You’re like a cloud full of hot air—loud and empty.',
+      'You’re proof that not every story has a happy ending.',
+      'You’re living proof that even trash gets recycled sometimes.',
+      'You’re like a software glitch—nobody asked for you, and everyone hates dealing with you.',
+      'You have two brain cells, and they’re both fighting for third place.',
+      'You’re like a cloud of smoke—bad for everyone around you and gone with a breeze.',
+      'You bring the IQ of the server down just by typing.',
+      'You look like a failed character creation screen.',
+      'You’re like an unpaid bill—everyone avoids you.',
+      'You’re like expired medicine—worthless and possibly dangerous.',
+      'You’re like a parking ticket—unwanted and makes everyone angry.',
+      'You’re living proof that birth control should be free.',
+      'You’re like a broken condom—an accident that nobody wanted.',
+      'You’re like a test nobody studied for—confusing, unwanted, and stressful.',
+      'You’re like a clown without makeup—still a clown.',
+      'You’re the human equivalent of a speed bump—pointless and irritating.',
+      'You’re like a smoke detector with low battery—annoying, loud, and useless.',
+      'You’re like a sequel nobody asked for—worse than the original.',
+      'You’re like a knockoff brand—cheap, fake, and disappointing.',
+      'You’re like a puzzle with missing pieces—frustrating and incomplete.',
+      'You’re proof that not every cry for attention deserves a reply.',
+      'You’re like malware—slow, annoying, and nobody wants you installed.',
+      'You’re like the Titanic—loud, overhyped, and destined to sink.',
+      'You’re like fast food—cheap, greasy, and makes everyone feel sick afterwards.',
+      'You’re like an error message nobody can fix.',
+      'You’re like roadkill—unpleasant to look at and better ignored.',
+      'You’re like a screen crack—ugly, distracting, and makes everything worse.',
+      'You’re like wet socks—disgusting and uncomfortable to be around.',
+      'You’re like a bad tattoo—permanent regret.',
+      'You’re like spoiled meat—bad smell, bad taste, and dangerous to consume.',
+      'You’re like a GPS with no signal—lost and completely useless.',
+      'You’re like homework—nobody wants you, and you ruin free time.',
+      'You’re like mold—grows where it’s not wanted and stinks up the place.',
+      'You’re like an unpaid intern—doing nothing, but somehow still in the way.',
+      'You’re like a prison sentence—nobody wants to deal with you and time feels longer when they do.',
+      'You’re like chewing tinfoil—unpleasant and painful.',
+      'You’re like a scratch on a CD—annoying, repetitive, and ruins everything.',
+      'You’re like a splinter—small but makes everyone hate you.',
+      'You’re like spam calls—relentless, irritating, and better blocked.',
+      'You’re like bad Wi-Fi—every interaction with you is frustrating.',
+      'You’re like a nightmare—nobody wants you, and everyone is relieved when you’re gone.',
+      'You’re like a side quest nobody cares about.',
+      'You’re like a pothole—unexpected, annoying, and ruins the ride.',
+      'You’re like burnt toast—useless and leaves a bad taste.',
+      'You’re like background noise—distracting and unwanted.',
+      'You’re like a rumor—worthless and spreads too easily.',
+      'You’re like a scam call—persistent, fake, and nobody falls for you.',
+      'You’re like rotten fruit—ugly on the outside and worse on the inside.',
+      'You’re like a bad driver—dangerous, clueless, and always in the way.',
+      'You’re like a horror movie sequel—predictable, cheap, and nobody asked for it.',
+      'You’re like sand in shoes—irritating and impossible to get rid of.',
+      'You’re like a bad memory—always there and never wanted.',
+      'You’re proof that dumb fucks can still learn to type.',
+      'You bring the same energy as a broken condom, useless shit.',
+      'You’re like Wi-Fi in hell—slow as fuck and painful to deal with.',
+      'You’re the human version of dog shit—everyone avoids you.',
+      'You’ve got two brain cells left, and one of them is on fucking break.',
+      'You’re like a clown, but somehow less funny and more pathetic as fuck.',
+      'You’re a walking “fuck this” moment.',
+      'You’re like spam mail—annoying as fuck and instantly deleted.',
+      'You’re the kind of idiot who could fuck up a free lunch.',
+      'You’re proof that evolution sometimes takes a giant fucking step backward.'
+];
+
+// ============================================================================
+// GAME LOGIC & FUNCTIONALITY
+// ============================================================================
+
+
+// ---- Persistent Warnings ----
+const warningsFile = './warnings.json';
+let warnings = {};
+
+if (fs.existsSync(warningsFile)) {
+  warnings = JSON.parse(fs.readFileSync(warningsFile, 'utf8'));
+}
+
+function saveWarnings() {
+  fs.writeFileSync(warningsFile, JSON.stringify(warnings, null, 2));
+}
+
+// ---- Blackjack Game ----
+const blackjackGames = new Map();
+
+function drawCard() {
+  const suits = ['♠️', '♥️', '♦️', '♣️'];
+  const values = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+  return {
+    suit: suits[Math.floor(Math.random() * suits.length)],
+    value: values[Math.floor(Math.random() * values.length)],
+  };
+}
+
+function cardValue(card) {
+  if (['J', 'Q', 'K'].includes(card.value)) return 10;
+  if (card.value === 'A') return 11;
+  return parseInt(card.value);
+}
+
+function handValue(hand) {
+  let total = hand.reduce((sum, c) => sum + cardValue(c), 0);
+  let aces = hand.filter(c => c.value === 'A').length;
+  while (total > 21 && aces > 0) {
+    total -= 10;
+    aces--;
+  }
+  return total;
+}
+
+function formatHand(hand) {
+  return hand.map(c => `${c.value}${c.suit}`).join(' ');
+}
+
+// ---- Question of the Day ----
 
 const qotdFile = './qotd.json';
 const qotdSettingsFile = './qotdSettings.json';
@@ -3484,135 +3638,6 @@ else if (command === '8ball') { // <--- Note the correct 'else if' connection
   } else if (command === 'roast') {
     const user = message.mentions.users.first();
     if (!user) return message.reply('🔥 Tag someone to roast.');
-    const roasts = [
-      'You bring people joy… by leaving.',
-      'You make onions cry out of pity.',
-      'You look like a before picture.',
-      'Bro thinks he is the main character, but ur not even in the opening credits.',
-      'You have got more filler than a Naruto flashback.',
-      'You talk big, but your aura screams background NPC.',
-      'Ur the type of villain who gets defeated in one episode just to hype the real boss.',
-      'U aim like a stormtrooper on low sensitivity.',
-      'Youre basically the tutorial boss—easy, forgettable, and only there so others can learn the game.',
-      'You die faster than my Wi-Fi when I need it most.',
-      'You camp harder than a free-to-play Fortnite kid with no skins.',
-      'Your KD ratio is a cry for help.',
-      'Youve got more missed messages than actual friends.',
-      'Your mic quality sounds like youre calling in from the Shadow Realm.',
-      'Even Google cant search up who asked.',
-      'Your comebacks load slower than Roblox on a school Chromebook.',
-      'Respawn and try again.',
-      'Alt+F4 your personality.',
-      'Lag is your only excuse.',
-      'Fuck you.',      
-      'Game over. Insert skill to continue.',    
-      'Your secrets are safe with me. I never listen anyway.',
-      'You have something on your face… oh wait, that’s just your face.',
-      'You bring everyone down to your IQ level, and then still lose.',
-      'You’re proof that even evolution makes mistakes.',
-      'You have something most people don’t: a personality no one asked for.',
-      'You’re like a software bug—annoying, pointless, and impossible to remove.',
-      'You’re as useless as a white crayon.',
-      'You bring people closer… to the exit.',
-      'You’re like a phone with no signal—nothing but dead weight.',
-      'You’re proof that not everyone deserves participation trophies.',
-      'You have something in common with a cloud: when you disappear, it’s finally nice outside.',
-      'You’re the human version of a headache.',
-      'You’re like Wi-Fi with one bar—barely functioning and always frustrating.',
-      'You’re proof that birth certificates can be returned.',
-      'You bring disappointment like it’s a full-time job.',
-      'You’re like expired milk—bad smell, worse taste, and no use.',
-      'You bring the kind of energy that makes batteries give up.',
-      'You’re like a broken pencil—pointless, messy, and not worth the effort.',
-      'You’re proof that intelligence skips generations.',
-      'You’re like an alarm clock that doesn’t go off—completely unreliable.',
-      'You bring people together… to laugh at you.',
-      'You’re like dial-up internet—annoying noises and zero speed.',
-      'You’re proof that natural selection sometimes gets lazy.',
-      'You’re like the flu—nobody wants you, and you make everyone feel worse.',
-      'You’re like a video game tutorial—unskippable and hated.',
-      'You bring the vibe of a Monday morning.',
-      'You’re like a printer—always jammed, loud, and nobody misses you when you’re gone.',
-      'You’re proof that not all babies are blessings.',
-      'You’re like an expired coupon—useless and embarrassing to use.',
-      'You’re like a popup ad—loud, desperate, and ignored instantly.',
-      'You’re proof that common sense isn’t common.',
-      'You’re like a math problem with no answer—pointless and irritating.',
-      'You bring nothing to the table but crumbs.',
-      'You’re like a mosquito—small, annoying, and everyone wants to slap you.',
-      'You’re proof that mistakes can walk and talk.',
-      'You’re like a virus—unwanted, contagious, and hard to get rid of.',
-      'You’re like a broken light bulb—dim, fragile, and useless in the dark.',
-      'You’re like the bottom of the barrel—literally what’s left over.',
-      'You’re proof that the gene pool has a shallow end.',
-      'You’re like a bad haircut—embarrassing and hard to ignore.',
-      'You’re like an alarm set for PM instead of AM—completely useless when needed.',
-      'You’re proof that practice doesn’t always make perfect.',
-      'You’re like diet water—fake and pointless.',
-      'You’re the reason warning labels exist.',
-      'You’re like a cloud full of hot air—loud and empty.',
-      'You’re proof that not every story has a happy ending.',
-      'You’re living proof that even trash gets recycled sometimes.',
-      'You’re like a software glitch—nobody asked for you, and everyone hates dealing with you.',
-      'You have two brain cells, and they’re both fighting for third place.',
-      'You’re like a cloud of smoke—bad for everyone around you and gone with a breeze.',
-      'You bring the IQ of the server down just by typing.',
-      'You look like a failed character creation screen.',
-      'You’re like an unpaid bill—everyone avoids you.',
-      'You’re like expired medicine—worthless and possibly dangerous.',
-      'You’re like a parking ticket—unwanted and makes everyone angry.',
-      'You’re living proof that birth control should be free.',
-      'You’re like a broken condom—an accident that nobody wanted.',
-      'You’re like a test nobody studied for—confusing, unwanted, and stressful.',
-      'You’re like a clown without makeup—still a clown.',
-      'You’re the human equivalent of a speed bump—pointless and irritating.',
-      'You’re like a smoke detector with low battery—annoying, loud, and useless.',
-      'You’re like a sequel nobody asked for—worse than the original.',
-      'You’re like a knockoff brand—cheap, fake, and disappointing.',
-      'You’re like a puzzle with missing pieces—frustrating and incomplete.',
-      'You’re proof that not every cry for attention deserves a reply.',
-      'You’re like malware—slow, annoying, and nobody wants you installed.',
-      'You’re like the Titanic—loud, overhyped, and destined to sink.',
-      'You’re like fast food—cheap, greasy, and makes everyone feel sick afterwards.',
-      'You’re like an error message nobody can fix.',
-      'You’re like roadkill—unpleasant to look at and better ignored.',
-      'You’re like a screen crack—ugly, distracting, and makes everything worse.',
-      'You’re like wet socks—disgusting and uncomfortable to be around.',
-      'You’re like a bad tattoo—permanent regret.',
-      'You’re like spoiled meat—bad smell, bad taste, and dangerous to consume.',
-      'You’re like a GPS with no signal—lost and completely useless.',
-      'You’re like homework—nobody wants you, and you ruin free time.',
-      'You’re like mold—grows where it’s not wanted and stinks up the place.',
-      'You’re like an unpaid intern—doing nothing, but somehow still in the way.',
-      'You’re like a prison sentence—nobody wants to deal with you and time feels longer when they do.',
-      'You’re like chewing tinfoil—unpleasant and painful.',
-      'You’re like a scratch on a CD—annoying, repetitive, and ruins everything.',
-      'You’re like a splinter—small but makes everyone hate you.',
-      'You’re like spam calls—relentless, irritating, and better blocked.',
-      'You’re like bad Wi-Fi—every interaction with you is frustrating.',
-      'You’re like a nightmare—nobody wants you, and everyone is relieved when you’re gone.',
-      'You’re like a side quest nobody cares about.',
-      'You’re like a pothole—unexpected, annoying, and ruins the ride.',
-      'You’re like burnt toast—useless and leaves a bad taste.',
-      'You’re like background noise—distracting and unwanted.',
-      'You’re like a rumor—worthless and spreads too easily.',
-      'You’re like a scam call—persistent, fake, and nobody falls for you.',
-      'You’re like rotten fruit—ugly on the outside and worse on the inside.',
-      'You’re like a bad driver—dangerous, clueless, and always in the way.',
-      'You’re like a horror movie sequel—predictable, cheap, and nobody asked for it.',
-      'You’re like sand in shoes—irritating and impossible to get rid of.',
-      'You’re like a bad memory—always there and never wanted.',
-      'You’re proof that dumb fucks can still learn to type.',
-      'You bring the same energy as a broken condom, useless shit.',
-      'You’re like Wi-Fi in hell—slow as fuck and painful to deal with.',
-      'You’re the human version of dog shit—everyone avoids you.',
-      'You’ve got two brain cells left, and one of them is on fucking break.',
-      'You’re like a clown, but somehow less funny and more pathetic as fuck.',
-      'You’re a walking “fuck this” moment.',
-      'You’re like spam mail—annoying as fuck and instantly deleted.',
-      'You’re the kind of idiot who could fuck up a free lunch.',
-      'You’re proof that evolution sometimes takes a giant fucking step backward.'
-];
     message.channel.send(`🔥 ${user.username}, ${roasts[Math.floor(Math.random() * roasts.length)]}`);
   } else if (command === 'compliment') {
     const user = message.mentions.users.first();
