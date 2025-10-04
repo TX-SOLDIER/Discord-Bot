@@ -71,7 +71,6 @@ let activeQotdChannels = new Set();
 let dirty = false;
 let saveCount = 0;
 let lastSaveTime = null;
-let dirty = false;
 
 /**
  * Marks botData as changed so it will be saved at the next scheduled save.
