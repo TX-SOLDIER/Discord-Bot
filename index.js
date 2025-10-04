@@ -67,51 +67,62 @@ let botData = {
 let activeQotdChannels = new Set();
 
 // ---- JSONBin.io Data Functions ----
-let saveTimeout = null;
-const SAVE_DEBOUNCE_DELAY = 3000; // 3-second delay to batch multiple saves
+// Instead of saving every few seconds, we save only once per hour.
+let dirty = false;
+let saveCount = 0;
+let lastSaveTime = null;
+let dirty = false;
 
 /**
- * Saves the current state of botData to JSONBin.io.
- * This function is debounced to avoid overwhelming the API.
+ * Marks botData as changed so it will be saved at the next scheduled save.
  */
-function saveData() {
-  if (!JSONBIN_API_KEY || !JSONBIN_BIN_ID) {
-    // Silently fail if credentials aren't set, to avoid spamming logs.
-    return;
-  }
-  
-  if (saveTimeout) {
-    clearTimeout(saveTimeout);
-  }
-  
-  saveTimeout = setTimeout(async () => {
-    try {
-      // Create a payload to save, converting the QOTD Set to an Array for JSON.
-      const dataToSave = {
-        ...botData,
-        activeQotdChannels: Array.from(activeQotdChannels)
-      };
-
-      const response = await fetch(JSONBIN_URL, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Master-Key': JSONBIN_API_KEY,
-        },
-        body: JSON.stringify(dataToSave),
-      });
-
-      const result = await response.json();
-      if (!response.ok) {
-        throw new Error(`JSONBin API Error: ${result.message || response.statusText}`);
-      }
-      
-      console.log(`[DATA] ✅ Data successfully saved to JSONBin at ${new Date().toLocaleTimeString()}`);
-    } catch (e) {
-      console.error('[DATA] ❌ Failed to save data to JSONBin:', e);
-    }
-  }, SAVE_DEBOUNCE_DELAY);
+function markDirty() {
+  dirty = true;
 }
+
+/**
+ * Saves the current state of botData to JSONBin.io once per hour if dirty.
+ */
+async function saveData() {
+  if (!JSONBIN_API_KEY || !JSONBIN_BIN_ID) return;
+  if (!dirty) return; // No changes since last save
+
+  try {
+    const dataToSave = {
+      ...botData,
+      activeQotdChannels: Array.from(activeQotdChannels)
+    };
+
+    const response = await fetch(JSONBIN_URL, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Master-Key': JSONBIN_API_KEY,
+      },
+      body: JSON.stringify(dataToSave),
+    });
+
+    const result = await response.json();
+    if (!response.ok) {
+      throw new Error(`JSONBin API Error: ${result.message || response.statusText}`);
+    }
+
+    console.log(`[DATA] ✅ Hourly save to JSONBin at ${new Date().toLocaleTimeString()}`);
+    dirty = false;
+  } catch (e) {
+    console.error('[DATA] ❌ Failed to save data to JSONBin:', e);
+  }
+}
+
+// Save once per hour if data has changed
+setInterval(saveData, 60 * 60 * 1000);
+
+// Save on shutdown
+process.on("SIGINT", async () => {
+  console.log("💾 Saving data before shutdown...");
+  await saveData();
+  process.exit();
+});
 
 /**
  * Loads the bot's data from JSONBin.io on startup.
@@ -158,22 +169,22 @@ async function loadData() {
 }
 
 // ---- Consolidated Save Functions ----
-// All old save functions now point to the single, debounced saveData function.
-const saveImmunity = saveData;
-const saveCountingData = saveData;
-const saveEconomyData = saveData;
-const saveLotteryData = saveData;
-const saveStoreData = saveData;
-const savePlayerData = saveData;
-const saveBattles = saveData;
-const saveDWBattles = saveData;
-const saveWarnings = saveData;
-const saveQotdState = saveData;
-const saveQotdSettings = saveData;
-const saveWelcomeMessages = saveData;
-const saveLeaveMessages = saveData;
-const saveLogChannels = saveData;
-const saveMasterLog = saveData;
+// Now they just mark data dirty instead of saving immediately.
+const saveImmunity = markDirty;
+const saveCountingData = markDirty;
+const saveEconomyData = markDirty;
+const saveLotteryData = markDirty;
+const saveStoreData = markDirty;
+const savePlayerData = markDirty;
+const saveBattles = markDirty;
+const saveDWBattles = markDirty;
+const saveWarnings = markDirty;
+const saveQotdState = markDirty;
+const saveQotdSettings = markDirty;
+const saveWelcomeMessages = markDirty;
+const saveLeaveMessages = markDirty;
+const saveLogChannels = markDirty;
+const saveMasterLog = markDirty;
 
 // ---- Immunity System ----
 const OWNER_ID = '782155864134909952';
@@ -3234,12 +3245,67 @@ else if (command === 'clearleave') {
     message.reply('✅ Leave message has been cleared for this server.');
 }
 
-else {
-    if (message.content.startsWith('$') && command) {
-      message.reply('❌ Unknown command or you do not have permission.');
-    }
-}
+// Track how many times data has been saved this session
+let saveCount = 0;
+let lastSaveTime = null;
 
+client.on("messageCreate", async (message) => {
+  if (message.author.bot) return;
+
+  const prefix = "$"; // Your bot's prefix
+  if (!message.content.startsWith(prefix)) return;
+
+  const args = message.content.slice(prefix.length).trim().split(/ +/);
+  const command = args.shift().toLowerCase();
+
+  // ---- Force Save Command ----
+  if (command === "forcesave") {
+    // Only the bot owner or immune users can use this
+    if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
+      return message.reply("❌ You don’t have permission to force save.");
+    }
+
+    try {
+      const before = Date.now();
+      await saveData();
+      const duration = ((Date.now() - before) / 1000).toFixed(2);
+
+      saveCount++;
+      lastSaveTime = new Date().toLocaleTimeString();
+
+      // Build an info message
+      const infoMsg = `💾 **Force Save Complete!**  
+**User:** ${message.author.tag} (${message.author.id})
+**Save Count (this session):** ${saveCount}
+**Last Save:** ${lastSaveTime}
+**Duration:** ${duration}s`;
+
+      await message.reply(infoMsg);
+
+      // --- Log it globally and/or to master log ---
+      const logMsg = `💾 **Force Save Triggered**
+👤 User: **${message.author.tag}** (${message.author.id})
+🏠 Server: **${message.guild?.name || 'DM'}**
+🕒 Time: ${lastSaveTime}
+💾 Total Saves This Session: ${saveCount}
+⚙️ Duration: ${duration}s`;
+
+      await sendLog(message.guild?.id, logMsg);
+      console.log(`[DATA] Force save by ${message.author.tag} (${duration}s) — total saves: ${saveCount}`);
+    } catch (err) {
+      console.error("Force save failed:", err);
+      message.reply("⚠️ Failed to save data. Check console for details.");
+    }
+
+    // ✅ Stop here after handling $forcesave
+    return;
+  }
+
+  // ---- Unknown command fallback ----
+  if (message.content.startsWith(prefix) && command) {
+    message.reply("❌ Unknown command or you do not have permission.");
+  }
 }); // ---- End of messageCreate ----
 
+// ---- Login ----
 client.login(process.env.BOT_TOKEN);
