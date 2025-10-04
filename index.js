@@ -3247,8 +3247,6 @@ else if (command === 'clearleave') {
 });
 
 // Track how many times data has been saved this session
-let saveCount = 0;
-let lastSaveTime = null;
 
 client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
