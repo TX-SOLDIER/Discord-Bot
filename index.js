@@ -1950,11 +1950,11 @@ if (command === 'help') {
   )
   .setFooter({ text: 'Use $help for full command list 📖' })
   .setImage('https://i.imgur.com/NAneRS5.gif');
-}
 
 await message.channel.send({ embeds: [embed1] });
 await message.channel.send({ embeds: [embed2] });
 await message.channel.send({ embeds: [embed3] });
+}
 
 else if (command === 'counting' || command === 'c') {
     const subcommand = args[0]?.toLowerCase();
