@@ -1887,8 +1887,45 @@ client.on('messageCreate', async (message) => {
 
 if (command === 'help') {
   const embed1 = new EmbedBuilder().setTitle('📖 Bot Commands – Utility & Fun').setColor(0x39FF14).setDescription( `📌 **Utility Commands**\n` + `• \`${PREFIX}prefix\` – Show the bot prefix\n` + `• \`${PREFIX}ping\` – Check bot response time\n` + `• \`${PREFIX}stats\` – Server member stats\n` + `• \`${PREFIX}uptime\` – Bot active time\n` + `• \`${PREFIX}botinfo\` – Info about the bot\n` + `• \`${PREFIX}invite\` – Get bot invite link\n` + `• \`${PREFIX}setwelcome\` / \`${PREFIX}clearwelcome\` – Set/clear welcome message\n` + `• \`${PREFIX}setleave\` / \`${PREFIX}clearleave\` – Set/clear leave message\n\n` + `🪙 **Fun & Games**\n` + `• \`${PREFIX}flip\` – Flip a coin\n` + `• \`${PREFIX}8ball [question]\` – Magic 8-ball\n` + `• \`${PREFIX}dice\` – Roll a die\n` + `• \`${PREFIX}rate @user\` – Rate someone\n` + `• \`${PREFIX}howgay @user\` – Gay meter\n` + `• \`${PREFIX}sus @user\` – Sus meter\n` + `• \`${PREFIX}truth\` – Truth question\n` + `• \`${PREFIX}dare\` – Dare\n` + `• \`${PREFIX}roast @user\` – Roast\n` + `• \`${PREFIX}compliment @user\` – Compliment\n` + `• \`${PREFIX}meme\` – Random meme\n` + `• \`${PREFIX}nsfw-meme\` – Random NSFW meme (NSFW channels only)\n` + `• \`${PREFIX}haunt\` / \`${PREFIX}unhaunt\` – Haunting\n` + `• \`${PREFIX}blackjack\`, \`${PREFIX}hit\`, \`${PREFIX}stand\` – Play Blackjack` );
-  const embed2 = new EmbedBuilder().setTitle('🎯 Moderation & Logging').setColor(0x39FF14).setDescription( `🎉 **Moderation Commands**\n` + `• \`${PREFIX}giveaway <duration> <prize>\` – Start a giveaway\n` + `• \`${PREFIX}kick @user [reason]\` – Kick a user\n` + `• \`${PREFIX}ban @user [reason]\` – Ban a user\n` + `• \`${PREFIX}mute @user [time]\` – Mute a user\n` + `• \`${PREFIX}unmute @user\` – Unmute a user\n` + `• \`${PREFIX}warn @user [reason]\` – Warn a user\n` + `• \`${PREFIX}warnings @user\` – Show warnings\n` + `• \`${PREFIX}clear [number]\` – Delete messages\n` + `• \`${PREFIX}lock\` / \`${PREFIX}unlock\` – Lock/unlock channel\n` + `• \`${PREFIX}antiraid on/off\` – Engage/disengage server lockdown\n` + `• \`${PREFIX}slowmode [seconds]\` – Set slowmode\n` + `• \`${PREFIX}role add/remove @user <role>\` – Manage roles\n` + `• \`${PREFIX}unauthorized\` – Unauthorized response\n` + `• \`${PREFIX}nuke delete [count]\` – Delete bulk channels\n` + `• \`${PREFIX}nuke rename <n> [count]\` – Rename bulk channels\n\n` + `🖥️ **Log Mode Commands**\n` + `• \`${PREFIX}logmode on [#channel]\` – Enable logging\n` + `• \`${PREFIX}logmode off\` – Disable logging\n` + `• \`${PREFIX}logmode setmaster <channelID>\` – Set master log (Owner only)\n` + `• \`${PREFIX}logmode masteron/off\` – Enable/disable master log (Owner only)` );
-  const embed3 = new EmbedBuilder().setTitle('🔢 QOTD, Counting, Economy & Battle').setColor(0x39FF14).setDescription( `❓ **Question of the Day**\n` + `• \`${PREFIX}qotd on/off\` – Enable/disable QOTD in channel\n` + `• \`${PREFIX}qotd everyone on/off\` – Enable/disable @everyone ping\n\n` + `🔢 **Counting Game**\n` + `• \`${PREFIX}counting set [#channel]\` – Set counting channel\n` + `• \`${PREFIX}counting off\` – Disable counting game\n` + `• \`${PREFIX}counting leaderboard\` – Show global leaderboard\n\n` + `🧑‍💼 **Info & Tools**\n` + `• \`${PREFIX}userinfo\` – User info\n` + `• \`${PREFIX}avatar @user\` – Avatar\n` + `• \`${PREFIX}serverinfo\` – Server info\n` + `• \`${PREFIX}shout [msg]\` – Shout\n` + `• \`${PREFIX}spoiler [msg]\` – Spoiler\n` + `• \`${PREFIX}say [msg]\` – Echo\n` + `• \`${PREFIX}send <channelID> <message>\` – Send elsewhere\n\n` + `🤖 **AI Commands**\n` + `• \`${PREFIX}ai <prompt>\` – Ask Google Gemini AI\n` + `• \`@bot <prompt>\` – Ask OpenRouter AI\n\n` + `💰 **Economy Commands**\n` + `• \`${PREFIX}balance [@user]\` – Check balance\n` + `• \`${PREFIX}pay @user <amount>\` – Pay coins\n` + `• \`${PREFIX}give/take @user <amount>\` – Owner & Immune only\n\n` + `🪖 **Battle System**\n` + `• \`${PREFIX}store [buy <item_id>]\` – Shop\n` + `• \`${PREFIX}inventory [@user]\` – View inventory\n` + `• \`${PREFIX}loadout [equip/unequip <item_id>]\` – Manage loadout\n` + `• \`${PREFIX}battle @user\` – Automated 1v1 battle\n` + `• \`${PREFIX}dw @user\` – Turn-based "Deadliest Warrior" battle\n\n` + `👑 **Owner & Immune Commands**\n` + `• \`${PREFIX}promote/demote @user <rank>\` – Grant/revoke immunity\n` + `• \`${PREFIX}serverlist\` – List servers\n` + `• \`${PREFIX}store add/remove ...\` – Manage shop\n\n` + `🏅 **Immunity Ranks:** 2LT, 1LT, CPT, MAJ, LTC, COL, BG, MG, LTG, GEN\n\n` + `💰 **Economy Permissions:**\n` + `• Bot Owner: Full control\n` + `• Immune Users: Give/take except owner\n` + `• Normal Users: Can only pay coins` ).setFooter({ text: 'Use $help for full command list 📖' }).setImage('https://i.imgur.com/NAneRS5.gif');
+  const embed2 = new EmbedBuilder().setTitle('🎯 Moderation & Logging').setColor(0x39FF14).setDescription( `🎉 **Moderation Commands**\n` + `• \`${PREFIX}giveaway <duration> <prize>\` – Start a giveaway\n` + `• \`${PREFIX}kick @user [reason]\` – Kick a user\n` + `• \`${PREFIX}ban @user [reason]\` – Ban a user\n` + `• \`${PREFIX}mute @user [time]\` – Mute a user\n` + `• \`${PREFIX}unmute @user\` – Unmute a user\n` + `• \`${PREFIX}warn @user [reason]\` – Warn a user\n` + `• \`${PREFIX}warnings @user\` – Show warnings\n` + `• \`${PREFIX}clear [number]\` – Delete messages\n` + `• \`${PREFIX}lock\` / \`${PREFIX}unlock\` – Lock/unlock channel\n` + `• \`${PREFIX}antiraid on/off\` – Engage/disengage server lockdown\n` + `• \`${PREFIX}slowmode [seconds]\` – Set slowmode\n` + `• \`${PREFIX}role add/remove @user <role>\` – Manage roles\n` + `• \`${PREFIX}unauthorized\` – Unauthorized response\n` + `• \`${PREFIX}nuke delete [count]\` – Delete bulk channels\n` + `• \`${PREFIX}nuke rename <n> [count]\` – Rename bulk channels\n\n` + `🖥️ **Log Mode Commands**\n` + `• \`${PREFIX}logmode on [#channel]\` – Enable logging\n` + `• \`${PREFIX}logmode off\` – Disable logging\n` + `• \`${PREFIX}logmode setmaster <channelID>\` – Set master log (Owner only)\n` + `• \`${PREFIX}logmode masteron/off\` – Enable/disable master log (Owner only)` ); 
+  const embed3 = new EmbedBuilder()
+  .setTitle('🔢 QOTD, Counting, Economy & Battle')
+  .setColor(0x39FF14)
+  .setDescription(
+    `❓ **Question of the Day**\n` +
+    `• \`${PREFIX}qotd on/off\` – Enable/disable QOTD in channel\n` +
+    `• \`${PREFIX}qotd everyone on/off\` – Enable/disable @everyone ping\n\n` +
+
+    `🔢 **Counting Game**\n` +
+    `• \`${PREFIX}counting set [#channel]\` – Set counting channel\n` +
+    `• \`${PREFIX}counting off\` – Disable counting game\n` +
+    `• \`${PREFIX}counting leaderboard\` – Show global leaderboard\n\n` +
+
+    `💰 **Economy & Lottery**\n` +
+    `• \`${PREFIX}balance [@user]\` / \`${PREFIX}bal\` – Check balance\n` +
+    `• \`${PREFIX}pay @user <amount>\` – Pay coins\n` +
+    `• \`${PREFIX}give/take @user <amount>\` – Owner & Immune only\n` +
+    `• \`${PREFIX}add\` – Alias for give\n` +
+    `• \`${PREFIX}take / remove / subtract\` – Aliases for removing coins\n` +
+    `• \`${PREFIX}lottery\` – View active lottery info\n` +
+    `• \`${PREFIX}buyticket 1 2 3 4 5 6 7\` – Buy a lottery ticket (7 unique numbers)\n` +
+    `• \`${PREFIX}flipbet <heads|tails> <amount>\` – Coin flip wager\n` +
+    `• \`${PREFIX}challengeflip @user <amount>\` – Challenge another player to a coin flip\n` +
+    `• \`${PREFIX}higherlower\` / \`${PREFIX}hl\` – Guess higher or lower\n` +
+    `• \`${PREFIX}guessnumber\` / \`${PREFIX}gtn\` – Number guessing game\n` +
+    `• \`${PREFIX}roulette <betType> <amount>\` – Play roulette (red/black/even/odd/number)\n` +
+    `• \`${PREFIX}rr\` – Russian Roulette (loser muted 1hr)\n\n` +
+
+    `🪖 **Battle System**\n` +
+    `• \`${PREFIX}store [buy <item_id>]\` – Shop\n` +
+    `• \`${PREFIX}inventory [@user]\` – View inventory\n` +
+    `• \`${PREFIX}loadout [equip/unequip <item_id>]\` – Manage loadout\n` +
+    `• \`${PREFIX}battle @user\` / \`${PREFIX}1v1\` – Automated 1v1 battle\n` +
+    `• \`${PREFIX}dw @user\` / \`${PREFIX}deadliestwarrior\` – Turn-based Deadliest Warrior\n\n` +
+
+    `⚙️ **Owner / Immune Tools**\n` +
+    `• \`${PREFIX}forcesave\` – Manually save all bot data (Owner & Immune only)`
+  );
   await message.channel.send({ embeds: [embed1] });
   await message.channel.send({ embeds: [embed2] });
   await message.channel.send({ embeds: [embed3] });
