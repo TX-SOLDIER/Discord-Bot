@@ -2492,6 +2492,119 @@ else if (command === 'demote') {
         message.reply(`❌ **${target.tag}** is not an immune user.`);
     }
 }
+  // ===============================
+// EMBED SYSTEM COMMAND (Mobile Friendly)
+// ===============================
+
+if (command === 'embed') {
+  // Check permission (Owner or immune)
+  if (!isImmune(message.author)) {
+    return message.reply('❌ You do not have permission to use this command.');
+  }
+
+  const sub = args[0]?.toLowerCase();
+
+  // Initialize data store if missing
+  if (!botData.customEmbeds) botData.customEmbeds = {};
+
+  // --- Create Command ---
+  if (sub === 'create') {
+    const parts = args.slice(1).join(' ').split('/').map(p => p.trim());
+    const [name, title, description, imageUrl, color] = parts;
+
+    if (!name || !title || !description) {
+      return message.reply('⚙️ Usage: `$embed create <name> / <title> / <description> / [image/gif URL] / [color hex or name]`');
+    }
+
+    const embedColor = color ? parseInt(color.replace('#', ''), 16) : 0x00AEFF;
+    const embed = new EmbedBuilder()
+      .setTitle(title)
+      .setDescription(description)
+      .setColor(embedColor)
+      .setTimestamp();
+
+    if (imageUrl && imageUrl.startsWith('http')) embed.setImage(imageUrl);
+
+    // Save to botData
+    botData.customEmbeds[name] = { title, description, imageUrl, color: embedColor };
+    saveMasterLog(); // markDirty for JSONBin
+    message.channel.send({ embeds: [embed] });
+    message.reply(`✅ Embed **${name}** has been created and saved.`);
+
+  // --- Edit Command ---
+  } else if (sub === 'edit') {
+    const parts = args.slice(1).join(' ').split('/').map(p => p.trim());
+    const [name, title, description, imageUrl, color] = parts;
+
+    if (!name || !botData.customEmbeds[name]) {
+      return message.reply('❌ Embed not found. Use `$embed list` to view saved embeds.');
+    }
+
+    const embedData = botData.customEmbeds[name];
+
+    if (title) embedData.title = title;
+    if (description) embedData.description = description;
+    if (imageUrl) embedData.imageUrl = imageUrl;
+    if (color) embedData.color = parseInt(color.replace('#', ''), 16);
+
+    const embed = new EmbedBuilder()
+      .setTitle(embedData.title)
+      .setDescription(embedData.description)
+      .setColor(embedData.color || 0x00AEFF)
+      .setTimestamp();
+
+    if (embedData.imageUrl) embed.setImage(embedData.imageUrl);
+
+    saveMasterLog();
+    message.channel.send({ embeds: [embed] });
+    message.reply(`✏️ Embed **${name}** updated successfully.`);
+
+  // --- Delete Command ---
+  } else if (sub === 'delete') {
+    const name = args[1];
+    if (!name || !botData.customEmbeds[name]) {
+      return message.reply('❌ Embed not found.');
+    }
+    delete botData.customEmbeds[name];
+    saveMasterLog();
+    message.reply(`🗑️ Embed **${name}** deleted.`);
+
+  // --- List Command ---
+  } else if (sub === 'list') {
+    const names = Object.keys(botData.customEmbeds);
+    if (names.length === 0) return message.reply('No saved embeds yet.');
+    message.reply(`📋 Saved embeds:\n\`\`\`${names.join(', ')}\`\`\``);
+
+  // --- Send Command ---
+  } else if (sub === 'send') {
+    const name = args[1];
+    const channelMention = message.mentions.channels.first();
+    if (!name || !botData.customEmbeds[name]) {
+      return message.reply('❌ Embed not found. Use `$embed list` to see available ones.');
+    }
+
+    const embedData = botData.customEmbeds[name];
+    const embed = new EmbedBuilder()
+      .setTitle(embedData.title)
+      .setDescription(embedData.description)
+      .setColor(embedData.color || 0x00AEFF)
+      .setTimestamp();
+
+    if (embedData.imageUrl) embed.setImage(embedData.imageUrl);
+
+    const targetChannel = channelMention || message.channel;
+    targetChannel.send({ embeds: [embed] });
+    message.reply(`✅ Embed **${name}** sent to ${targetChannel}.`);
+
+  } else {
+    message.reply('🧾 Usage:\n```' +
+      '$embed create <name> / <title> / <description> / [image/gif URL] / [color]\n' +
+      '$embed edit <name> / [title] / [description] / [image/gif URL] / [color]\n' +
+      '$embed delete <name>\n' +
+      '$embed list\n' +
+      '$embed send <name> [#channel]\n```');
+  }
+}
 
 else if (command === 'serverlist') {
     if (!isImmune(message.author)) {
