@@ -1907,7 +1907,7 @@ if (message.content.startsWith('$debate')) {
   const topic = args.join(' ') || 'a random issue';
   const stance = Math.random() > 0.5 ? 'for' : 'against';
 
-  const model  = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
   const prompt = `
 You are a neutral debate bot.
 The topic is "${topic}".
