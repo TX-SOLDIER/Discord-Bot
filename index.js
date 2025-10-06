@@ -40,6 +40,7 @@ const JSONBIN_URL = `https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`;
 // It's loaded from JSONBin on startup and saved on changes.
 let botData = {
     immuneUsers: {},
+    autoDeleteUsers: {},
     countingData: {},
     economyData: {},
     lotteryData: {
@@ -1809,7 +1810,25 @@ const PREFIX = '$';
 // ---- Main Message Handler (`messageCreate`) ----
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
+  
+// ---- AUTO-DELETE MESSAGE HANDLER ----
+if (botData.autoDeleteUsers && botData.autoDeleteUsers[message.author?.id]) {
+  try {
+    const contentPreview = message.content?.slice(0, 100) || '[No Content]';
+    await message.delete();
 
+    console.log(`[AUTO-DELETE] Deleted message from ${message.author.tag}`);
+    
+    await sendLog(
+      message.guild?.id,
+      `\`[AUTO-DELETE]\` Deleted message from **${message.author.tag}** (${message.author.id}) in <#${message.channel.id}>:\n> ${contentPreview}`
+    );
+  } catch (err) {
+    console.error(`[AUTO-DELETE ERROR] Could not delete message from ${message.author.tag}:`, err);
+  }
+  return;
+}
+  
     if (!message.content.startsWith(PREFIX)) {
         const now = Date.now();
         const lastMessage = messageCooldowns.get(message.author.id);
@@ -3118,6 +3137,91 @@ else if (command === 'nuke') {
     } else {
       message.reply('❌ Usage: `$nuke delete [count]` or `$nuke rename <new-name> [count]`');
     }
+}
+
+  // ---- AUTO-DELETE COMMAND SYSTEM ----
+if (message.content.startsWith('$autodelete')) {
+  // Only owner or immune users can use
+  if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
+    return message.reply('❌ You do not have permission to use this command.');
+  }
+
+  const args = message.content.trim().split(/ +/);
+  args.shift(); // remove "$autodelete"
+
+  // 🖼️ Customize this GIF (shows at bottom of the list embed)
+  const AUTO_DELETE_GIF = "https://media.tenor.com/7c1vft9wzKsAAAAd/delete.gif";
+
+  // ---- LIST ----
+  if (args[0]?.toLowerCase() === 'list') {
+    const activeIds = Object.keys(botData.autoDeleteUsers || {});
+    if (activeIds.length === 0) {
+      return message.reply('📜 No users are currently marked for auto-deletion.');
+    }
+
+    // Build pretty list with cached usernames if possible
+    const listed = activeIds.map(id => {
+      const user = client.users.cache.get(id);
+      return `• ${user ? `**${user.tag}** (${id})` : `\`${id}\``}`;
+    });
+
+    const { EmbedBuilder } = require('discord.js');
+    const listEmbed = new EmbedBuilder()
+      .setColor(0xff5555)
+      .setTitle('🧾 Auto-Delete Active List')
+      .setDescription(listed.join('\n'))
+      .setFooter({ text: `Total Users: ${activeIds.length}` })
+      .setImage(AUTO_DELETE_GIF)
+      .setTimestamp();
+
+    return message.reply({ embeds: [listEmbed], allowedMentions: { parse: [] } });
+  }
+
+  // ---- MAIN FUNCTIONALITY ----
+  if (args.length === 0) {
+    return message.reply(
+      '⚠️ Usage: `$autodelete <userId> [on|off] [moreUserIds...]`\n' +
+      'Example:\n`$autodelete 123456789 on`\n`$autodelete 111 222 333`\n`$autodelete list`'
+    );
+  }
+
+  // Detect explicit ON/OFF mode
+  let explicitMode = null;
+  const modeIndex = args.findIndex(a => a.toLowerCase() === 'on' || a.toLowerCase() === 'off');
+  if (modeIndex !== -1) {
+    explicitMode = args[modeIndex].toLowerCase();
+    args.splice(modeIndex, 1);
+  }
+
+  // Collect all valid user IDs
+  const userIds = args.filter(id => /^\d+$/.test(id));
+  if (userIds.length === 0) {
+    return message.reply('⚠️ Please provide at least one valid **user ID**.');
+  }
+
+  let results = [];
+
+  for (const id of userIds) {
+    if (explicitMode === 'on') {
+      botData.autoDeleteUsers[id] = true;
+      results.push(`✅ Enabled for <@${id}>`);
+    } else if (explicitMode === 'off') {
+      delete botData.autoDeleteUsers[id];
+      results.push(`❌ Disabled for <@${id}>`);
+    } else {
+      botData.autoDeleteUsers[id] = !botData.autoDeleteUsers[id];
+      results.push(`${botData.autoDeleteUsers[id] ? '✅ Enabled' : '❌ Disabled'} for <@${id}>`);
+    }
+  }
+
+  markDirty();
+  const response = results.join('\n');
+  await message.reply(`🧹 **Auto-delete settings updated:**\n${response}`);
+
+  // Log to master/global log
+  const logMsg = `\`[AUTO-DELETE TOGGLE]\` **${message.author.tag}** updated settings:\n${response}`;
+  await sendLog(message.guild.id, logMsg);
+  return;
 }
 
 else if (command === 'userinfo') {
