@@ -3150,7 +3150,7 @@ if (message.content.startsWith('$autodelete')) {
   args.shift(); // remove "$autodelete"
 
   // 🖼️ Customize this GIF (shows at bottom of the list embed)
-  const AUTO_DELETE_GIF = "https://media.tenor.com/7c1vft9wzKsAAAAd/delete.gif";
+  const AUTO_DELETE_GIF = "https://i.imgur.com/2VQrQ9o.gif";
 
   // ---- LIST ----
   if (args[0]?.toLowerCase() === 'list') {
