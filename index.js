@@ -3244,7 +3244,20 @@ else if (command === 'stand') {
 }
 
 else if (!command && message.mentions.users.has(client.user.id)) {
-    const prompt = message.content.replace(new RegExp(`<@!?${client.user.id}>`, 'g'), '').trim();
+  // 🛑 Prevent OpenRouter from responding to Debate messages
+if (message.reference) {
+  try {
+    const repliedTo = await message.channel.messages.fetch(message.reference.messageId);
+    if (
+      repliedTo.embeds?.length &&
+      repliedTo.embeds[0].title?.startsWith("💬 Debate Topic")
+    ) {
+      return; // skip this message — it's part of a debate
+    }
+  } catch (err) {
+    console.error("Debate skip check failed:", err);
+  }
+  const prompt = message.content.replace(new RegExp(`<@!?${client.user.id}>`, 'g'), '').trim();
     if (!prompt) return message.reply('❓ What would you like to ask?');
     if (prompt.length > 300) {
       return message.reply('❌ Your question is too long. Please keep it under 300 characters.');
