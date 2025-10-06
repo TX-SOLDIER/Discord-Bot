@@ -3245,44 +3245,56 @@ else if (command === 'stand') {
 
 else if (!command && message.mentions.users.has(client.user.id)) {
   // 🛑 Prevent OpenRouter from responding to Debate messages
-if (message.reference) {
-  try {
-    const repliedTo = await message.channel.messages.fetch(message.reference.messageId);
-    if (
-      repliedTo.embeds?.length &&
-      repliedTo.embeds[0].title?.startsWith("💬 Debate Topic")
-    ) {
-      return; // skip this message — it's part of a debate
-    }
-  } catch (err) {
-    console.error("Debate skip check failed:", err);
-  }
-  const prompt = message.content.replace(new RegExp(`<@!?${client.user.id}>`, 'g'), '').trim();
-    if (!prompt) return message.reply('❓ What would you like to ask?');
-    if (prompt.length > 300) {
-      return message.reply('❌ Your question is too long. Please keep it under 300 characters.');
-    }
+  if (message.reference) {
     try {
-      await message.channel.sendTyping();
-      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: { "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ model: "deepseek/deepseek-chat-v3.1:free", messages: [{ role: "user", content: prompt }] })
-      });
-      const data = await response.json();
-      if (data.error) {
-        return message.reply(`🚫 OpenRouter Error: ${data.error.message}`);
-      }
-      const reply = data.choices?.[0]?.message?.content || "⚠️ Sorry, I couldn’t generate a reply.";
-      if (reply.length > 2000) {
-        await message.reply(reply.slice(0, 1997) + '...');
-      } else {
-        await message.reply(reply);
+      const repliedTo = await message.channel.messages.fetch(message.reference.messageId);
+      if (
+        repliedTo.embeds?.length &&
+        repliedTo.embeds[0].title?.startsWith("💬 Debate Topic")
+      ) {
+        return; // skip this message — it's part of a debate
       }
     } catch (err) {
-      console.error('❌ OpenRouter request failed:', err);
-      await message.reply('🚫 Error talking to the AI. Try again later.');
+      console.error("Debate skip check failed:", err);
     }
+  } // ✅ ← this closes the "if (message.reference)" block properly
+
+  const prompt = message.content.replace(new RegExp(`<@!?${client.user.id}>`, 'g'), '').trim();
+  if (!prompt) return message.reply('❓ What would you like to ask?');
+  if (prompt.length > 300) {
+    return message.reply('❌ Your question is too long. Please keep it under 300 characters.');
+  }
+
+  try {
+    await message.channel.sendTyping();
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: { 
+        "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`, 
+        "Content-Type": "application/json" 
+      },
+      body: JSON.stringify({ 
+        model: "deepseek/deepseek-chat-v3.1:free", 
+        messages: [{ role: "user", content: prompt }] 
+      })
+    });
+
+    const data = await response.json();
+    if (data.error) {
+      return message.reply(`🚫 OpenRouter Error: ${data.error.message}`);
+    }
+
+    const reply = data.choices?.[0]?.message?.content || "⚠️ Sorry, I couldn’t generate a reply.";
+    if (reply.length > 2000) {
+      await message.reply(reply.slice(0, 1997) + '...');
+    } else {
+      await message.reply(reply);
+    }
+
+  } catch (err) {
+    console.error('❌ OpenRouter request failed:', err);
+    await message.reply('🚫 Error talking to the AI. Try again later.');
+  }
 }
 
 else if (command === 'ai') {
