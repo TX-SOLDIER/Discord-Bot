@@ -1898,6 +1898,155 @@ if (botData.autoDeleteUsers && botData.autoDeleteUsers[message.author?.id]) {
         }
         return true;
     }
+  // ==== AI-POWERED DEBATE SYSTEM ====
+const debateCooldowns = new Map();   // userId → last use
+const debateThreads  = new Map();    // channelId → [{role,text}, …]
+
+if (message.content.startsWith('$debate')) {
+  const args  = message.content.split(' ').slice(1);
+  const topic = args.join(' ') || 'a random issue';
+  const stance = Math.random() > 0.5 ? 'for' : 'against';
+
+  const model  = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+  const prompt = `
+You are a neutral debate bot.
+The topic is "${topic}".
+Argue ${stance.toUpperCase()} the topic in 2–3 concise sentences.
+Stay polite and suitable for a general Discord audience.
+`;
+
+  await message.channel.send('🧠 Generating debate topic…');
+  try {
+    const result = await model.generateContent(prompt);
+    const reply  = result.response.text();
+
+    let minutesLeft = 5;
+    const embed = new EmbedBuilder()
+      .setTitle(`💬 Debate Topic: ${topic}`)
+      .setColor(0x00AEEF)
+      .setDescription(`**Stance chosen:** ${stance.toUpperCase()}\n\n> ${reply}`)
+      .addFields({
+        name: 'How to Participate',
+        value: `React with 👍 to agree or 👎 to disagree.\nDebate ends in **${minutesLeft} minutes**.`,
+      })
+      .setFooter({ text: 'AI Debate – Be respectful!' })
+      .setTimestamp();
+
+    const debateMsg = await message.channel.send({ embeds: [embed] });
+    await debateMsg.react('👍');
+    await debateMsg.react('👎');
+    debateThreads.set(message.channel.id, []);
+
+    // update countdown every minute
+    const interval = setInterval(async () => {
+      minutesLeft--;
+      if (minutesLeft <= 0) return;
+      const upd = EmbedBuilder.from(embed)
+        .setFields({
+          name: 'How to Participate',
+          value: `React with 👍 to agree or 👎 to disagree.\nDebate ends in **${minutesLeft} minute${minutesLeft===1?'':'s'}**.`,
+        });
+      try { await debateMsg.edit({ embeds: [upd] }); } catch {}
+    }, 60000);
+
+    // conclude after 5 minutes
+    setTimeout(async () => {
+      clearInterval(interval);
+      try {
+        const fetched = await message.channel.messages.fetch(debateMsg.id);
+        const r = fetched.reactions.cache;
+        const ups = r.get('👍')?.count - 1 || 0;
+        const dns = r.get('👎')?.count - 1 || 0;
+        let resultText =
+          ups > dns ? `✅ Majority **agreed** (${ups} 👍 vs ${dns} 👎)` :
+          dns > ups ? `❌ Majority **disagreed** (${dns} 👎 vs ${ups} 👍)` :
+          `🤝 It’s a **tie** (${ups} 👍 vs ${dns} 👎)`;
+        const final = EmbedBuilder.from(embed)
+          .addFields({ name: 'Final Results', value: resultText })
+          .setFooter({ text: '🏁 Debate concluded after 5 minutes.' });
+        await fetched.edit({ embeds: [final] });
+        debateThreads.delete(message.channel.id);
+        await message.channel.send('🏁 **Debate concluded!** Thanks for participating.');
+      } catch (e) { console.error('Debate conclude error:', e); }
+    }, 300000);
+  } catch (e) {
+    console.error('AI debate error:', e);
+    message.channel.send('❌ Unable to start debate right now.');
+  }
+}
+
+// ---- Debate Reply Handler (AI memory + cooldown + live reactions) ----
+if (message.reference && !message.author.bot) {
+  try {
+    const replied = await message.channel.messages.fetch(message.reference.messageId);
+    if (!replied.author.bot) return;
+    if (!replied.embeds?.length) return;
+    const emb = replied.embeds[0];
+    if (!emb.title?.startsWith('💬 Debate Topic')) return;
+
+    const topic = emb.title.replace('💬 Debate Topic: ', '');
+    const userArg = message.content.trim();
+    const uid  = message.author.id;
+    const cid  = message.channel.id;
+
+    // cooldown 1 min
+    const now = Date.now(), last = debateCooldowns.get(uid) || 0;
+    if (now - last < 60000) {
+      const wait = Math.ceil((60000 - (now - last)) / 1000);
+      return message.reply(`⏳ Please wait **${wait}s** before engaging again.`);
+    }
+    debateCooldowns.set(uid, now);
+
+    // memory
+    if (!debateThreads.has(cid)) debateThreads.set(cid, []);
+    const thread = debateThreads.get(cid);
+    thread.push({ role: 'user', text: userArg });
+    if (thread.length > 6) thread.shift();
+
+    const history = thread.map(m => `${m.role==='user'?'User':'Bot'}: ${m.text}`).join('\n');
+    const prompt = `
+You are a neutral, respectful debate bot for topic "${topic}".
+Recent conversation:
+${history}
+Give a short (2–3 sentence) counter-argument or clarification.
+Stay polite and logical.
+`;
+
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const res = await model.generateContent(prompt);
+    const replyText = res.response.text();
+    thread.push({ role: 'bot', text: replyText });
+
+    const followEmbed = new EmbedBuilder()
+      .setColor(0x2ecc71)
+      .setTitle('🤖 Debate Response')
+      .setDescription(`> ${replyText}`)
+      .setFooter({ text: '👍 0   👎 0 • AI Debate – Context aware' });
+
+    const botMsg = await message.channel.send({
+      embeds: [followEmbed],
+      reply: { messageReference: message.id },
+    });
+
+    // add reactions + live counter
+    try { await botMsg.react('👍'); await botMsg.react('👎'); } catch {}
+    const collector = botMsg.createReactionCollector({ time: 5*60*1000, dispose: true });
+
+    const updateFooter = async () => {
+      try {
+        const ups = botMsg.reactions.cache.get('👍')?.count - 1 || 0;
+        const dns = botMsg.reactions.cache.get('👎')?.count - 1 || 0;
+        const upd = EmbedBuilder.from(followEmbed)
+          .setFooter({ text: `👍 ${ups}   👎 ${dns} • AI Debate – Context aware` });
+        await botMsg.edit({ embeds: [upd] });
+      } catch (e) { console.error('Footer update error:', e); }
+    };
+    collector.on('collect', updateFooter);
+    collector.on('remove', updateFooter);
+  } catch (e) {
+    console.error('Debate reply handler error:', e);
+  }
+}
 
 // ---- COMMANDS START HERE ----
 
