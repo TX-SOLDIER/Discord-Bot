@@ -2012,7 +2012,7 @@ Give a short (2–3 sentence) counter-argument or clarification.
 Stay polite and logical.
 `;
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
     const res = await model.generateContent(prompt);
     const replyText = res.response.text();
     thread.push({ role: 'bot', text: replyText });
