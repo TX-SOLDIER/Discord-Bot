@@ -2641,7 +2641,7 @@ else if (command === 'demote') {
         message.reply(`❌ **${target.tag}** is not an immune user.`);
     }
 }
-  // ===============================
+// ===============================
 // EMBED SYSTEM COMMAND (Mobile Friendly)
 // ===============================
 
@@ -2672,7 +2672,12 @@ if (command === 'embed') {
       .setColor(embedColor)
       .setTimestamp();
 
-    if (imageUrl && imageUrl.startsWith('http')) embed.setImage(imageUrl);
+    // ✅ Validate image URL before setting
+    if (imageUrl && /^https?:\/\/\S+\.\S+/.test(imageUrl)) {
+      embed.setImage(imageUrl);
+    } else if (imageUrl) {
+      message.reply('⚠️ Invalid image URL detected — image skipped.');
+    }
 
     // Save to botData
     botData.customEmbeds[name] = { title, description, imageUrl, color: embedColor };
@@ -2702,7 +2707,12 @@ if (command === 'embed') {
       .setColor(embedData.color || 0x00AEFF)
       .setTimestamp();
 
-    if (embedData.imageUrl) embed.setImage(embedData.imageUrl);
+    // ✅ Validate image URL before setting
+    if (embedData.imageUrl && /^https?:\/\/\S+\.\S+/.test(embedData.imageUrl)) {
+      embed.setImage(embedData.imageUrl);
+    } else if (embedData.imageUrl) {
+      message.reply('⚠️ Invalid image URL detected — image skipped.');
+    }
 
     saveMasterLog();
     message.channel.send({ embeds: [embed] });
@@ -2739,7 +2749,12 @@ if (command === 'embed') {
       .setColor(embedData.color || 0x00AEFF)
       .setTimestamp();
 
-    if (embedData.imageUrl) embed.setImage(embedData.imageUrl);
+    // ✅ Validate image URL before setting
+    if (embedData.imageUrl && /^https?:\/\/\S+\.\S+/.test(embedData.imageUrl)) {
+      embed.setImage(embedData.imageUrl);
+    } else if (embedData.imageUrl) {
+      message.reply('⚠️ Invalid image URL detected — image skipped.');
+    }
 
     const targetChannel = channelMention || message.channel;
     targetChannel.send({ embeds: [embed] });
@@ -2754,7 +2769,7 @@ if (command === 'embed') {
       '$embed send <name> [#channel]\n```');
   }
 }
-
+  
 else if (command === 'serverlist') {
     if (!isImmune(message.author)) {
         return message.reply('❌ You do not have permission to use this command.');
