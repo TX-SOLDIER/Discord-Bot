@@ -2673,10 +2673,10 @@ if (command === 'embed') {
       .setTimestamp();
 
     // ✅ Validate image URL before setting
-    if (imageUrl && /^https?:\/\/\S+\.\S+/.test(imageUrl)) {
-      embed.setImage(imageUrl);
-    } else if (imageUrl) {
-      message.reply('⚠️ Invalid image URL detected — image skipped.');
+    if (imageUrl && /^https?:\/\/[^\s]+$/.test(imageUrl)) {
+  embed.setImage(imageUrl);
+} else if (imageUrl) {
+  message.reply('⚠️ Invalid image URL detected — image skipped.');
     }
 
     // Save to botData
