@@ -2658,7 +2658,7 @@ if (command === 'embed') {
 
   // --- Create Command ---
   if (sub === 'create') {
-    const parts = args.slice(1).join(' ').split('/').map(p => p.trim());
+    const parts = args.slice(1).join(' ').split('~').map(p => p.trim());
     const [name, title, description, imageUrl, color] = parts;
 
     if (!name || !title || !description) {
