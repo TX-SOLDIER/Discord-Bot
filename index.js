@@ -3,7 +3,7 @@
 // ============================================================================
 // All 'fs' file system calls have been replaced with JSONBin.io API calls.
 // Data is now persistent and will not be erased on new commits or deployments.
-// ============================================================================
+// ===========================================================================
 
 require('dotenv').config();
 const { Client, GatewayIntentBits, PermissionsBitField, EmbedBuilder } = require('discord.js');
