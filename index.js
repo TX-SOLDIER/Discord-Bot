@@ -3293,7 +3293,6 @@ else if (!command && message.mentions.users.has(client.user.id)) {
 
     // Keep only last 6 messages
     if (history.length > 6) history.splice(0, history.length - 6);
-
     userConversations.set(userId, history);
 
     let data;
@@ -3315,9 +3314,14 @@ else if (!command && message.mentions.users.has(client.user.id)) {
 
       data = await response.json();
       if (data.error || response.status >= 500) throw new Error(data.error?.message || "Model error");
+
     } catch (err) {
       // ⚠️ DeepSeek failed → fallback to Mistral silently
-      log(`⚠️ DeepSeek failed → switching to fallback model (mistralai/mistral-7b-instruct)\nReason: ${err.message}`);
+      sendLog(
+        message.guild?.id || 'global',
+        `⚠️ DeepSeek failed → switching to fallback model (mistralai/mistral-7b-instruct)\nReason: ${err.message}`
+      );
+
       modelUsed = "mistralai/mistral-7b-instruct";
 
       const backupResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -3354,8 +3358,9 @@ else if (!command && message.mentions.users.has(client.user.id)) {
     userConversations.set(message.author.id, updatedHistory);
 
     // ✅ Log successful AI response
-    log(
-      `🤖 AI Reply Sent | Model: ${modelUsed}\n👤 User: ${message.author.tag}\n💬 Prompt: ${prompt}\n📨 Reply: ${output.slice(
+    sendLog(
+      message.guild?.id || 'global',
+      `🤖 **AI Reply Sent** | Model: ${modelUsed}\n👤 **User:** ${message.author.tag}\n💬 **Prompt:** ${prompt}\n📨 **Reply:** ${output.slice(
         0,
         400
       )}${reply.length > 400 ? "..." : ""}`
@@ -3363,7 +3368,7 @@ else if (!command && message.mentions.users.has(client.user.id)) {
 
   } catch (err) {
     await message.reply("🚫 Error talking to the AI. Try again later.");
-    log(`❌ OpenRouter request failed: ${err.message}`);
+    sendLog(message.guild?.id || 'global', `❌ OpenRouter request failed: ${err.message}`);
   }
 }
 
