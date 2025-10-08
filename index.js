@@ -229,6 +229,7 @@ const commandCooldowns = new Map();
 const MESSAGE_COOLDOWN = 60 * 1000;
 const COMMAND_COOLDOWN = 30 * 1000;
 const blackjackGames = new Map();
+const userConversations = new Map(); 
 
 // ---- Lottery System ----
 function generateWinningNumbers() {
@@ -3272,7 +3273,7 @@ else if (!command && message.mentions.users.has(client.user.id)) {
     } catch (err) {
       console.error("Debate skip check failed:", err);
     }
-  } // ✅ ← this closes the "if (message.reference)" block properly
+  }
 
   const prompt = message.content.replace(new RegExp(`<@!?${client.user.id}>`, 'g'), '').trim();
   if (!prompt) return message.reply('❓ What would you like to ask?');
@@ -3282,33 +3283,87 @@ else if (!command && message.mentions.users.has(client.user.id)) {
 
   try {
     await message.channel.sendTyping();
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: { 
-        "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`, 
-        "Content-Type": "application/json" 
-      },
-      body: JSON.stringify({ 
-        model: "deepseek/deepseek-chat-v3.1:free", 
-        messages: [{ role: "user", content: prompt }] 
-      })
-    });
 
-    const data = await response.json();
-    if (data.error) {
-      return message.reply(`🚫 OpenRouter Error: ${data.error.message}`);
+    // 🧠 Get and update user's conversation memory
+    const userId = message.author.id;
+    const history = userConversations.get(userId) || [];
+
+    // Add the new user message
+    history.push({ role: "user", content: prompt });
+
+    // Keep only last 6 messages
+    if (history.length > 6) history.splice(0, history.length - 6);
+
+    userConversations.set(userId, history);
+
+    let data;
+    let modelUsed = "deepseek/deepseek-chat-v3.1:free";
+
+    try {
+      // 🧠 Primary model call (DeepSeek)
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: modelUsed,
+          messages: history
+        })
+      });
+
+      data = await response.json();
+      if (data.error || response.status >= 500) throw new Error(data.error?.message || "Model error");
+    } catch (err) {
+      // ⚠️ DeepSeek failed → fallback to Mistral silently
+      log(`⚠️ DeepSeek failed → switching to fallback model (mistralai/mistral-7b-instruct)\nReason: ${err.message}`);
+      modelUsed = "mistralai/mistral-7b-instruct";
+
+      const backupResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: modelUsed,
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are DeepSeek, a witty and calm assistant with a confident personality. Speak naturally and keep responses concise but engaging. Avoid robotic or overly formal tones."
+            },
+            ...history
+          ]
+        })
+      });
+
+      data = await backupResponse.json();
+      if (data.error) throw new Error(data.error.message);
     }
 
     const reply = data.choices?.[0]?.message?.content || "⚠️ Sorry, I couldn’t generate a reply.";
-    if (reply.length > 2000) {
-      await message.reply(reply.slice(0, 1997) + '...');
-    } else {
-      await message.reply(reply);
-    }
+    const output = reply.length > 2000 ? reply.slice(0, 1997) + "..." : reply;
+    await message.reply(output);
+
+    // 🧠 Save assistant reply in history
+    const updatedHistory = userConversations.get(message.author.id) || [];
+    updatedHistory.push({ role: "assistant", content: reply });
+    if (updatedHistory.length > 6) updatedHistory.splice(0, updatedHistory.length - 6);
+    userConversations.set(message.author.id, updatedHistory);
+
+    // ✅ Log successful AI response
+    log(
+      `🤖 AI Reply Sent | Model: ${modelUsed}\n👤 User: ${message.author.tag}\n💬 Prompt: ${prompt}\n📨 Reply: ${output.slice(
+        0,
+        400
+      )}${reply.length > 400 ? "..." : ""}`
+    );
 
   } catch (err) {
-    console.error('❌ OpenRouter request failed:', err);
-    await message.reply('🚫 Error talking to the AI. Try again later.');
+    await message.reply("🚫 Error talking to the AI. Try again later.");
+    log(`❌ OpenRouter request failed: ${err.message}`);
   }
 }
 
