@@ -3589,10 +3589,66 @@ else if (command === 'warnings') {
 }
 
 else if (command === 'clear') {
-    if (!checkPermission(PermissionsBitField.Flags.ManageMessages)) return;
-    const count = parseInt(args[0]);
-    if (!count || count < 1 || count > 100) return message.reply('❌ Enter a number between 1-100.');
-    message.channel.bulkDelete(count, true).then(() => message.reply(`🧹 Deleted ${count} messages.`)).catch(() => message.reply('❌ Cannot delete messages.'));
+  // ✅ Owner or immune users only
+  if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
+    return message.reply('❌ You do not have permission to use this command.')
+      .then(msg => setTimeout(() => msg.delete().catch(() => {}), 4000));
+  }
+
+  // ✅ Cooldown to prevent spam
+  const clearCooldowns = global.clearCooldowns || (global.clearCooldowns = new Set());
+  if (clearCooldowns.has(message.author.id)) {
+    return message.reply('⏳ Please wait a few seconds before using this again.')
+      .then(msg => setTimeout(() => msg.delete().catch(() => {}), 4000));
+  }
+  clearCooldowns.add(message.author.id);
+  setTimeout(() => clearCooldowns.delete(message.author.id), 5000); // 5 sec cooldown
+
+  const count = parseInt(args[0]);
+  if (!count || count < 1 || count > 100) {
+    return message.reply('❌ Enter a number between 1–100.')
+      .then(msg => setTimeout(() => msg.delete().catch(() => {}), 4000));
+  }
+
+  try {
+    // Delete command message first
+    await message.delete().catch(() => {});
+
+    // Perform the bulk deletion
+    const requested = count;
+    const deleted = await message.channel.bulkDelete(requested, true);
+    const skipped = requested - deleted.size;
+
+    // 🧹 Temporary confirmation
+    const confirmMsg = await message.channel.send(
+      skipped > 0
+        ? `🧹 Deleted ${deleted.size} messages (skipped ${skipped} old messages).`
+        : `🧹 Deleted ${deleted.size} messages.`
+    );
+    setTimeout(() => confirmMsg.delete().catch(() => {}), 4000);
+
+    // 🪶 Log embed
+    const logEmbed = new EmbedBuilder()
+      .setColor(0x5865F2)
+      .setTitle('🧹 Message Clear Executed')
+      .addFields(
+        { name: 'Server', value: `${message.guild.name}`, inline: false },
+        { name: 'Moderator', value: `${message.author.tag} (<@${message.author.id}>)`, inline: false },
+        { name: 'Channel', value: `<#${message.channel.id}>`, inline: true },
+        { name: 'Messages Deleted', value: `${deleted.size}`, inline: true },
+        { name: 'Skipped (Old Messages)', value: `${skipped}`, inline: true }
+      )
+      .setFooter({ text: `User ID: ${message.author.id}` })
+      .setTimestamp();
+
+    // ✅ Send log to all log systems
+    await sendLog(message.guild.id, { embeds: [logEmbed] });
+
+  } catch (err) {
+    console.error('❌ Clear command error:', err);
+    message.reply('❌ Cannot delete messages (they may be older than 14 days or I lack permissions).')
+      .then(msg => setTimeout(() => msg.delete().catch(() => {}), 4000));
+  }
 }
 
 else if (command === 'lock') {
