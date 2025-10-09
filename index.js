@@ -55,12 +55,28 @@ let botData = {
     activeBattles: {},
     activeDWGames: {},
     warnings: {},
-    activeQotdChannels: [], // Stored as an array for JSON
+    activeQotdChannels: [],
     qotdSettings: {},
     welcomeMessages: {},
     leaveMessages: {},
     logChannels: {},
     masterLog: { channelId: null, enabled: false },
+
+    // ---- XP + Prestige System Data ----
+    xpData: {},
+    xpSettings: {
+      baseXp: 15,
+      cooldown: 60,
+      xpToNext: 100,
+      levelMultiplier: 1.25,
+      coinRewardPerLevel: 150,
+      coinRewardPerPrestige: 10000,
+      maxLevel: 100,
+      maxPrestige: 10,
+    },
+
+    // ---- Channel Settings ----
+    levelUpChannel: null, // Channel ID for level-up announcements
 };
 
 // In-memory Set for efficient QOTD channel lookups.
@@ -185,6 +201,8 @@ const saveWelcomeMessages = markDirty;
 const saveLeaveMessages = markDirty;
 const saveLogChannels = markDirty;
 const saveMasterLog = markDirty;
+const saveXPData = markDirty;
+const saveXPSettings = markDirty;
 
 // ---- Immunity System ----
 const OWNER_ID = '782155864134909952';
@@ -344,6 +362,112 @@ function findItem(itemId) {
         }
     }
     return null;
+}
+
+// ===============================
+// XP + Prestige System Core
+// ===============================
+
+function getXPData(userId) {
+  if (!botData.xpData[userId]) {
+    botData.xpData[userId] = {
+      xp: 0,
+      level: 1,
+      prestige: 0,
+      totalXp: 0,
+      lastMessageTime: 0,
+      background: 'https://i.imgur.com/Qm9X9jN.png', // default card background
+    };
+  }
+  return botData.xpData[userId];
+}
+
+function addXP(userId, amount) {
+  const data = getXPData(userId);
+  data.xp += amount;
+  data.totalXp += amount;
+
+  const xpToLevel = botData.xpSettings.xpToNext * Math.pow(data.level, botData.xpSettings.levelMultiplier);
+
+  if (data.xp >= xpToLevel) {
+    data.xp -= xpToLevel;
+    data.level++;
+    handleLevelUp(userId, data);
+  }
+
+  saveXPData();
+}
+
+// ---- Level Up Handler (Embed + Channel + DM) ----
+function handleLevelUp(userId, data) {
+  const coins = botData.xpSettings.coinRewardPerLevel;
+  updateBalance(userId, coins);
+  saveEconomyData();
+
+  const user = client.users.cache.get(userId);
+
+  // 🎉 Level Up Embed
+  const embed = new EmbedBuilder()
+    .setColor(0xFFD700)
+    .setTitle('🎉 Level Up!')
+    .setDescription(
+      `**${user ? user.username : 'A user'}** reached **Level ${data.level}!**\n` +
+      `💰 Earned **${coins} CP**\n` +
+      `⭐ Prestige **${data.prestige}**`
+    )
+    .setThumbnail(user?.displayAvatarURL({ dynamic: true }))
+    .setFooter({ text: 'XP & Prestige System — Keep Chatting!' })
+    .setTimestamp();
+
+  // 📨 Send to set channel or fallback to DM
+  const chId = botData.levelUpChannel;
+  const ch = chId ? client.channels.cache.get(chId) : null;
+
+  if (ch) ch.send({ embeds: [embed] }).catch(() => {});
+  if (user) user.send({ embeds: [embed] }).catch(() => {});
+
+  // 🌟 Auto-prestige at max level
+  if (data.level >= botData.xpSettings.maxLevel) {
+    handlePrestige(userId, data);
+  }
+
+  saveXPData();
+}
+
+// ---- Prestige Handler (Public + DM Embed) ----
+function handlePrestige(userId, data) {
+  if (data.prestige >= botData.xpSettings.maxPrestige) return;
+
+  data.prestige++;
+  data.level = 1;
+  data.xp = 0;
+
+  const bonus = botData.xpSettings.coinRewardPerPrestige * data.prestige;
+  updateBalance(userId, bonus);
+  saveEconomyData();
+
+  const user = client.users.cache.get(userId);
+
+  // 🌟 Prestige Embed
+  const embed = new EmbedBuilder()
+    .setColor(0xFFD700)
+    .setTitle('🌟 Prestige Unlocked!')
+    .setDescription(
+      `**${user ? user.username : 'A user'}** has reached **Prestige ${data.prestige}!**\n\n` +
+      `🏆 Level reset to **1**\n💰 Prestige Bonus: **${bonus.toLocaleString()} CP**`
+    )
+    .setThumbnail(user?.displayAvatarURL({ dynamic: true }))
+    .setFooter({ text: 'XP & Prestige System — Keep grinding!' })
+    .setTimestamp();
+
+  // 📨 Send to set channel or DM fallback
+  const chId = botData.levelUpChannel;
+  const ch = chId ? client.channels.cache.get(chId) : null;
+
+  if (ch) ch.send({ embeds: [embed] }).catch(() => {});
+  if (user) user.send({ embeds: [embed] }).catch(() => {});
+
+  saveXPData();
 }
 
 function initializeStore() {
@@ -1811,6 +1935,17 @@ const PREFIX = '$';
 // ---- Main Message Handler (`messageCreate`) ----
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
+
+// ---- XP Gain System ----
+if (!message.author.bot && message.guild) {
+  const now = Date.now();
+  const data = getXPData(message.author.id);
+  if (now - data.lastMessageTime >= botData.xpSettings.cooldown * 1000) {
+    data.lastMessageTime = now;
+    const gained = botData.xpSettings.baseXp + Math.floor(Math.random() * 10);
+    addXP(message.author.id, gained);
+  }
+}
   
 // ---- AUTO-DELETE MESSAGE HANDLER ----
 if (botData.autoDeleteUsers && botData.autoDeleteUsers[message.author?.id]) {
