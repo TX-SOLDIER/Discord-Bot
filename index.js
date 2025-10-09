@@ -3896,12 +3896,19 @@ if (command === 'rank') {
   const { Rank } = require('canvacord');
   const prestigeIcon = ['⭐','🌟','💫','🔥','⚡','👑','💎','🏆','🪙','🎖️'][xpData.prestige] || '⭐';
   const prestigeBackgrounds = {
-    0:'https://yourcdn.com/rank_bg_1.png',1:'https://yourcdn.com/rank_bg_2.png',
-    2:'https://yourcdn.com/rank_bg_3.png',3:'https://yourcdn.com/rank_bg_4.png',
-    4:'https://yourcdn.com/rank_bg_5.png',5:'https://yourcdn.com/rank_bg_6.png',
-    6:'https://yourcdn.com/rank_bg_7.png',7:'https://yourcdn.com/rank_bg_8.png',
-    8:'https://yourcdn.com/rank_bg_9.png',9:'https://yourcdn.com/rank_bg_10.png',
-  };
+  // ✅ Safe fallback backgrounds (Imgur — guaranteed online)
+const prestigeBackgrounds = {
+  0: 'https://i.imgur.com/Qm9X9jN.png',
+  1: 'https://i.imgur.com/Qm9X9jN.png',
+  2: 'https://i.imgur.com/Qm9X9jN.png',
+  3: 'https://i.imgur.com/Qm9X9jN.png',
+  4: 'https://i.imgur.com/Qm9X9jN.png',
+  5: 'https://i.imgur.com/Qm9X9jN.png',
+  6: 'https://i.imgur.com/Qm9X9jN.png',
+  7: 'https://i.imgur.com/Qm9X9jN.png',
+  8: 'https://i.imgur.com/Qm9X9jN.png',
+  9: 'https://i.imgur.com/Qm9X9jN.png',
+};
   const background =
     prestigeBackgrounds[Math.min(xpData.prestige, 9)] ||
     xpData.background || 'https://i.imgur.com/Qm9X9jN.png';
