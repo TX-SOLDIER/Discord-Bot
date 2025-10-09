@@ -3915,6 +3915,7 @@ if (command === 'rank') {
     .setProgressBar(['#FFD700','#FFA500','#FF4500'],'GRADIENT')
     .setBackground('IMAGE',background)
     .setOverlay('#000',0.3,false)
+    .setFont("sans-serif")
     .setLevelColor('#FFD700','#FFF').setRankColor('#00BFFF','#FFF');
     
   const card = await rank.build();
