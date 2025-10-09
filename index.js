@@ -3881,6 +3881,202 @@ else if (command === 'role') {
     }
 }
 
+  // ===============================
+// XP + Prestige System — Full Command Suite
+// ===============================
+
+// ---- RANK CARD (Prestige Frames + Gradient Bar) ----
+if (command === 'rank') {
+  const user = message.mentions.users.first() || message.author;
+  const xpData = getXPData(user.id);
+  const balance = getBalance(user.id);
+  const xpToLevel =
+    botData.xpSettings.xpToNext * Math.pow(xpData.level, botData.xpSettings.levelMultiplier);
+
+  const { Rank } = require('canvacord');
+  const prestigeIcon = ['⭐','🌟','💫','🔥','⚡','👑','💎','🏆','🪙','🎖️'][xpData.prestige] || '⭐';
+  const prestigeBackgrounds = {
+    0:'https://yourcdn.com/rank_bg_1.png',1:'https://yourcdn.com/rank_bg_2.png',
+    2:'https://yourcdn.com/rank_bg_3.png',3:'https://yourcdn.com/rank_bg_4.png',
+    4:'https://yourcdn.com/rank_bg_5.png',5:'https://yourcdn.com/rank_bg_6.png',
+    6:'https://yourcdn.com/rank_bg_7.png',7:'https://yourcdn.com/rank_bg_8.png',
+    8:'https://yourcdn.com/rank_bg_9.png',9:'https://yourcdn.com/rank_bg_10.png',
+  };
+  const background =
+    prestigeBackgrounds[Math.min(xpData.prestige, 9)] ||
+    xpData.background || 'https://i.imgur.com/Qm9X9jN.png';
+
+  const rank = new Rank()
+    .setAvatar(user.displayAvatarURL({ extension:'png' }))
+    .setUsername(`${user.username} ${prestigeIcon.repeat(Math.min(xpData.prestige,5))}`)
+    .setDiscriminator(user.discriminator)
+    .setLevel(xpData.level).setRank(xpData.prestige)
+    .setCurrentXP(xpData.xp).setRequiredXP(xpToLevel)
+    .setProgressBar(['#FFD700','#FFA500','#FF4500'],'GRADIENT')
+    .setBackground('IMAGE',background)
+    .setOverlay('#000',0.3,false)
+    .setLevelColor('#FFD700','#FFF').setRankColor('#00BFFF','#FFF')
+    .setFont('Manrope').setStatus(user.presence?.status || 'online');
+
+  const card = await rank.build();
+  const embed = new EmbedBuilder()
+    .setColor(0xFFD700)
+    .setTitle(`${user.username}'s Profile`)
+    .setDescription(
+      `🧠 **Level:** ${xpData.level}\n⭐ **Prestige:** ${xpData.prestige}\n` +
+      `💰 **Coins:** ${balance}\n📈 **Total XP:** ${xpData.totalXp.toLocaleString()}`
+    )
+    .setFooter({ text:'XP & Prestige System — Prestige Frames Edition' });
+
+  message.channel.send({ embeds:[embed], files:[{ attachment:card, name:'rank.png' }] });
+}
+
+// ---- SET BACKGROUND ----
+if (command === 'setbg') {
+  const url = args[0];
+  if (!url || !/^https?:\/\/[^\s]+$/.test(url))
+    return message.reply('⚠️ Provide a valid image URL.');
+  const data = getXPData(message.author.id);
+  data.background = url; saveXPData();
+  message.reply('✅ Background image updated for your rank card!');
+}
+
+// ---- PRESTIGE ----
+if (command === 'prestige') {
+  const data = getXPData(message.author.id);
+  if (data.level < botData.xpSettings.maxLevel)
+    return message.reply(`⛔ Reach level ${botData.xpSettings.maxLevel} to prestige!`);
+  if (data.prestige >= botData.xpSettings.maxPrestige)
+    return message.reply('🏁 You have reached max prestige!');
+  handlePrestige(message.author.id, data);
+  message.reply(`⭐ You have prestiged! Now Prestige ${data.prestige}.`);
+}
+
+// ---- XP LEADERBOARD ----
+if (command === 'xpleaderboard' || command === 'xplb') {
+  const top = Object.entries(botData.xpData)
+    .filter(([id]) => message.guild.members.cache.has(id))
+    .sort(([,a],[,b]) => b.totalXp - a.totalXp).slice(0,10);
+  if (!top.length) return message.reply('📉 No XP data found yet.');
+  const embed = new EmbedBuilder()
+    .setTitle(`🏆 XP Leaderboard — ${message.guild.name}`)
+    .setColor(0xFFD700)
+    .setDescription(top.map(([id,d],i)=>{
+      const coins=getBalance(id);
+      const icon=['⭐','🌟','💫','🔥','⚡','👑','💎','🏆','🪙','🎖️'][d.prestige]||'⭐';
+      return `**${i+1}.** <@${id}> — 🧠 Lvl **${d.level}** (${icon}${d.prestige}) • 💰 **${coins}**`;
+    }).join('\n'))
+    .setFooter({ text:'Prestige = total resets, Level resets every 100.' });
+  message.channel.send({ embeds:[embed] });
+}
+
+// ---- XPINFO ----
+if (command === 'xpinfo') {
+  const target = message.mentions.users.first() || message.author;
+  const data = getXPData(target.id); const coins=getBalance(target.id);
+  const xpToNext=Math.floor(botData.xpSettings.xpToNext*Math.pow(data.level,botData.xpSettings.levelMultiplier));
+  const remaining=Math.max(0,xpToNext-data.xp);
+  const percent=Math.min(100,((data.xp/xpToNext)*100).toFixed(1));
+  const totalBars=20, filled=Math.round((percent/100)*totalBars);
+  const bar=`\`${'█'.repeat(filled)}${'░'.repeat(totalBars-filled)}\` ${percent}%`;
+  const s=botData.xpSettings;
+  const embed=new EmbedBuilder()
+    .setColor(0x00bfff).setTitle(`📘 XP & CP Information — ${target.username}`)
+    .setThumbnail(target.displayAvatarURL({ dynamic:true }))
+    .setDescription(
+      `**🧠 Level:** ${data.level}\n⭐ **Prestige:** ${data.prestige}\n💰 **Coins (CP):** ${coins.toLocaleString()}\n`+
+      `**📈 XP:** ${data.xp.toLocaleString()} / ${xpToNext.toLocaleString()}\n${bar}\n`+
+      `**⬆️ Needed:** ${remaining.toLocaleString()} XP\n\n`+
+      `**🎯 XP Earn Rate:**\n• ${s.baseXp}–${s.baseXp+10} XP per message\n• Cooldown: ${s.cooldown}s\n• Growth: ${s.levelMultiplier}× per level\n• Reward: ${s.coinRewardPerLevel} CP/level\n• Prestige bonus: ${s.coinRewardPerPrestige}×tier CP\n\n`+
+      `**🏅 How to Earn:**\n• Chat every ${s.cooldown}s\n• Join events & commands\n• Level up & prestige\n• Max level ${s.maxLevel} → new prestige\n\n`+
+      `**📖 Tips:**\n• Prestige resets level but boosts rewards\n• Use $rank & $xpleaderboard to track progress`
+    )
+    .setFooter({ text:'XP & Prestige System — Player Guide' }).setTimestamp();
+  message.channel.send({ embeds:[embed] });
+}
+
+// ===============================
+// Level-Up Announcement Controls
+// ===============================
+
+// ---- SET LEVEL-UP CHANNEL ----
+if (command === 'setlevelupchannel') {
+  if (!isImmune(message.author)) return message.reply('❌ No permission.');
+  const ch = message.mentions.channels.first();
+  if (!ch) return message.reply('⚙️ Usage: `$setlevelupchannel #channel`');
+  botData.levelUpChannel = ch.id; markDirty();
+  message.reply(`✅ Level-up announcements will now appear in ${ch}.`);
+}
+
+// ---- DISABLE LEVEL-UP ANNOUNCEMENTS ----
+if (command === 'disablelevelup') {
+  if (!isImmune(message.author)) return message.reply('❌ No permission.');
+  botData.levelUpChannel = null; markDirty();
+  message.reply('🚫 Level-up announcements disabled.');
+}
+
+// ===============================
+// XP Management & Admin Commands
+// ===============================
+
+if (command === 'addxp') {
+  if (!isImmune(message.author)) return message.reply('❌ No permission.');
+  const u=message.mentions.users.first(); const amt=parseInt(args[1]);
+  if(!u||isNaN(amt))return message.reply('⚙️ `$addxp @user <amount>`');
+  addXP(u.id,amt); message.reply(`✅ Added **${amt} XP** to ${u.username}.`);
+}
+
+if (command === 'removexp') {
+  if (!isImmune(message.author)) return message.reply('❌ No permission.');
+  const u=message.mentions.users.first(); const amt=parseInt(args[1]);
+  if(!u||isNaN(amt))return message.reply('⚙️ `$removexp @user <amount>`');
+  const d=getXPData(u.id); d.xp=Math.max(0,d.xp-amt); saveXPData();
+  message.reply(`🧹 Removed **${amt} XP** from ${u.username}.`);
+}
+
+if (command === 'setlevel') {
+  if (!isImmune(message.author)) return message.reply('❌ No permission.');
+  const u=message.mentions.users.first(); const lvl=parseInt(args[1]);
+  if(!u||isNaN(lvl))return message.reply('⚙️ `$setlevel @user <level>`');
+  const d=getXPData(u.id); d.level=Math.min(lvl,botData.xpSettings.maxLevel); saveXPData();
+  message.reply(`🔧 Set ${u.username}'s level to **${d.level}**.`);
+}
+
+if (command === 'setprestige') {
+  if (!isImmune(message.author)) return message.reply('❌ No permission.');
+  const u=message.mentions.users.first(); const p=parseInt(args[1]);
+  if(!u||isNaN(p))return message.reply('⚙️ `$setprestige @user <prestige>`');
+  const d=getXPData(u.id); d.prestige=Math.min(p,botData.xpSettings.maxPrestige); saveXPData();
+  message.reply(`👑 Set ${u.username}'s prestige to **${d.prestige}**.`);
+}
+
+if (command === 'resetxp') {
+  if (!isImmune(message.author)) return message.reply('❌ No permission.');
+  const u=message.mentions.users.first();
+  if(!u)return message.reply('⚙️ `$resetxp @user`');
+  delete botData.xpData[u.id]; saveXPData();
+  message.reply(`♻️ Reset all XP data for ${u.username}.`);
+}
+
+if (command === 'xpsettings') {
+  const s=botData.xpSettings;
+  const embed=new EmbedBuilder()
+    .setTitle('⚙️ XP System Settings').setColor(0x00bfff)
+    .setDescription(
+      `Base XP/msg: ${s.baseXp}\nCooldown: ${s.cooldown}s\nXP Next(base): ${s.xpToNext}\nMultiplier: ${s.levelMultiplier}\nCoins/Level: ${s.coinRewardPerLevel}\nCoins/Prestige: ${s.coinRewardPerPrestige}\nMax Level: ${s.maxLevel}\nMax Prestige: ${s.maxPrestige}`
+    ).setFooter({ text:'Use $setxpsetting <key> <value> to modify.' });
+  message.channel.send({ embeds:[embed] });
+}
+
+if (command === 'setxpsetting') {
+  if (!isImmune(message.author)) return message.reply('❌ No permission.');
+  const k=args[0]; const v=parseFloat(args[1]);
+  if(!k||isNaN(v))return message.reply('⚙️ `$setxpsetting <key> <value>`');
+  if(!(k in botData.xpSettings))return message.reply('⚠️ Invalid key.');
+  botData.xpSettings[k]=v; markDirty();
+  message.reply(`✅ Updated **${k}** → **${v}**.`);
+}
+
 else if (command === 'qotd') {
     if (!checkPermission(PermissionsBitField.Flags.ManageChannels)) return;
     const subcommand = args[0];
