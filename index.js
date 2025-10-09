@@ -3894,9 +3894,10 @@ if (command === 'rank') {
     botData.xpSettings.xpToNext * Math.pow(xpData.level, botData.xpSettings.levelMultiplier);
 
   const { Rank } = require('canvacord');
-  const prestigeIcon = ['⭐','🌟','💫','🔥','⚡','👑','💎','🏆','🪙','🎖️'][xpData.prestige] || '⭐';
-  const prestigeBackgrounds = {
-  // ✅ Safe fallback backgrounds (Imgur — guaranteed online)
+
+const prestigeIcon = ['⭐','🌟','💫','🔥','⚡','👑','💎','🏆','🪙','🎖️'][xpData.prestige] || '⭐';
+
+// ✅ Safe fallback backgrounds (Imgur — guaranteed online)
 const prestigeBackgrounds = {
   0: 'https://i.imgur.com/Qm9X9jN.png',
   1: 'https://i.imgur.com/Qm9X9jN.png',
@@ -3909,9 +3910,11 @@ const prestigeBackgrounds = {
   8: 'https://i.imgur.com/Qm9X9jN.png',
   9: 'https://i.imgur.com/Qm9X9jN.png',
 };
-  const background =
-    prestigeBackgrounds[Math.min(xpData.prestige, 9)] ||
-    xpData.background || 'https://i.imgur.com/Qm9X9jN.png';
+
+const background =
+  prestigeBackgrounds[Math.min(xpData.prestige, 9)] ||
+  xpData.background ||
+  'https://i.imgur.com/Qm9X9jN.png';
 
   const rank = new Rank()
     .setAvatar(user.displayAvatarURL({ extension:'png' }))
