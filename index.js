@@ -2229,6 +2229,7 @@ if (command === 'help') {
     .setColor(0x39FF14)
     .setDescription(
       `• \`${PREFIX}giveaway <duration> <prize>\` – Start a giveaway\n` +
+      `• \`${PREFIX}debate <question>\` – Start an ai powered debate\n` +
       `• \`${PREFIX}kick @user [reason]\` – Kick a user\n` +
       `• \`${PREFIX}ban @user [reason]\` – Ban a user\n` +
       `• \`${PREFIX}mute @user [time]\` – Mute a user\n` +
