@@ -2999,7 +2999,14 @@ else if (command === 'giveaway') {
       return message.reply('❌ **Invalid duration format!** Use `s`, `m`, `h`, or `d`.');
     }
     const endTime = Date.now() + durationMs;
-    const embed = { color: 0x0099FF, title: '🎉 **GIVEAWAY** 🎉', description: `React with 🎉 to enter!\n\n**Prize:** ${prize}`, footer: { text: 'Ends at' }, timestamp: new Date(endTime).toISOString(), };
+    const embed = { 
+        color: 0x0099FF, 
+        title: '🎉 **GIVEAWAY** 🎉', 
+        description: `React with 🎉 to enter!\n\n**Prize:** ${prize}`, 
+        footer: { text: 'Ends at' }, 
+        timestamp: new Date(endTime).toISOString(),
+        image: { url: 'https://i.imgur.com/jKos16w.gif' }, // ⬅️ NEW: GIF added here
+    };
     const giveawayMessage = await message.channel.send({ embeds: [embed] });
     await giveawayMessage.react('🎉');
     setTimeout(async () => {
@@ -3021,6 +3028,127 @@ else if (command === 'giveaway') {
         message.channel.send('❌ There was an error determining the giveaway winner.');
       }
     }, durationMs);
+} else if (command === 'continue') {
+    if (!checkPermission(PermissionsBitField.Flags.ManageGuild)) return;
+    const messageId = args[0];
+    if (!messageId) {
+      return message.reply('❌ **Usage:** `$continue <giveaway_message_id>`');
+    }
+
+    try {
+        // Fetch the original message to get the end time and prize
+        const giveawayMessage = await message.channel.messages.fetch(messageId);
+        const embed = giveawayMessage.embeds[0];
+
+        // Basic check to confirm it's a giveaway embed
+        if (!embed || embed.title !== '🎉 **GIVEAWAY** 🎉' || embed.footer?.text !== 'Ends at') {
+            return message.reply('❌ The message ID provided is not for an active giveaway.');
+        }
+
+        const endTime = new Date(embed.timestamp).getTime();
+        const remainingDurationMs = endTime - Date.now();
+        // Extract the prize from the description
+        const prizeMatch = embed.description.match(/\*\*Prize:\*\*\s*(.*)/);
+        const prize = prizeMatch ? prizeMatch[1].trim() : 'Unknown Prize';
+
+        if (remainingDurationMs <= 0) {
+            return message.reply('❌ This giveaway has already ended.');
+        }
+
+        message.reply(`✅ **Giveaway Continued!** The **${prize}** giveaway will now end in approximately **${Math.ceil(remainingDurationMs / 60000)} minutes**.`);
+
+        // Set a new timeout for the remaining time
+        setTimeout(async () => {
+            try {
+                // Re-fetch message to get latest reactions
+                const fetchedMessage = await message.channel.messages.fetch(giveawayMessage.id);
+                const reactions = fetchedMessage.reactions.cache.get('🎉');
+                const users = await reactions.users.fetch();
+                const entrants = users.filter(user => !user.bot);
+
+                if (entrants.size === 0) {
+                    const noWinnerEmbed = {
+                        color: 0xFF0000,
+                        title: '🎉 **GIVEAWAY ENDED** 🎉',
+                        description: `**Prize:** ${prize}\n\nNo one entered the giveaway. 😢`,
+                        footer: { text: 'Ended at' },
+                        timestamp: new Date().toISOString(),
+                    };
+                    return fetchedMessage.edit({ embeds: [noWinnerEmbed] });
+                }
+
+                const winner = entrants.random();
+                const winnerEmbed = {
+                    color: 0x00FF00,
+                    title: '🎉 **GIVEAWAY ENDED** 🎉',
+                    description: `**Prize:** ${prize}\n**Winner:** ${winner}!`,
+                    footer: { text: 'Ended at' },
+                    timestamp: new Date().toISOString(),
+                };
+                await fetchedMessage.edit({ embeds: [winnerEmbed] });
+                message.channel.send(`Congratulations ${winner}! You won the **${prize}**!`);
+
+            } catch (error) {
+                console.error("Giveaway continuation ending error:", error);
+                message.channel.send('❌ There was an error determining the giveaway winner after continuing.');
+            }
+        }, remainingDurationMs);
+
+    } catch (error) {
+        console.error("Giveaway continue error:", error);
+        return message.reply('❌ Could not fetch the message. Check the ID and make sure it\'s in this channel.');
+    }
+} else if (command === 'endgiveaway') {
+    if (!checkPermission(PermissionsBitField.Flags.ManageGuild)) return;
+    const messageId = args[0];
+    if (!messageId) {
+      return message.reply('❌ **Usage:** `$endgiveaway <giveaway_message_id>`');
+    }
+
+    try {
+        // Fetch the message to end
+        const giveawayMessage = await message.channel.messages.fetch(messageId);
+        const embed = giveawayMessage.embeds[0];
+
+        // Basic check to confirm it's a giveaway embed
+        if (!embed || embed.title !== '🎉 **GIVEAWAY** 🎉' || embed.footer?.text !== 'Ends at') {
+            return message.reply('❌ The message ID provided is not for an active giveaway.');
+        }
+
+        const prizeMatch = embed.description.match(/\*\*Prize:\*\*\s*(.*)/);
+        const prize = prizeMatch ? prizeMatch[1].trim() : 'Unknown Prize';
+        
+        // --- Giveaway ending logic ---
+        const reactions = giveawayMessage.reactions.cache.get('🎉');
+        const users = await reactions.users.fetch();
+        const entrants = users.filter(user => !user.bot);
+
+        if (entrants.size === 0) {
+            const noWinnerEmbed = {
+                color: 0xFF0000, // Red
+                title: '🛑 **GIVEAWAY ENDED EARLY** 🛑',
+                description: `**Prize:** ${prize}\n\nNo one entered the giveaway. 😢`,
+                footer: { text: 'Ended by Moderator' },
+                timestamp: new Date().toISOString(),
+            };
+            return giveawayMessage.edit({ embeds: [noWinnerEmbed] });
+        }
+
+        const winner = entrants.random();
+        const winnerEmbed = {
+            color: 0x00FF00, // Green for winner
+            title: '🛑 **GIVEAWAY ENDED EARLY** 🛑',
+            description: `**Prize:** ${prize}\n**Winner:** ${winner}!\n\n*(Giveaway ended by a moderator)*`,
+            footer: { text: 'Ended by Moderator' },
+            timestamp: new Date().toISOString(),
+        };
+        await giveawayMessage.edit({ embeds: [winnerEmbed] });
+        message.channel.send(`Congratulations ${winner}! You won the **${prize}**! (Giveaway ended early)`);
+        
+    } catch (error) {
+        console.error("Giveaway end early error:", error);
+        return message.reply('❌ Could not fetch the message or an error occurred while ending the giveaway. Check the ID and make sure it\'s in this channel.');
+    }
 }
 
 else if (command === 'ping') {
