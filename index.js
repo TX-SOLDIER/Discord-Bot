@@ -4111,10 +4111,7 @@ const prestigeBackgrounds = {
   9: 'https://i.imgur.com/Qm9X9jN.png',
 };
 
-const background =
-  prestigeBackgrounds[Math.min(xpData.prestige, 9)] ||
-  xpData.background ||
-  'https://i.imgur.com/Qm9X9jN.png';
+const background = xpData.background || prestigeBackgrounds[Math.min(xpData.prestige, 9)] || 'https://i.imgur.com/Qm9X9jN.png';
 
   const rank = new Rank()
     .setAvatar(user.displayAvatarURL({ extension:'png' }))
