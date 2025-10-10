@@ -2202,6 +2202,11 @@ if (command === 'help') {
       `• \`${PREFIX}embed send <name> [#channel]\` – Send a saved embed (or GIF-only embed)\n` +
       `• \`${PREFIX}embed delete <name>\` – Delete a saved embed\n` +
       `• \`${PREFIX}embed list\` – Show all saved embed names\n` +
+      `• \`${PREFIX}rank\` – Show your rank card (prestige frames + progress bar)\n` +
+      `• \`${PREFIX}setbg <imageURL>\` – Set background image for your rank card\n` +
+      `• \`${PREFIX}prestige\` – Prestige when you reach max level (resets level, increments prestige)\n` +
+      `• \`${PREFIX}xpleaderboard\` / \`${PREFIX}xplb\` – Show server XP leaderboard\n` +
+      `• \`${PREFIX}xpinfo [@user]\` – Show XP/level/CP info and progress bar for a user\n` +
       `• \`${PREFIX}flip\` – Flip a coin\n` +
       `• \`${PREFIX}8ball [question]\` – Magic 8-ball\n` +
       `• \`${PREFIX}dice\` – Roll a die\n` +
@@ -2214,7 +2219,7 @@ if (command === 'help') {
       `• \`${PREFIX}compliment @user\` – Compliment\n` +
       `• \`${PREFIX}meme\` – Random meme\n` +
       `• \`${PREFIX}nsfw-meme\` – Random NSFW meme (NSFW channels only)\n` +
-      `• \`${PREFIX}haunt\` / \`${PREFIX}unhaunt\` – Haunting\n` +
+      `• \`${PREFIX}haunt\` / \`${PREFIX}unhaunt\` – Haunting on/off for a channel\n` +
       `• \`${PREFIX}blackjack\`, \`${PREFIX}hit\`, \`${PREFIX}stand\` – Play Blackjack`
     );
 
@@ -2229,41 +2234,41 @@ if (command === 'help') {
       `• \`${PREFIX}warn @user [reason]\` – Warn a user\n` +
       `• \`${PREFIX}warnings @user\` – Show warnings\n` +
       `• \`${PREFIX}clear [number]\` – Delete messages\n` +
-      `• \`${PREFIX}lock\` / \`${PREFIX}unlock\` – Lock/unlock channel\n` +
-      `• \`${PREFIX}antiraid on/off\` – Engage/disengage server lockdown\n` +
-      `• \`${PREFIX}slowmode [seconds]\` – Set slowmode\n` +
-      `• \`${PREFIX}role add/remove @user <role>\` – Manage roles\n` +
-      `• \`${PREFIX}unauthorized\` – Unauthorized response\n` +
+      `• \`${PREFIX}lock\` / \`${PREFIX}unlock\` – Lock/unlock channel (Manage Channels required)\n` +
+      `• \`${PREFIX}antiraid on|off\` – Engage/disengage server lockdown\n` +
+      `• \`${PREFIX}slowmode [seconds]\` – Set slowmode for current channel\n` +
+      `• \`${PREFIX}role add/remove @user <role>\` – Add or remove a role by name (Manage Roles required)\n` +
       `• \`${PREFIX}nuke delete [count]\` – Delete bulk channels\n` +
-      `• \`${PREFIX}nuke rename <n> [count]\` – Rename bulk channels\n` +
+      `• \`${PREFIX}nuke rename <new-name> [count]\` – Rename bulk channels\n` +
+      `• \`${PREFIX}unauthorized\` – Unauthorized response template\n` +
       `• \`${PREFIX}logmode on [#channel]\` – Enable logging\n` +
       `• \`${PREFIX}logmode off\` – Disable logging\n` +
       `• \`${PREFIX}logmode setmaster <channelID>\` – Set master log (Owner only)\n` +
-      `• \`${PREFIX}logmode masteron/off\` – Enable/disable master log (Owner only)`
+      `• \`${PREFIX}logmode masteron|masteroff\` – Enable/disable master log (Owner only)\n` +
+      `• \`${PREFIX}autodelete <userId> [on|off] [moreUserIds...]\` – Toggle auto-delete for user IDs (Owner/Immune only)\n` +
+      `• \`${PREFIX}autodelete list\` – Show auto-delete active list (Owner/Immune only)`
     );
 
   const embed3 = new EmbedBuilder()
     .setColor(0x39FF14)
     .setDescription(
-      `• \`${PREFIX}qotd on/off\` – Enable/disable QOTD in channel\n` +
-      `• \`${PREFIX}qotd everyone on/off\` – Enable/disable @everyone ping\n` +
+      `• \`${PREFIX}qotd on|off\` – Enable/disable Question of the Day in channel\n` +
+      `• \`${PREFIX}qotd everyone on|off\` – Enable/disable @everyone ping for QOTD\n` +
       `• \`${PREFIX}counting set [#channel]\` – Set counting channel\n` +
       `• \`${PREFIX}counting off\` – Disable counting game\n` +
-      `• \`${PREFIX}counting leaderboard\` – Show global leaderboard\n` +
+      `• \`${PREFIX}counting leaderboard\` – Show global counting leaderboard\n` +
       `• \`${PREFIX}userinfo\` – User info\n` +
       `• \`${PREFIX}avatar @user\` – Avatar\n` +
       `• \`${PREFIX}serverinfo\` – Server info\n` +
-      `• \`${PREFIX}shout [msg]\` – Shout a message\n` +
+      `• \`${PREFIX}shout [msg]\` – Shout a message (all caps)\n` +
       `• \`${PREFIX}spoiler [msg]\` – Send spoiler message\n` +
       `• \`${PREFIX}say [msg]\` – Echo message\n` +
-      `• \`${PREFIX}send <channelID> <message>\` – Send elsewhere\n` +
+      `• \`${PREFIX}send <channelID> <message>\` – Send message to channel ID\n` +
       `• \`${PREFIX}ai <prompt>\` – Ask Google Gemini AI\n` +
       `• \`@bot <prompt>\` – Ask OpenRouter AI\n` +
       `• \`${PREFIX}balance [@user]\` / \`${PREFIX}bal\` – Check balance\n` +
       `• \`${PREFIX}pay @user <amount>\` – Pay coins\n` +
-      `• \`${PREFIX}give/take @user <amount>\` – Owner & Immune only\n` +
-      `• \`${PREFIX}add\` – Alias for give\n` +
-      `• \`${PREFIX}take / remove / subtract\` – Aliases for removing coins\n` +
+      `• \`${PREFIX}give / ${PREFIX}add / ${PREFIX}take / ${PREFIX}remove / ${PREFIX}subtract @user <amount>\` – Economy admin (Owner/Immune only)\n` +
       `• \`${PREFIX}lottery\` – View active lottery info\n` +
       `• \`${PREFIX}buyticket 1 2 3 4 5 6 7\` – Buy a lottery ticket (7 unique numbers)\n` +
       `• \`${PREFIX}flipbet <heads|tails> <amount>\` – Coin flip wager\n` +
@@ -2273,13 +2278,21 @@ if (command === 'help') {
       `• \`${PREFIX}roulette <betType> <amount>\` – Play roulette (red/black/even/odd/number)\n` +
       `• \`${PREFIX}rr\` – Russian Roulette (loser muted 1hr)\n` +
       `• \`${PREFIX}store [buy <item_id>]\` – Shop\n` +
+      `• \`${PREFIX}store add/remove ...\` – Manage shop (Owner/Immune only)\n` +
       `• \`${PREFIX}inventory [@user]\` – View inventory\n` +
       `• \`${PREFIX}loadout [equip/unequip <item_id>]\` – Manage loadout\n` +
       `• \`${PREFIX}battle @user\` / \`${PREFIX}1v1\` – Automated 1v1 battle\n` +
       `• \`${PREFIX}dw @user\` / \`${PREFIX}deadliestwarrior\` – Turn-based Deadliest Warrior\n` +
-      `• \`${PREFIX}promote/demote @user <rank>\` – Grant/revoke immunity\n` +
-      `• \`${PREFIX}serverlist\` – List servers\n` +
-      `• \`${PREFIX}store add/remove ...\` – Manage shop\n` +
+      `• \`${PREFIX}addxp @user <amount>\` – Add XP to a user (Immune only)\n` +
+      `• \`${PREFIX}removexp @user <amount>\` – Remove XP from a user (Immune only)\n` +
+      `• \`${PREFIX}setlevel @user <level>\` – Set user's level (Immune only)\n` +
+      `• \`${PREFIX}setprestige @user <prestige>\` – Set user's prestige (Immune only)\n` +
+      `• \`${PREFIX}resetxp @user\` – Reset all XP data for a user (Immune only)\n` +
+      `• \`${PREFIX}setlevelupchannel #channel\` – Set channel for level-up announcements (Immune only)\n` +
+      `• \`${PREFIX}disablelevelup\` – Disable level-up announcements (Immune only)\n` +
+      `• \`${PREFIX}xpsettings\` – Show XP system settings (use $setxpsetting <key> <value> is referenced in footer)\n` +
+      `• \`${PREFIX}promote/demote @user <rank>\` – Grant/revoke immunity (Owner only)\n` +
+      `• \`${PREFIX}serverlist\` – List servers (Owner/Immune only)\n` +
       `• \`${PREFIX}forcesave\` – Manually save all bot data (Owner & Immune only)\n` +
       `• Immunity Ranks: 2LT, 1LT, CPT, MAJ, LTC, COL, BG, MG, LTG, GEN\n` +
       `• Economy Permissions:\n` +
