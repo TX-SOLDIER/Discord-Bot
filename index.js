@@ -3005,7 +3005,7 @@ else if (command === 'giveaway') {
         description: `React with 🎉 to enter!\n\n**Prize:** ${prize}`, 
         footer: { text: 'Ends at' }, 
         timestamp: new Date(endTime).toISOString(),
-        image: { url: 'https://i.imgur.com/jKos16w.gif' }, // ⬅️ NEW: GIF added here
+        image: { url: 'https://i.imgur.com/jKos16w.gif' }, // START GIF
     };
     const giveawayMessage = await message.channel.send({ embeds: [embed] });
     await giveawayMessage.react('🎉');
@@ -3020,7 +3020,14 @@ else if (command === 'giveaway') {
           return giveawayMessage.edit({ embeds: [noWinnerEmbed] });
         }
         const winner = entrants.random();
-        const winnerEmbed = { color: 0x00FF00, title: '🎉 **GIVEAWAY ENDED** 🎉', description: `**Prize:** ${prize}\n**Winner:** ${winner}!`, footer: { text: 'Ended at' }, timestamp: new Date().toISOString(), };
+        const winnerEmbed = { 
+            color: 0x00FF00, 
+            title: '🎉 **GIVEAWAY ENDED** 🎉', 
+            description: `**Prize:** ${prize}\n**Winner:** ${winner}!`, 
+            footer: { text: 'Ended at' }, 
+            timestamp: new Date().toISOString(),
+            image: { url: 'https://i.imgur.com/u7B4DmJ.gif' }, // WINNER GIF
+        };
         await giveawayMessage.edit({ embeds: [winnerEmbed] });
         message.channel.send(`Congratulations ${winner}! You won the **${prize}**!`);
       } catch (error) {
@@ -3084,6 +3091,7 @@ else if (command === 'giveaway') {
                     description: `**Prize:** ${prize}\n**Winner:** ${winner}!`,
                     footer: { text: 'Ended at' },
                     timestamp: new Date().toISOString(),
+                    image: { url: 'https://i.imgur.com/u7B4DmJ.gif' }, // WINNER GIF
                 };
                 await fetchedMessage.edit({ embeds: [winnerEmbed] });
                 message.channel.send(`Congratulations ${winner}! You won the **${prize}**!`);
@@ -3136,11 +3144,12 @@ else if (command === 'giveaway') {
 
         const winner = entrants.random();
         const winnerEmbed = {
-            color: 0x00FF00, // Green for winner
+            color: 0xFF0000, // Red color as requested for early end
             title: '🛑 **GIVEAWAY ENDED EARLY** 🛑',
             description: `**Prize:** ${prize}\n**Winner:** ${winner}!\n\n*(Giveaway ended by a moderator)*`,
             footer: { text: 'Ended by Moderator' },
             timestamp: new Date().toISOString(),
+            image: { url: 'https://i.imgur.com/u7B4DmJ.gif' }, // WINNER GIF
         };
         await giveawayMessage.edit({ embeds: [winnerEmbed] });
         message.channel.send(`Congratulations ${winner}! You won the **${prize}**! (Giveaway ended early)`);
