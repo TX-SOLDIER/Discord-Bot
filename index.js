@@ -2778,7 +2778,7 @@ else if (command === 'demote') {
     }
 }
 // ===============================
-// EMBED SYSTEM COMMAND (Mobile Friendly)
+// EMBED SYSTEM COMMAND (Mobile Friendly + GIF Only Compatible)
 // ===============================
 
 if (command === 'embed') {
@@ -2792,36 +2792,40 @@ if (command === 'embed') {
   // Initialize data store if missing
   if (!botData.customEmbeds) botData.customEmbeds = {};
 
-  // --- Create Command ---
+  // --- CREATE Command ---
   if (sub === 'create') {
     const parts = args.slice(1).join(' ').split('~').map(p => p.trim());
     const [name, title, description, imageUrl, color] = parts;
 
-    if (!name || !title || !description) {
-      return message.reply('⚙️ Usage: `$embed create <name> / <title> / <description> / [image/gif URL] / [color hex or name]`');
+    // Require at least a name + one content field
+    if (!name) {
+      return message.reply('⚙️ Usage: `$embed create <name> ~ <title> ~ <description> ~ [image/gif URL] ~ [color]`');
+    }
+
+    if (!title && !description && !imageUrl) {
+      return message.reply('⚠️ You must provide at least a title, description, or image URL.');
     }
 
     const embedColor = color ? parseInt(color.replace('#', ''), 16) : 0x00AEFF;
-    const embed = new EmbedBuilder()
-      .setTitle(title)
-      .setDescription(description)
-      .setColor(embedColor)
-      .setTimestamp();
+    const embed = new EmbedBuilder().setColor(embedColor).setTimestamp();
 
-    // ✅ Validate image URL before setting
+    if (title) embed.setTitle(title);
+    if (description) embed.setDescription(description);
+
+    // ✅ Validate and attach image
     if (imageUrl && /^https?:\/\/[^\s]+$/.test(imageUrl)) {
-  embed.setImage(imageUrl);
-} else if (imageUrl) {
-  message.reply('⚠️ Invalid image URL detected — image skipped.');
+      embed.setImage(imageUrl);
+    } else if (imageUrl) {
+      message.reply('⚠️ Invalid image URL detected — image skipped.');
     }
 
     // Save to botData
     botData.customEmbeds[name] = { title, description, imageUrl, color: embedColor };
-    saveMasterLog(); // markDirty for JSONBin
+    saveMasterLog(); // markDirty for JSONBin or your save system
     message.channel.send({ embeds: [embed] });
     message.reply(`✅ Embed **${name}** has been created and saved.`);
 
-  // --- Edit Command ---
+  // --- EDIT Command ---
   } else if (sub === 'edit') {
     const parts = args.slice(1).join(' ').split('/').map(p => p.trim());
     const [name, title, description, imageUrl, color] = parts;
@@ -2832,18 +2836,19 @@ if (command === 'embed') {
 
     const embedData = botData.customEmbeds[name];
 
-    if (title) embedData.title = title;
-    if (description) embedData.description = description;
-    if (imageUrl) embedData.imageUrl = imageUrl;
+    if (title !== undefined) embedData.title = title;
+    if (description !== undefined) embedData.description = description;
+    if (imageUrl !== undefined) embedData.imageUrl = imageUrl;
     if (color) embedData.color = parseInt(color.replace('#', ''), 16);
 
     const embed = new EmbedBuilder()
-      .setTitle(embedData.title)
-      .setDescription(embedData.description)
       .setColor(embedData.color || 0x00AEFF)
       .setTimestamp();
 
-    // ✅ Validate image URL before setting
+    if (embedData.title) embed.setTitle(embedData.title);
+    if (embedData.description) embed.setDescription(embedData.description);
+
+    // ✅ Validate and attach image
     if (embedData.imageUrl && /^https?:\/\/\S+\.\S+/.test(embedData.imageUrl)) {
       embed.setImage(embedData.imageUrl);
     } else if (embedData.imageUrl) {
@@ -2854,7 +2859,7 @@ if (command === 'embed') {
     message.channel.send({ embeds: [embed] });
     message.reply(`✏️ Embed **${name}** updated successfully.`);
 
-  // --- Delete Command ---
+  // --- DELETE Command ---
   } else if (sub === 'delete') {
     const name = args[1];
     if (!name || !botData.customEmbeds[name]) {
@@ -2864,28 +2869,29 @@ if (command === 'embed') {
     saveMasterLog();
     message.reply(`🗑️ Embed **${name}** deleted.`);
 
-  // --- List Command ---
+  // --- LIST Command ---
   } else if (sub === 'list') {
     const names = Object.keys(botData.customEmbeds);
     if (names.length === 0) return message.reply('No saved embeds yet.');
     message.reply(`📋 Saved embeds:\n\`\`\`${names.join(', ')}\`\`\``);
 
-  // --- Send Command ---
+  // --- SEND Command ---
   } else if (sub === 'send') {
     const name = args[1];
     const channelMention = message.mentions.channels.first();
+
     if (!name || !botData.customEmbeds[name]) {
       return message.reply('❌ Embed not found. Use `$embed list` to see available ones.');
     }
 
     const embedData = botData.customEmbeds[name];
     const embed = new EmbedBuilder()
-      .setTitle(embedData.title)
-      .setDescription(embedData.description)
       .setColor(embedData.color || 0x00AEFF)
       .setTimestamp();
 
-    // ✅ Validate image URL before setting
+    if (embedData.title) embed.setTitle(embedData.title);
+    if (embedData.description) embed.setDescription(embedData.description);
+
     if (embedData.imageUrl && /^https?:\/\/\S+\.\S+/.test(embedData.imageUrl)) {
       embed.setImage(embedData.imageUrl);
     } else if (embedData.imageUrl) {
@@ -2896,9 +2902,10 @@ if (command === 'embed') {
     targetChannel.send({ embeds: [embed] });
     message.reply(`✅ Embed **${name}** sent to ${targetChannel}.`);
 
+  // --- HELP Command ---
   } else {
     message.reply('🧾 Usage:\n```' +
-      '$embed create <name> / <title> / <description> / [image/gif URL] / [color]\n' +
+      '$embed create <name> ~ <title> ~ <description> ~ [image/gif URL] ~ [color]\n' +
       '$embed edit <name> / [title] / [description] / [image/gif URL] / [color]\n' +
       '$embed delete <name>\n' +
       '$embed list\n' +
