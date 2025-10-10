@@ -2202,6 +2202,8 @@ if (command === 'help') {
       `• \`${PREFIX}embed send <name> [#channel]\` – Send a saved embed (or GIF-only embed)\n` +
       `• \`${PREFIX}embed delete <name>\` – Delete a saved embed\n` +
       `• \`${PREFIX}embed list\` – Show all saved embed names\n` +
+      `• \`${PREFIX}setgif <URL>\` – Set the persistent GIF embed URL\n` +
+      `• \`${PREFIX}showgif\` – Display the persistently saved GIF embed\n` +
       `• \`${PREFIX}rank\` – Show your rank card (prestige frames + progress bar)\n` +
       `• \`${PREFIX}setbg <imageURL>\` – Set background image for your rank card\n` +
       `• \`${PREFIX}prestige\` – Prestige when you reach max level (resets level, increments prestige)\n` +
@@ -2246,7 +2248,12 @@ if (command === 'help') {
       `• \`${PREFIX}logmode setmaster <channelID>\` – Set master log (Owner only)\n` +
       `• \`${PREFIX}logmode masteron|masteroff\` – Enable/disable master log (Owner only)\n` +
       `• \`${PREFIX}autodelete <userId> [on|off] [moreUserIds...]\` – Toggle auto-delete for user IDs (Owner/Immune only)\n` +
-      `• \`${PREFIX}autodelete list\` – Show auto-delete active list (Owner/Immune only)`
+      `• \`${PREFIX}autodelete list\` – Show auto-delete active list (Owner/Immune only)\n` +
+      `• \`${PREFIX}addxp @user <amount>\` – Add XP to a user (Immune only)\n` +
+      `• \`${PREFIX}removexp @user <amount>\` – Remove XP from a user (Immune only)\n` +
+      `• \`${PREFIX}setlevel @user <level>\` – Set user level (Immune only)\n` +
+      `• \`${PREFIX}setprestige @user <tier>\` – Set prestige level (Immune only)\n` +
+      `• \`${PREFIX}resetxp @user\` – Reset a user’s XP data (Immune only)`
     );
 
   const embed3 = new EmbedBuilder()
@@ -2283,14 +2290,10 @@ if (command === 'help') {
       `• \`${PREFIX}loadout [equip/unequip <item_id>]\` – Manage loadout\n` +
       `• \`${PREFIX}battle @user\` / \`${PREFIX}1v1\` – Automated 1v1 battle\n` +
       `• \`${PREFIX}dw @user\` / \`${PREFIX}deadliestwarrior\` – Turn-based Deadliest Warrior\n` +
-      `• \`${PREFIX}addxp @user <amount>\` – Add XP to a user (Immune only)\n` +
-      `• \`${PREFIX}removexp @user <amount>\` – Remove XP from a user (Immune only)\n` +
-      `• \`${PREFIX}setlevel @user <level>\` – Set user's level (Immune only)\n` +
-      `• \`${PREFIX}setprestige @user <prestige>\` – Set user's prestige (Immune only)\n` +
-      `• \`${PREFIX}resetxp @user\` – Reset all XP data for a user (Immune only)\n` +
       `• \`${PREFIX}setlevelupchannel #channel\` – Set channel for level-up announcements (Immune only)\n` +
       `• \`${PREFIX}disablelevelup\` – Disable level-up announcements (Immune only)\n` +
-      `• \`${PREFIX}xpsettings\` – Show XP system settings (use $setxpsetting <key> <value> is referenced in footer)\n` +
+      `• \`${PREFIX}xpsettings\` – Show XP system settings\n` +
+      `• \`${PREFIX}setxpsetting <key> <value>\` – Update XP system settings (Immune only)\n` +
       `• \`${PREFIX}promote/demote @user <rank>\` – Grant/revoke immunity (Owner only)\n` +
       `• \`${PREFIX}serverlist\` – List servers (Owner/Immune only)\n` +
       `• \`${PREFIX}forcesave\` – Manually save all bot data (Owner & Immune only)\n` +
