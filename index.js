@@ -3847,7 +3847,7 @@ if (message.content.startsWith('$autodelete')) {
   args.shift(); // remove "$autodelete"
 
   // 🖼️ Customize this GIF (shows at bottom of the list embed)
-  const AUTO_DELETE_GIF = "https://i.imgur.com/2VQrQ9o.gif";
+  const AUTO_DELETE_GIF = "https://media4.giphy.com/media/v1.Y2lkPTZjMDliOTUyc2I2NTRkY204aGEwcjRob2ZhbjU5ZDd1ZzF5NWFvMXBkc3ptYXEwOCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/4AoU8U5hfS2meEXc3q/giphy.gif";
 
   // ---- LIST ----
   if (args[0]?.toLowerCase() === 'list') {
