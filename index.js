@@ -2304,8 +2304,8 @@ if (command === 'help') {
       `  - Immune Users: Give/take except owner\n` +
       `  - Normal Users: Can only pay coins`
     )
-    .setFooter({ text: 'Use $help for full command list' })
-    .setImage('https://i.imgur.com/NAneRS5.gif');
+    .setFooter({ text: 'Bot developer and creator:TX_SOLDIER' })
+    .setImage('https://media4.giphy.com/media/v1.Y2lkPTZjMDliOTUyOWgwYTdtYXNjdmpnOWpib256anFtNmI1M3IwZW84eHUxZG5tcTluZyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/6YjbrQ0dun9ydpEqhG/giphy.gif');
 
   await message.channel.send({ embeds: [embed1] });
   await message.channel.send({ embeds: [embed2] });
@@ -3149,7 +3149,7 @@ else if (command === 'giveaway') {
             description: `**Prize:** ${prize}\n**Winner:** ${winner}!\n\n*(Giveaway ended by a moderator)*`,
             footer: { text: 'Ended by Moderator' },
             timestamp: new Date().toISOString(),
-            image: { url: 'https://i.imgur.com/u7B4DmJ.gif' }, // WINNER GIF
+            image: { url: 'https://media3.giphy.com/media/v1.Y2lkPTZjMDliOTUyYmpqN2Z2cDc3aDk1OXR0MGs1cW1hZ2RlbnB5d2ZidWVhemdzbWh0OSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/Z2XIQz9AXISznANAbB/giphy.gif' }, // WINNER GIF
         };
         await giveawayMessage.edit({ embeds: [winnerEmbed] });
         message.channel.send(`Congratulations ${winner}! You won the **${prize}**! (Giveaway ended early)`);
@@ -3162,7 +3162,7 @@ else if (command === 'giveaway') {
 
 else if (command === 'ping') {
     const sent = await message.channel.send({ content: "🏓 Pinging..." });
-    const pingEmbed = { color: 0x39FF14, title: "🏓 Pong!", description: `Latency is **${sent.createdTimestamp - message.createdTimestamp}ms**\nAPI Latency is **${Math.round(client.ws.ping)}ms**`, thumbnail: { url: "https://i.imgur.com/Abo2D8x.gif" } };
+    const pingEmbed = { color: 0x39FF14, title: "🏓 Pong!", description: `Latency is **${sent.createdTimestamp - message.createdTimestamp}ms**\nAPI Latency is **${Math.round(client.ws.ping)}ms**`, thumbnail: { url: "https://media2.giphy.com/media/v1.Y2lkPTZjMDliOTUyM3NueW5kOHp4d3Y3Ymp3amljM21rZW9zYjlueGFucWtncjJiZDU1ZiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/WEyJEtMeFAQDLmCf5H/giphy.gif" } };
     await sent.edit({ content: "", embeds: [pingEmbed] });
 }
 
