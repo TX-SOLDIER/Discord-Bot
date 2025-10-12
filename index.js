@@ -3005,7 +3005,7 @@ else if (command === 'giveaway') {
         description: `React with 🎉 to enter!\n\n**Prize:** ${prize}`, 
         footer: { text: 'Ends at' }, 
         timestamp: new Date(endTime).toISOString(),
-        image: { url: 'https://i.imgur.com/jKos16w.gif' }, // START GIF
+        image: { url: 'https://media1.giphy.com/media/v1.Y2lkPTZjMDliOTUyNjhnd2Q1dDB1bGxkMmQ4c3RiejB5NmRocTNiMWRmdjJnc2tzZXo1OCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/JqTZqf0HTAy9yOo38W/giphy.gif' }, // START GIF
     };
     const giveawayMessage = await message.channel.send({ embeds: [embed] });
     await giveawayMessage.react('🎉');
@@ -3026,7 +3026,7 @@ else if (command === 'giveaway') {
             description: `**Prize:** ${prize}\n**Winner:** ${winner}!`, 
             footer: { text: 'Ended at' }, 
             timestamp: new Date().toISOString(),
-            image: { url: 'https://i.imgur.com/u7B4DmJ.gif' }, // WINNER GIF
+            image: { url: 'https://media3.giphy.com/media/v1.Y2lkPTZjMDliOTUyYmpqN2Z2cDc3aDk1OXR0MGs1cW1hZ2RlbnB5d2ZidWVhemdzbWh0OSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/Z2XIQz9AXISznANAbB/giphy.gif' }, // WINNER GIF
         };
         await giveawayMessage.edit({ embeds: [winnerEmbed] });
         message.channel.send(`Congratulations ${winner}! You won the **${prize}**!`);
