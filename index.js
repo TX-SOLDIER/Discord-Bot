@@ -1975,41 +1975,55 @@ if (botData.autoDeleteUsers && botData.autoDeleteUsers[message.author?.id]) {
         }
     }
 
-    const guildCountingData = botData.countingData[message.guild.id];
-    if (guildCountingData && message.channel.id === guildCountingData.channelId) {
-        if (!message.content.startsWith(PREFIX)) {
-            const number = parseInt(message.content);
-            if (isNaN(number)) return; 
+    const guildCountingData = botData.countingData[message.guild?.id];
+if (guildCountingData && message.channel.id === guildCountingData.channelId) {
+    // Ignore bot messages
+    if (message.author.bot) return;
 
-            let failed = false;
-            if (number !== guildCountingData.currentCount + 1 || message.author.id === guildCountingData.lastUserId) {
-                const correctNextNumber = guildCountingData.currentCount + 1;
-                const reason = number !== correctNextNumber 
-                    ? `Wrong number noob! Learn to count.The next number was **${correctNextNumber}**.` 
-                    : `You can't count twice in a row you noob smh. Pay attention !`;
-                await message.react('❌');
-                await message.channel.send(`**Count Reset!** ${message.author} ruined it at **${guildCountingData.currentCount}**. ${reason} The count starts back at **1**.`);
-                guildCountingData.currentCount = 0;
-                guildCountingData.lastUserId = null;
-                failed = true;
-            } else {
-                guildCountingData.currentCount++;
-                guildCountingData.lastUserId = message.author.id;
-                
-                if (guildCountingData.currentCount > (guildCountingData.highScore || 0)) {
-                    guildCountingData.highScore = guildCountingData.currentCount;
-                }
-                const userId = message.author.id;
-                guildCountingData.leaderboard[userId] = (guildCountingData.leaderboard[userId] || 0) + 1;
-                
-                updateBalance(message.author.id, 5);
-                saveEconomyData();
-                await message.react('✅');
-            }
-            saveCountingData();
-            if (failed) return;
+    const isPrivileged = isImmune(message.author) || message.author.id === OWNER_ID;
+
+    // ✅ 1) If message doesn't start with prefix AND user is NOT immune/owner
+    if (!message.content.startsWith(PREFIX) && !isPrivileged) {
+        // Auto-delete any non-number
+        if (!/^\d+$/.test(message.content.trim())) {
+            return message.delete().catch(() => {});
         }
     }
+
+    // ✅ 2) Continue with your existing counting logic (number parsing)
+    if (!message.content.startsWith(PREFIX)) {
+        const number = parseInt(message.content);
+        if (isNaN(number)) return; 
+
+        let failed = false;
+        if (number !== guildCountingData.currentCount + 1 || message.author.id === guildCountingData.lastUserId) {
+            const correctNextNumber = guildCountingData.currentCount + 1;
+            const reason = number !== correctNextNumber 
+                ? `Wrong number noob! Learn to count.The next number was **${correctNextNumber}**.` 
+                : `You can't count twice in a row you noob smh. Pay attention !`;
+            await message.react('❌');
+            await message.channel.send(`**Count Reset!** ${message.author} ruined it at **${guildCountingData.currentCount}**. ${reason} The count starts back at **1**.`);
+            guildCountingData.currentCount = 0;
+            guildCountingData.lastUserId = null;
+            failed = true;
+        } else {
+            guildCountingData.currentCount++;
+            guildCountingData.lastUserId = message.author.id;
+            
+            if (guildCountingData.currentCount > (guildCountingData.highScore || 0)) {
+                guildCountingData.highScore = guildCountingData.currentCount;
+            }
+            const userId = message.author.id;
+            guildCountingData.leaderboard[userId] = (guildCountingData.leaderboard[userId] || 0) + 1;
+            
+            updateBalance(message.author.id, 5);
+            saveEconomyData();
+            await message.react('✅');
+        }
+        saveCountingData();
+        if (failed) return;
+    }
+}
 
     if (!message.content.startsWith(PREFIX) && !message.mentions.users.has(client.user.id)) return;
 
@@ -2312,7 +2326,6 @@ if (command === 'help') {
   await message.channel.send({ embeds: [embed3] });
 }
 
-
 else if (command === 'counting' || command === 'c') {
     const subcommand = args[0]?.toLowerCase();
 
@@ -2329,6 +2342,29 @@ else if (command === 'counting' || command === 'c') {
         };
         saveCountingData();
         return message.reply(`✅ Counting channel has been set to ${channel}. The next number is **1**.`);
+    }
+
+    // ✅ NEW: setnext command (owner/immunes only)
+    if (subcommand === 'setnext') {
+        if (!isImmune(message.author) && message.author.id !== OWNER_ID) {
+            return message.reply("❌ Only bot owner or immune users can set the next number!");
+        }
+
+        const newNumber = parseInt(args[1]);
+        if (isNaN(newNumber) || newNumber < 1) {
+            return message.reply('❌ Please provide a valid positive number.');
+        }
+
+        const data = botData.countingData[message.guild.id];
+        if (!data) {
+            return message.reply('❌ Counting is not active in this server.');
+        }
+
+        data.currentCount = newNumber - 1;
+        data.lastUserId = null; // reset last user so ANYONE can type the next number
+        saveCountingData();
+
+        return message.reply(`✅ Next number has been set to **${newNumber}**.`);
     }
 
     if (subcommand === 'off') {
@@ -2367,7 +2403,7 @@ else if (command === 'counting' || command === 'c') {
         return message.channel.send({ embeds: [leaderboardEmbed] });
     }
 
-    return message.reply('❌ Invalid subcommand. Use `$counting set`, `$counting off`, or `$counting leaderboard`.');
+    return message.reply('❌ Invalid subcommand. Use `$counting set`, `$counting setnext`, `$counting off`, or `$counting leaderboard`.');
 }
 
 else if (command === 'hl') {
