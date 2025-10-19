@@ -3176,7 +3176,7 @@ else if (command === 'uptime') {
 }
 
 else if (command === 'botinfo') {
-    const botInfoEmbed = new EmbedBuilder().setColor(0x00FFFF).setTitle(`🤖 ${client.user.tag} — Bot Info`).setDescription(`📡 [SECURE TRANSMISSION] 📡\n\n**Unit:** Discord Bot\n**Creator / Operator:** TX_SOLDIER\n**Status:** Mission-Ready. Armed.`).addFields({ name: 'Capabilities', value: `**Defense:** Active protection for allied servers.\n` + `**Offense:** Engage threats if provoked or mission parameters require.\n` + `**Recon:** Logging and monitoring activities\n` + `**Special Operations:** Classified.` }).setImage("https://i.imgur.com/yourTopGif.gif").setFooter({ text: 'End Transmission.', iconURL: "https://i.imgur.com/yourBottomGif.gif" });
+    const botInfoEmbed = new EmbedBuilder().setColor(0x00FFFF).setTitle(`🤖 ${client.user.tag} — Bot Info`).setDescription(`📡 [SECURE TRANSMISSION] 📡\n\n**Unit:** Discord Bot\n**Creator / Operator:** TX_SOLDIER\n**Status:** Mission-Ready. Armed.`).addFields({ name: 'Capabilities', value: `**Defense:** Active protection for allied servers.\n` + `**Offense:** Engage threats if provoked or mission parameters require.\n` + `**Recon:** Logging and monitoring activities\n` + `**Special Operations:** Classified.` }).setImage("https://i.imgur.com/yourTopGif.gif").setFooter({ text: 'End Transmission.', iconURL: "https://media2.giphy.com/media/v1.Y2lkPTZjMDliOTUydGNjNGl3eTZlbTM4MzlxNDRtamFlMWpyaGNiejUzNHYyYXBxM2wxbCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/NsGhIiCIw6yP8UGg0e/giphy.gif" });
     message.channel.send({ embeds: [botInfoEmbed] });
 }
 
