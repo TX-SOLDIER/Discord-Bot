@@ -26,6 +26,11 @@ const client = new Client({
   ],
 });
 
+// ✅ Error logging to catch startup/login issues
+client.on('error', console.error);
+client.on('shardError', console.error);
+process.on('unhandledRejection', console.error);
+
 // ---- Google Gemini AI Setup ----
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
 
