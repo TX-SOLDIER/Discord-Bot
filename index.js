@@ -2503,7 +2503,7 @@ else if (command === 'gtn') {
 else if (command === 'lottery') {
     const nextDraw = new Date(botData.lotteryData.drawDate);
     const timeUntilDraw = Math.floor(nextDraw.getTime() / 1000);
-    const gifUrl = 'https://i.imgur.com/rN99D4p.png';
+    const gifUrl = 'https://media3.giphy.com/media/v1.Y2lkPTZjMDliOTUyNmY5NWR2M2pjcTZqM2J4bHp4aTVxcWh6b3Ftb2QzeWNvMmhhNnNyNyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/6r66mC6UA0fEk2QAeZ/giphy.gif';
     const infoEmbed = new EmbedBuilder().setTitle('🎟️ Weekly Lottery Information').setDescription('Match 7 unique numbers (1-99) to win the jackpot!').addFields({ name: '🏆 Jackpot Prize', value: `**${botData.lotteryData.prizePool.toLocaleString()} Gold Coins**`, inline: true }, { name: '⏰ Next Draw', value: `<t:${timeUntilDraw}:R> (on <t:${timeUntilDraw}:F>)`, inline: true }, { name: '🔢 Your Tickets', value: `${botData.lotteryData.entries[message.guild.id]?.[message.author.id]?.length || 0}`, inline: true }, { name: '💵 Cost to Enter', value: '1,000 Gold Coins per ticket', inline: true }, { name: '❓ How to Play', value: 'Use `$buyticket <num1> <num2> ... <num7>`', inline: false }).setColor(0x9B59B6).setImage(gifUrl).setFooter({ text: 'Good luck! All tickets reset after the draw.' });
     message.channel.send({ embeds: [infoEmbed] });
 }
