@@ -62,6 +62,7 @@ let botData = {
     warnings: {},
     activeQotdChannels: [],
     qotdSettings: {},
+    sentQuestions: {},
     welcomeMessages: {},
     leaveMessages: {},
     logChannels: {},
@@ -1072,25 +1073,32 @@ function formatHand(hand) {
 
 // ---- Question of the Day ----
 const qotdIntervals = new Map();
-let sentQuestions = {};
+// DELETE THE LINE: let sentQuestions = {};  <-- We don't need this anymore!
 
 function sendQuestion(channelId) {
   const channel = client.channels.cache.get(channelId);
   if (!channel) return;
 
-  if (!sentQuestions[channelId]) sentQuestions[channelId] = [];
+  // Initialize the persistent storage if it doesn't exist
+  if (!botData.sentQuestions) botData.sentQuestions = {};
+  if (!botData.sentQuestions[channelId]) botData.sentQuestions[channelId] = [];
 
+  // Use botData.sentQuestions instead of the temporary variable
   const unusedIndices = qotdQuestions
     .map((_, i) => i)
-    .filter(i => !sentQuestions[channelId].includes(i));
+    .filter(i => !botData.sentQuestions[channelId].includes(i));
 
+  // If we ran out of questions, reset the list for this channel
   if (unusedIndices.length === 0) {
-    sentQuestions[channelId] = [];
+    botData.sentQuestions[channelId] = [];
     unusedIndices.push(...qotdQuestions.map((_, i) => i));
   }
 
   const randomIndex = unusedIndices[Math.floor(Math.random() * unusedIndices.length)];
-  sentQuestions[channelId].push(randomIndex);
+  
+  // Save the new index to persistent storage
+  botData.sentQuestions[channelId].push(randomIndex);
+  saveQotdState(); // <--- THIS SAVES IT TO THE DATABASE!
 
   const prefix = botData.qotdSettings[channelId]?.everyone ? '@everyone ' : '';
   const question = qotdQuestions[randomIndex];
@@ -1128,7 +1136,11 @@ function stopQotd(channelId) {
     saveQotdSettings();
   }
 
-  if (sentQuestions[channelId]) delete sentQuestions[channelId];
+  // Clean up the persistent data if you want (optional)
+  if (botData.sentQuestions && botData.sentQuestions[channelId]) {
+      delete botData.sentQuestions[channelId];
+      saveQotdState();
+  }
 }
 
 // ---- Permanent Global Log Channel ----
