@@ -2541,6 +2541,26 @@ else if (command === 'pay') {
     saveEconomyData();
     message.reply(`✅ You paid **${amount}** Gold Coins to **${target.username}**.`);
 }
+
+else if (command === 'immunelist') {
+  if (message.author.id !== OWNER_ID) {
+    return message.reply('❌ Only the bot owner can view immune users.');
+  }
+
+  const immuneEntries = Object.entries(botData.immuneUsers || {});
+
+  if (immuneEntries.length === 0) {
+    return message.reply('ℹ️ There are currently **no immune users**.');
+  }
+
+  let list = immuneEntries
+    .map(([id, rank], i) => `${i + 1}. <@${id}> — **${rank}**`)
+    .join('\n');
+
+  message.channel.send({
+    content: `🛡️ **Immune Users List:**\n${list}`
+  });
+}
   
 else if (command === 'store') {
     const subcommand = args[0]?.toLowerCase();
