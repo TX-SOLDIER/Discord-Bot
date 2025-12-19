@@ -6,7 +6,15 @@
 // ===========================================================================
 
 require('dotenv').config();
-const { Client, GatewayIntentBits, PermissionsBitField, EmbedBuilder } = require('discord.js');
+const { 
+  Client,
+  GatewayIntentBits,
+  PermissionsBitField,
+  EmbedBuilder,
+  REST,
+  Routes,
+  SlashCommandBuilder
+} = require('discord.js');
 const fetch = require('node-fetch');
 const express = require('express');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
