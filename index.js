@@ -2551,14 +2551,88 @@ else if (command === 'hl') {
   return message.channel.send({ embeds: [winEmbed] });
 }
 
-  
-else if (command === 'lottery') {
+  // =========================
+  // SLOTS COMMAND ($slots)
+  // =========================
+  } else if (command === 'slots') {
+    const bet = parseInt(args[0]);
+    const balance = getBalance(message.author.id);
+
+    if (isNaN(bet) || bet <= 0) {
+      return message.reply("❌ Please provide a valid amount to bet. Example: `$slots 100`");
+    }
+    if (bet > balance) {
+      return message.reply(`❌ You don't have enough Gold Coins. Your balance: **${balance}**`);
+    }
+
+    const emojis = ['🍎', '💎', '🎰', '🍒', '🌟'];
+    const res1 = emojis[Math.floor(Math.random() * emojis.length)];
+    const res2 = emojis[Math.floor(Math.random() * emojis.length)];
+    const res3 = emojis[Math.floor(Math.random() * emojis.length)];
+
+    let winnings = 0;
+    let resultText = "";
+    let color = 0x000000;
+
+    if (res1 === res2 && res2 === res3) {
+      winnings = bet * 5; 
+      resultText = `🎉 **JACKPOT!**\n\nAll three matched! You won **${winnings}** Gold Coins!`;
+      color = 0xFFD700; 
+    } else if (res1 === res2 || res2 === res3 || res1 === res3) {
+      winnings = bet * 2; 
+      resultText = `✨ **Nice!**\n\nYou got a double match! You won **${winnings}** Gold Coins!`;
+      color = 0x00FF00; 
+    } else {
+      winnings = -bet; 
+      resultText = `💀 **Better luck next time!**\n\nNo matches. You lost **${bet}** Gold Coins.`;
+      color = 0xFF0000; 
+    }
+
+    const newBalance = updateBalance(message.author.id, winnings);
+    saveEconomyData(); 
+
+    const slotsEmbed = new EmbedBuilder()
+      .setTitle('🎰 Slot Machine')
+      .setDescription(`**[ ${res1} | ${res2} | ${res3} ]**\n\n${resultText}`)
+      .addFields(
+        { name: '💰 Bet Amount', value: `${bet} Gold Coins`, inline: true },
+        { name: '💸 New Balance', value: `${newBalance} Gold Coins`, inline: true }
+      )
+      .setColor(color)
+      .setImage('https://media2.giphy.com/media/v1.Y2lkPTZjMDliOTUybmp4YmloenYzNHp2NmZnY2dydThweHVqMmVvNDZiZHQxeWIyZnptMSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/DS57LWXWFN70hI37kQ/giphy.gif')
+      .setTimestamp();
+
+    return message.channel.send({ embeds: [slotsEmbed] });
+
+  // =========================
+  // LOTTERY COMMAND ($lottery)
+  // =========================
+  } else if (command === 'lottery') {
     const nextDraw = new Date(botData.lotteryData.drawDate);
     const timeUntilDraw = Math.floor(nextDraw.getTime() / 1000);
     const gifUrl = 'https://media3.giphy.com/media/v1.Y2lkPTZjMDliOTUyNmY5NWR2M2pjcTZqM2J4bHp4aTVxcWh6b3Ftb2QzeWNvMmhhNnNyNyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/6r66mC6UA0fEk2QAeZ/giphy.gif';
-    const infoEmbed = new EmbedBuilder().setTitle('🎟️ Weekly Lottery Information').setDescription('Match 7 unique numbers (1-99) to win the jackpot!').addFields({ name: '🏆 Jackpot Prize', value: `**${botData.lotteryData.prizePool.toLocaleString()} Gold Coins**`, inline: true }, { name: '⏰ Next Draw', value: `<t:${timeUntilDraw}:R> (on <t:${timeUntilDraw}:F>)`, inline: true }, { name: '🔢 Your Tickets', value: `${botData.lotteryData.entries[message.guild.id]?.[message.author.id]?.length || 0}`, inline: true }, { name: '💵 Cost to Enter', value: '1,000 Gold Coins per ticket', inline: true }, { name: '❓ How to Play', value: 'Use `$buyticket <num1> <num2> ... <num7>`', inline: false }).setColor(0x9B59B6).setImage(gifUrl).setFooter({ text: 'Good luck! All tickets reset after the draw.' });
+    
+    // Check if entries for this guild exist
+    const guildEntries = botData.lotteryData.entries[message.guild.id] || {};
+    const userTickets = guildEntries[message.author.id]?.length || 0;
+
+    const infoEmbed = new EmbedBuilder()
+      .setTitle('🎟️ Weekly Lottery Information')
+      .setDescription('Match 7 unique numbers (1-99) to win the jackpot!')
+      .addFields(
+        { name: '🏆 Jackpot Prize', value: `**${botData.lotteryData.prizePool.toLocaleString()} Gold Coins**`, inline: true },
+        { name: '⏰ Next Draw', value: `<t:${timeUntilDraw}:R>`, inline: true },
+        { name: '🔢 Your Tickets', value: `${userTickets}`, inline: true },
+        { name: '💵 Cost to Enter', value: '1,000 Gold Coins per ticket', inline: true },
+        { name: '❓ How to Play', value: 'Use `$buyticket <num1> <num2> ... <num7>`', inline: false }
+      )
+      .setColor(0x9B59B6)
+      .setImage(gifUrl)
+      .setFooter({ text: 'Good luck! All tickets reset after the draw.' });
+
     message.channel.send({ embeds: [infoEmbed] });
-}
+  }
+
 
 else if (command === 'buyticket') {
     const ticketCost = 1000;
