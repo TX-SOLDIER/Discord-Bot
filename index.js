@@ -2601,8 +2601,7 @@ else if (command === 'hl') {
       .setImage('https://media2.giphy.com/media/v1.Y2lkPTZjMDliOTUybmp4YmloenYzNHp2NmZnY2dydThweHVqMmVvNDZiZHQxeWIyZnptMSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/DS57LWXWFN70hI37kQ/giphy.gif')
       .setTimestamp();
 
-    return message.channel.send({ embeds: [slotsEmbed] });
-}
+    return message.channel.send({ embeds: [slotsEmbed] FOUNl
 
   // =========================
   // LOTTERY COMMAND ($lottery)
