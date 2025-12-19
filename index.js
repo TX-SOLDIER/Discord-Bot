@@ -19,6 +19,14 @@ const fetch = require('node-fetch');
 const express = require('express');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
+// ---- Slash Commands Definition ----
+const commands = [
+  new SlashCommandBuilder()
+    .setName('hi')
+    .setDescription('Say hello')
+    .toJSON(),
+];
+
 const app = express();
 app.get('/', (req, res) => res.send('✅ Bot is running!'));
 const PORT = process.env.PORT || 3000;
@@ -1351,18 +1359,40 @@ async function sendLog(guildId, messageContent) {
   }
 }
 
+// ---- Slash Command Handler ----
+client.on('interactionCreate', async interaction => {
+  if (!interaction.isChatInputCommand()) return;
+
+  if (interaction.commandName === 'hi') {
+    await interaction.reply('Hello world 👋');
+  }
+});
+
 // ---- Bot Startup Event (`ready`) ----
 client.once('ready', async () => {
   console.log("🚀 Bot starting up... Loading persistent data from JSONBin...");
   await loadData();
   
-  // This check now runs *after* data has been loaded from the bin.
   if (!botData.storeData || Object.keys(botData.storeData).length === 0) {
       console.log("🏬 Store data is empty. Initializing with default items...");
-      initializeStore(); // This will call saveData() automatically
+      initializeStore();
   }
 
   console.log(`✅ Logged in as ${client.user.tag}`);
+
+  // ---- Register Slash Commands ----
+  const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
+
+  try {
+    console.log('🔁 Refreshing application (/) commands...');
+    await rest.put(
+      Routes.applicationCommands(client.user.id),
+      { body: commands }
+    );
+    console.log('✅ Slash commands registered.');
+  } catch (error) {
+    console.error('❌ Failed to register slash commands:', error);
+  }
   
   // Start systems that depend on loaded data.
   startAllQotd();
