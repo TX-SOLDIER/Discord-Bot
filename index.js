@@ -2549,7 +2549,6 @@ else if (command === 'hl') {
     .setColor(0x00FF00);
 
   return message.channel.send({ embeds: [winEmbed] });
-}
 
 // =========================
   // SLOTS COMMAND ($slots)
