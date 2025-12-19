@@ -2551,7 +2551,7 @@ else if (command === 'hl') {
   return message.channel.send({ embeds: [winEmbed] });
 }
 
-  // =========================
+// =========================
   // SLOTS COMMAND ($slots)
   // =========================
   } else if (command === 'slots') {
@@ -2575,21 +2575,21 @@ else if (command === 'hl') {
     let color = 0x000000;
 
     if (res1 === res2 && res2 === res3) {
-      winnings = bet * 5; 
+      winnings = bet * 5;
       resultText = `🎉 **JACKPOT!**\n\nAll three matched! You won **${winnings}** Gold Coins!`;
-      color = 0xFFD700; 
+      color = 0xFFD700;
     } else if (res1 === res2 || res2 === res3 || res1 === res3) {
-      winnings = bet * 2; 
+      winnings = bet * 2;
       resultText = `✨ **Nice!**\n\nYou got a double match! You won **${winnings}** Gold Coins!`;
-      color = 0x00FF00; 
+      color = 0x00FF00;
     } else {
-      winnings = -bet; 
+      winnings = -bet;
       resultText = `💀 **Better luck next time!**\n\nNo matches. You lost **${bet}** Gold Coins.`;
-      color = 0xFF0000; 
+      color = 0xFF0000;
     }
 
     const newBalance = updateBalance(message.author.id, winnings);
-    saveEconomyData(); 
+    saveEconomyData();
 
     const slotsEmbed = new EmbedBuilder()
       .setTitle('🎰 Slot Machine')
@@ -2603,7 +2603,6 @@ else if (command === 'hl') {
       .setTimestamp();
 
     return message.channel.send({ embeds: [slotsEmbed] });
-}
 
   // =========================
   // LOTTERY COMMAND ($lottery)
@@ -2612,8 +2611,7 @@ else if (command === 'hl') {
     const nextDraw = new Date(botData.lotteryData.drawDate);
     const timeUntilDraw = Math.floor(nextDraw.getTime() / 1000);
     const gifUrl = 'https://media3.giphy.com/media/v1.Y2lkPTZjMDliOTUyNmY5NWR2M2pjcTZqM2J4bHp4aTVxcWh6b3Ftb2QzeWNvMmhhNnNyNyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/6r66mC6UA0fEk2QAeZ/giphy.gif';
-    
-    // Check if entries for this guild exist
+
     const guildEntries = botData.lotteryData.entries[message.guild.id] || {};
     const userTickets = guildEntries[message.author.id]?.length || 0;
 
@@ -2631,9 +2629,8 @@ else if (command === 'hl') {
       .setImage(gifUrl)
       .setFooter({ text: 'Good luck! All tickets reset after the draw.' });
 
-    message.channel.send({ embeds: [infoEmbed] });
-  }
-
+    return message.channel.send({ embeds: [infoEmbed] });
+}
 
 else if (command === 'buyticket') {
     const ticketCost = 1000;
