@@ -2354,53 +2354,113 @@ else if (command === 'counting' || command === 'c') {
 }
 
 else if (command === 'hl') {
-    const game = higherLowerGames.get(message.guild.id);
-    const reward = 100;
-    const gifUrl = 'https://i.imgur.com/rN99D4p.png';
-    
-    if (args.length === 0) {
-        if (game) {
-            return message.reply(`❌ A Higher or Lower game is already active! Guess \`higher\` or \`lower\` to continue, or wait for it to expire.`);
-        }
-        const initialNumber = Math.floor(Math.random() * 100) + 1;
-        const nextNumber = Math.floor(Math.random() * 100) + 1;
-        const startEmbed = new EmbedBuilder().setTitle('⬆️⬇️ Higher or Lower').setDescription(`**Starting Number:** \`${initialNumber}\`\n\nWill the next number be **Higher** or **Lower** than \`${initialNumber}\`?`).addFields({ name: '💰 Potential Win', value: `\`${reward} Gold Coins\``, inline: true }).setFooter({ text: 'Reply with "higher" or "lower" to guess. Game expires in 30 seconds.' }).setColor(0x0099FF).setImage(gifUrl);
-        const gameMessage = await message.channel.send({ embeds: [startEmbed] });
-        const newGame = { messageId: gameMessage.id, number: nextNumber, attempts: 1, player: message.author.id, initialNumber: initialNumber };
-        higherLowerGames.set(message.guild.id, newGame);
-        setTimeout(() => {
-            if (higherLowerGames.get(message.guild.id)?.messageId === gameMessage.id) {
-                higherLowerGames.delete(message.guild.id);
-                gameMessage.edit({ embeds: [startEmbed.setFooter({ text: 'Game expired due to inactivity.' }).setColor(0xAAAAAA)] }).catch(() => {});
-            }
-        }, 30000);
-    } else if (game && game.player === message.author.id) {
-        const guess = args[0].toLowerCase();
-        if (guess !== 'higher' && guess !== 'lower') {
-            return message.reply('❌ Invalid guess. Please reply with `higher` or `lower`.');
-        }
-        const currentNumber = game.initialNumber;
-        const nextNumber = game.number;
-        let didWin = false;
-        let resultMessage = '';
-        if (guess === 'higher') {
-            didWin = nextNumber > currentNumber;
-            resultMessage = didWin ? `🎉 **Higher!** \`${nextNumber}\` is greater than \`${currentNumber}\`.` : `💔 **Lower!** \`${nextNumber}\` is not greater than \`${currentNumber}\`.`;
-        } else if (guess === 'lower') {
-            didWin = nextNumber < currentNumber;
-            resultMessage = didWin ? `🎉 **Lower!** \`${nextNumber}\` is less than \`${currentNumber}\`.` : `💔 **Higher!** \`${nextNumber}\` is not less than \`${currentNumber}\`.`;
-        }
-        higherLowerGames.delete(message.guild.id);
-        const finalEmbed = new EmbedBuilder().setTitle('⬆️⬇️ Higher or Lower: Result').setDescription(resultMessage).setImage(gifUrl);
-        if (didWin) {
-            const newBalance = updateBalance(message.author.id, reward);
-            saveEconomyData();
-            finalEmbed.setColor(0x00FF00).addFields({ name: '💰 Winnings', value: `+${reward} Gold Coins`, inline: true }, { name: '💸 New Balance', value: `\`${newBalance}\` Gold Coins`, inline: true });
-        } else {
-            finalEmbed.setColor(0xFF0000).addFields({ name: '😭 Loss', value: 'The game has ended.' });
-        }
-        message.channel.send({ embeds: [finalEmbed] });
+  const channelId = message.channel.id;
+  const game = higherLowerGames.get(channelId);
+  const reward = 100;
+  const COOLDOWN = 3000; // 3s per user
+
+  // =========================
+  // END GAME
+  // =========================
+  if (args[0] === 'end') {
+    if (!game) return message.reply('❌ No Higher / Lower game is running.');
+
+    const isStarter = game.starterId === message.author.id;
+    const isOwner = message.author.id === OWNER_ID;
+    const immune = isImmune(message.author);
+
+    if (!isStarter && !isOwner && !immune) {
+      return message.reply(
+        '❌ Only the game starter, immune users, or the owner can end this game.'
+      );
     }
+
+    higherLowerGames.delete(channelId);
+
+    return message.channel.send(
+      `🛑 **Higher / Lower ended.**\nThe number was **${game.number}**.`
+    );
+  }
+
+  // =========================
+  // START GAME
+  // =========================
+  if (!game) {
+    const secret = Math.floor(Math.random() * 100) + 1;
+
+    const startEmbed = new EmbedBuilder()
+      .setTitle('⬆️⬇️ Higher or Lower')
+      .setDescription(
+        '🎯 I picked a number between **1–100**.\n\n' +
+        'Type a number to guess!\n\n' +
+        '⏱️ **Cooldown:** 3 seconds per user\n' +
+        '🛑 **End game:** `!hl end`'
+      )
+      .setColor(0x0099FF);
+
+    await message.channel.send({ embeds: [startEmbed] });
+
+    higherLowerGames.set(channelId, {
+      number: secret,
+      starterId: message.author.id,
+      lastGuess: new Map(),
+      startedAt: Date.now(),
+    });
+
+    // Auto-expire after 10 minutes
+    setTimeout(() => {
+      if (higherLowerGames.has(channelId)) {
+        higherLowerGames.delete(channelId);
+        message.channel.send('⌛ **Higher / Lower ended due to inactivity.**');
+      }
+    }, 10 * 60 * 1000);
+
+    return;
+  }
+
+  // =========================
+  // GUESS HANDLING
+  // =========================
+  const guess = parseInt(args[0], 10);
+  if (isNaN(guess)) return;
+
+  if (guess < 1 || guess > 100) return;
+
+  const now = Date.now();
+  const last = game.lastGuess.get(message.author.id) || 0;
+
+  if (now - last < COOLDOWN) return; // silent anti-spam
+
+  game.lastGuess.set(message.author.id, now);
+
+  if (guess < game.number) {
+    return message.react('⬆️');
+  }
+
+  if (guess > game.number) {
+    return message.react('⬇️');
+  }
+
+  // =========================
+  // WIN
+  // =========================
+  higherLowerGames.delete(channelId);
+
+  const newBalance = updateBalance(message.author.id, reward);
+  saveEconomyData();
+
+  const winEmbed = new EmbedBuilder()
+    .setTitle('🎉 Correct Guess!')
+    .setDescription(
+      `<@${message.author.id}> guessed **${game.number}** correctly!`
+    )
+    .addFields(
+      { name: '💰 Reward', value: `+${reward} Gold Coins`, inline: true },
+      { name: '💸 New Balance', value: `${newBalance}`, inline: true }
+    )
+    .setColor(0x00FF00);
+
+  message.channel.send({ embeds: [winEmbed] });
 }
 
 else if (command === 'gtn') {
