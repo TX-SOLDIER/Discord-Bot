@@ -2463,45 +2463,95 @@ else if (command === 'hl') {
   message.channel.send({ embeds: [winEmbed] });
 }
 
-else if (command === 'gtn') {
-    const game = guessNumberGames.get(message.channel.id);
-    const reward = 10000;
-    const gifUrl = 'https://i.imgur.com/rN99D4p.png';
+} else if (command === 'gtn') {
+  const channelId = message.channel.id;
+  const game = guessNumberGames.get(channelId);
+  const reward = 100; // Reward for winning
 
-    if (args.length === 0) {
-        if (game) {
-            return message.reply(`❌ A Guess the Number game is already active in this channel!`);
-        }
-        const targetNumber = Math.floor(Math.random() * 100) + 1;
-        guessNumberGames.set(message.channel.id, { number: targetNumber, player: null, attempts: 0 });
-        const startEmbed = new EmbedBuilder().setTitle('🔢 Guess The Number (1-100)').setDescription('I have chosen a secret number between **1 and 100**. Start guessing!').addFields({ name: '🏆 Jackpot', value: `**${reward} Gold Coins**`, inline: true }).setFooter({ text: 'First user to guess correctly wins!' }).setColor(0x3498DB).setImage(gifUrl);
-        return message.channel.send({ embeds: [startEmbed] });
-    } else {
-        if (!game) {
-            return message.reply('❌ No Guess the Number game is currently active. Start one with `$gtn`.');
-        }
-        const guess = parseInt(args[0]);
-        if (isNaN(guess) || guess < 1 || guess > 100) {
-            return message.reply('❌ Please guess a valid number between 1 and 100.');
-        }
-        game.attempts++;
-        let response = '';
-        if (guess < game.number) {
-            response = `⬆️ Too low! Try a higher number.`;
-        } else if (guess > game.number) {
-            response = `⬇️ Too high! Try a lower number.`;
-        } else {
-            const winner = message.author;
-            guessNumberGames.delete(message.channel.id);
-            const newBalance = updateBalance(winner.id, reward);
-            saveEconomyData();
-            const winEmbed = new EmbedBuilder().setTitle('🎉 GUESS THE NUMBER: WINNER! 🎉').setDescription(`Congratulations, <@${winner.id}>! You guessed the number **${game.number}** in **${game.attempts}** attempts!`).addFields({ name: '🏆 Winnings', value: `+${reward} Gold Coins`, inline: true }, { name: '💸 New Balance', value: `\`${newBalance}\` Gold Coins`, inline: true }).setColor(0x2ECC71).setImage(gifUrl);
-            return message.channel.send({ embeds: [winEmbed] });
-        }
-        message.reply(response);
+  // =========================
+  // END GAME LOGIC
+  // =========================
+  if (args[0] === 'end') {
+    if (!game) return message.reply('❌ No GTN game is running in this channel.');
+
+    const isStarter = game.starterId === message.author.id;
+    const isOwner = message.author.id === OWNER_ID;
+    const immune = isImmune(message.author);
+
+    if (!isStarter && !isOwner && !immune) {
+      return message.reply('❌ Only the game starter, immune users, or the owner can end this game.');
     }
+
+    guessNumberGames.delete(channelId);
+    return message.channel.send(`🛑 **GTN ended.** The number was **${game.number}**.`);
+  }
+
+  // =========================
+  // START GAME LOGIC
+  // =========================
+  if (!game) {
+    const secret = Math.floor(Math.random() * 100) + 1;
+    
+    guessNumberGames.set(channelId, {
+      number: secret,
+      starterId: message.author.id,
+      attempts: 0
+    });
+
+    const startEmbed = new EmbedBuilder()
+      .setTitle('🎯 Guess the Number')
+      .setDescription('I picked a number between **1–100**.\n\nType `$gtn <number>` to guess!\n🛑 **End game:** `$gtn end`')
+      .setColor(0xFFA500);
+
+    return message.channel.send({ embeds: [startEmbed] });
+  }
+
+  // =========================
+  // GUESS HANDLING
+  // =========================
+  const guess = parseInt(args[0], 10);
+  
+  // If they just typed $gtn without a number (and game is already running)
+  if (isNaN(guess)) {
+    return message.reply('❓ Please provide a number! Example: `$gtn 50`');
+  }
+
+  if (guess < 1 || guess > 100) {
+    return message.reply('❌ Please guess a number between 1 and 100.');
+  }
+
+  game.attempts++;
+
+  if (guess < game.number) {
+    return message.reply('⬆️ **Higher!**');
+  }
+
+  if (guess > game.number) {
+    return message.reply('⬇️ **Lower!**');
+  }
+
+  // =========================
+  // WIN LOGIC
+  // =========================
+  guessNumberGames.delete(channelId);
+
+  const newBalance = updateBalance(message.author.id, reward);
+  saveEconomyData();
+
+  const winEmbed = new EmbedBuilder()
+    .setTitle('🎉 Correct!')
+    .setDescription(`<@${message.author.id}> guessed **${game.number}** correctly in **${game.attempts}** tries!`)
+    .addFields(
+      { name: '💰 Reward', value: `+${reward} Gold Coins`, inline: true },
+      { name: '💸 New Balance', value: `${newBalance}`, inline: true }
+    )
+    .setThumbnail('https://i.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHJueXF6bm9sZzRycHByZ3R6Z3R6Z3R6Z3R6Z3R6Z3R6Z3R6JmVwPXYxX2ludGVybmFsX2dpZl9ieV9pZCZjdD1n/26tOZ42Mg6pbMUMM0/giphy.gif')
+    .setColor(0x00FF00);
+
+  return message.channel.send({ embeds: [winEmbed] });
 }
 
+  
 else if (command === 'lottery') {
     const nextDraw = new Date(botData.lotteryData.drawDate);
     const timeUntilDraw = Math.floor(nextDraw.getTime() / 1000);
