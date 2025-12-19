@@ -2463,7 +2463,7 @@ else if (command === 'hl') {
   message.channel.send({ embeds: [winEmbed] });
 }
 
-} else if (command === 'gtn') {
+  else if (command === 'gtn') {
   const channelId = message.channel.id;
   const game = guessNumberGames.get(channelId);
   const reward = 100; // Reward for winning
