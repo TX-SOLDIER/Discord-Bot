@@ -2256,7 +2256,7 @@ if (command === 'help') {
       `• \`${PREFIX}disablelevelup\` – Disable level-up announcements (Immune only)\n` +
       `• \`${PREFIX}xpsettings\` – Show XP system settings\n` +
       `• \`${PREFIX}setxpsetting <key> <value>\` – Update XP system settings (Immune only)\n` +
-      `• \`${PREFIX}promote/demote @user <rank>\` – Grant/revoke immunity (Owner only)\n` +
+      `• \`${PREFIX}promote/demote @user <rank>\` – Grant/revoke immunity PREFIX immunitylist for list of admin.(Owner only)\n` +
       `• \`${PREFIX}serverlist\` – List servers (Owner/Immune only)\n` +
       `• \`${PREFIX}forcesave\` – Manually save all bot data (Owner & Immune only)\n` +
       `• Immunity Ranks: 2LT, 1LT, CPT, MAJ, LTC, COL, BG, MG, LTG, GEN\n` +
