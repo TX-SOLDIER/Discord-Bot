@@ -1381,7 +1381,7 @@ client.once('ready', async () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
 
   // ---- Register Slash Commands ----
-  const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
+  const rest = new REST({ version: '10' }).setToken(process.env.BOT_TOKEN);
 
   try {
     console.log('🔁 Refreshing application (/) commands...');
