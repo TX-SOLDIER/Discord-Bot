@@ -47,6 +47,9 @@ client.on('error', console.error);
 client.on('shardError', console.error);
 process.on('unhandledRejection', console.error);
 
+const TAGSPAM_DELETE_TIME = 10_000; // 10 seconds
+const MAX_TAGSPAM = 50;
+
 // ---- Google Gemini AI Setup ----
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
 
@@ -3382,6 +3385,64 @@ else if (command === 'giveaway') {
     }
 }
 
+if (command === 'tagspam') {
+
+  // 🚫 ONLY OWNER OR IMMUNE USERS CAN USE
+  if (!isImmune(message.author)) {
+    return message.reply('❌ You are not allowed to use this command.');
+  }
+
+  const target = message.mentions.users.first();
+  const count = parseInt(args[1]);
+
+  if (!target) {
+    return message.reply('❌ You must mention a user.\nExample: `$tagspam @user 10`');
+  }
+
+  // 🛡️ IMMUNE + OWNER CANNOT BE TARGETED
+  if (isImmune(target)) {
+    return message.reply('❌ You cannot tag spam an immune user or the owner.');
+  }
+
+  if (isNaN(count) || count < 1) {
+    return message.reply('❌ Please provide a valid number.');
+  }
+
+  if (count > MAX_TAGSPAM) {
+    return message.reply(`❌ Max allowed tags is **${MAX_TAGSPAM}**.`);
+  }
+
+  const mention = `<@${target.id}>`;
+  let batch = '';
+  const sentMessages = [];
+
+  for (let i = 0; i < count; i++) {
+    if ((batch + mention + ' ').length > 1900) {
+      const msg = await message.channel.send(batch);
+      sentMessages.push(msg);
+      batch = '';
+    }
+    batch += mention + ' ';
+  }
+
+  if (batch.length > 0) {
+    const msg = await message.channel.send(batch);
+    sentMessages.push(msg);
+  }
+
+  // ⏱️ AUTO DELETE AFTER 10 SECONDS
+  setTimeout(() => {
+    for (const msg of sentMessages) {
+      msg.delete().catch(() => {});
+    }
+  }, TAGSPAM_DELETE_TIME);
+
+  await sendLog(
+    message.guild.id,
+    `\`[TAGSPAM]\` **${message.author.tag}** spam-tagged **${target.tag}** ${count} times (auto-deleted)`
+  );
+}
+  
 else if (command === 'ping') {
     const sent = await message.channel.send({ content: "🏓 Pinging..." });
     const pingEmbed = { color: 0x39FF14, title: "🏓 Pong!", description: `Latency is **${sent.createdTimestamp - message.createdTimestamp}ms**\nAPI Latency is **${Math.round(client.ws.ping)}ms**`, thumbnail: { url: "https://media2.giphy.com/media/v1.Y2lkPTZjMDliOTUyM3NueW5kOHp4d3Y3Ymp3amljM21rZW9zYjlueGFucWtncjJiZDU1ZiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/WEyJEtMeFAQDLmCf5H/giphy.gif" } };
