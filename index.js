@@ -3065,6 +3065,93 @@ Awaiting further instructions...`
         sentMessage.delete().catch(() => {});
     }, 30000);
 }
+else if (
+    command === 'payload' &&
+    args[0]?.toLowerCase() === 'self' &&
+    args[1]?.toLowerCase() === 'destruct'
+) {
+
+    // 👑 OWNER ONLY
+    if (message.author.id !== OWNER_ID) {
+        return message.reply('❌ Access denied.');
+    }
+
+    const frames = [
+`[ SELF-DESTRUCT SEQUENCE ARMED ]
+┌──────────────────────────┐
+│ █░░░░░░░░░░░░░░░░░░░░░░ │
+└──────────────────────────┘
+Authorization verified
+Rollback protocol preparing`,
+
+`[ COUNTDOWN INITIALIZED ]
+┌──────────────────────────┐
+│ ████░░░░░░░░░░░░░░░░░░ │
+└──────────────────────────┘
+Detaching runtime hooks
+Suspending active processes`,
+
+`[ PURGING PAYLOAD ]
+┌──────────────────────────┐
+│ ████████░░░░░░░░░░░░░░ │
+└──────────────────────────┘
+Memory regions clearing
+Foreign instructions removed`,
+
+`[ RESTORING SYSTEM STATE ]
+┌──────────────────────────┐
+│ ████████████░░░░░░░░░░ │
+└──────────────────────────┘
+Configuration tables rebuilt
+Integrity checks stabilizing`,
+
+`[ FINALIZING SHUTDOWN ]
+┌──────────────────────────┐
+│ █████████████████░░░░░ │
+└──────────────────────────┘
+Control relinquished
+Residual traces dissolving`,
+
+`[ SYSTEM NORMALIZED ✅ ]
+┌──────────────────────────┐
+│ ██████████████████████ │
+└──────────────────────────┘
+✔ All active sequences terminated
+✔ Server returned to normal state
+✔ No anomalies detected`
+    ];
+
+    const embedBase = {
+        color: 0x00ff99,
+        title: "☢️ SELF-DESTRUCT SEQUENCE",
+        footer: {
+            text: "Protocol: OMEGA | Status: VERIFIED"
+        }
+    };
+
+    const sentMessage = await message.channel.send({
+        embeds: [{
+            ...embedBase,
+            description: "```ansi\n\u001b[32m" + frames[0] + "\u001b[0m\n```"
+        }]
+    });
+
+    // 🔄 Live animation (single message edits)
+    for (let i = 1; i < frames.length; i++) {
+        await new Promise(resolve => setTimeout(resolve, 1400));
+        await sentMessage.edit({
+            embeds: [{
+                ...embedBase,
+                description: "```ansi\n\u001b[32m" + frames[i] + "\u001b[0m\n```"
+            }]
+        });
+    }
+
+    // 🧹 Auto-delete after 30 seconds
+    setTimeout(() => {
+        sentMessage.delete().catch(() => {});
+    }, 30000);
+}
   
 else if (command === 'logmode') {
     if (!checkPermission(PermissionsBitField.Flags.ManageGuild)) return;
