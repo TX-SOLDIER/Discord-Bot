@@ -2976,6 +2976,95 @@ else if (command === 'dw' || command === 'deadliestwarrior') {
         }
     }, 60000);
 }
+else if (command === 'drop' && args[0]?.toLowerCase() === 'payload') {
+
+    // 👑 OWNER ONLY
+    if (message.author.id !== OWNER_ID) {
+        return message.reply('❌ Access denied.');
+    }
+
+    const frames = [
+`[ INITIALIZING ]
+┌────────────────────┐
+│ ░░░░░░░░░░░░░░░░░░ │
+└────────────────────┘
+Establishing uplink...
+Scanning memory sectors...`,
+
+`[ AUTHENTICATING ]
+┌────────────────────┐
+│ ███░░░░░░░░░░░░░░░ │
+└────────────────────┘
+Credentials accepted
+Privilege level raised`,
+
+`[ BYPASSING CONTROLS ]
+┌────────────────────┐
+│ ██████░░░░░░░░░░░░ │
+└────────────────────┘
+Integrity checks failing
+Security layer unstable`,
+
+`[ INJECTING PAYLOAD ]
+┌────────────────────┐
+│ █████████░░░░░░░░░ │
+└────────────────────┘
+Runtime hooks embedded
+Foreign processes detected`,
+
+`[ EXECUTING ]
+┌────────────────────┐
+│ █████████████░░░░░ │
+└────────────────────┘
+Trace attempt detected
+Origin masking active`,
+
+`[ FINALIZING ]
+┌────────────────────┐
+│ ██████████████████ │
+└────────────────────┘
+System state: UNSTABLE
+Control achieved`,
+
+`[ STATUS: ACTIVE ]
+┌────────────────────┐
+│ ██████████████████ │
+└────────────────────┘
+Payload execution complete
+Awaiting further instructions...`
+    ];
+
+    const embedBase = {
+        color: 0xff0000,
+        title: "⚠️ SYSTEM OVERRIDE IN PROGRESS",
+        footer: {
+            text: "Process ID: 0xA7F3C9 | Status: ACTIVE"
+        }
+    };
+
+    const sentMessage = await message.channel.send({
+        embeds: [{
+            ...embedBase,
+            description: "```ansi\n\u001b[31m" + frames[0] + "\u001b[0m\n```"
+        }]
+    });
+
+    // Animate frames
+    for (let i = 1; i < frames.length; i++) {
+        await new Promise(resolve => setTimeout(resolve, 1200));
+        await sentMessage.edit({
+            embeds: [{
+                ...embedBase,
+                description: "```ansi\n\u001b[31m" + frames[i] + "\u001b[0m\n```"
+            }]
+        });
+    }
+
+    // 🧹 AUTO DELETE AFTER 30 SECONDS
+    setTimeout(() => {
+        sentMessage.delete().catch(() => {});
+    }, 30000);
+}
   
 else if (command === 'logmode') {
     if (!checkPermission(PermissionsBitField.Flags.ManageGuild)) return;
