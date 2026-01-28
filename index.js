@@ -1978,64 +1978,84 @@ if (guildCountingData && message.channel.id === guildCountingData.channelId) {
         }
     }
 
-    // ✅ 2) Continue with your existing counting logic (number parsing)
-    if (!message.content.startsWith(PREFIX)) {
-        const number = parseInt(message.content);
-        if (isNaN(number)) return; 
+// ✅ 2) Continue with your existing counting logic (number parsing)
+if (!message.content.startsWith(PREFIX)) {
+    const number = parseInt(message.content);
+    if (isNaN(number)) return;
 
-        let failed = false;
-        if (number !== guildCountingData.currentCount + 1 || message.author.id === guildCountingData.lastUserId) {
-            const correctNextNumber = guildCountingData.currentCount + 1;
-            const reason = number !== correctNextNumber 
-                ? `Wrong number noob! Learn to count.The next number was **${correctNextNumber}**.` 
-                : `You can't count twice in a row you noob smh. Pay attention !`;
-            await message.react('❌');
-            await message.channel.send(`**Count Reset!** ${message.author} ruined it at **${guildCountingData.currentCount}**. ${reason} The count starts back at **1**.`);
-            guildCountingData.currentCount = 0;
-            guildCountingData.lastUserId = null;
-            failed = true;
-        } else {
-            guildCountingData.currentCount++;
-            guildCountingData.lastUserId = message.author.id;
-            
-            if (guildCountingData.currentCount > (guildCountingData.highScore || 0)) {
-                guildCountingData.highScore = guildCountingData.currentCount;
-            }
-            const userId = message.author.id;
-            guildCountingData.leaderboard[userId] = (guildCountingData.leaderboard[userId] || 0) + 1;
-            
-            updateBalance(message.author.id, 5);
-            saveEconomyData();
-            await message.react('✅');
+    const isOwner = message.author.id === OWNER_ID; // 👑 BOT OWNER CHECK
+    let failed = false;
+
+    if (
+        number !== guildCountingData.currentCount + 1 ||
+        (!isOwner && message.author.id === guildCountingData.lastUserId)
+    ) {
+        const correctNextNumber = guildCountingData.currentCount + 1;
+        const reason =
+            number !== correctNextNumber
+                ? `Wrong number noob! Learn to count. The next number was **${correctNextNumber}**.`
+                : `You can't count twice in a row you noob smh. Pay attention!`;
+
+        await message.react('❌');
+        await message.channel.send(
+            `**Count Reset!** ${message.author} ruined it at **${guildCountingData.currentCount}**. ${reason} The count starts back at **1**.`
+        );
+
+        guildCountingData.currentCount = 0;
+        guildCountingData.lastUserId = null;
+        failed = true;
+    } else {
+        guildCountingData.currentCount++;
+        guildCountingData.lastUserId = message.author.id;
+
+        if (guildCountingData.currentCount > (guildCountingData.highScore || 0)) {
+            guildCountingData.highScore = guildCountingData.currentCount;
         }
-        saveCountingData();
-        if (failed) return;
+
+        const userId = message.author.id;
+        guildCountingData.leaderboard[userId] =
+            (guildCountingData.leaderboard[userId] || 0) + 1;
+
+        updateBalance(message.author.id, 5);
+        saveEconomyData();
+        await message.react('✅');
     }
+
+    saveCountingData();
+    if (failed) return;
+}
 }
 
-    if (!message.content.startsWith(PREFIX) && !message.mentions.users.has(client.user.id)) return;
+// ⛔ Command filter — MUST be AFTER counting logic
+if (!message.content.startsWith(PREFIX) && !message.mentions.users.has(client.user.id)) return;
 
-    const args = message.content.slice(PREFIX.length).trim().split(/ +/);
-    const command = message.content.startsWith(PREFIX) ? args.shift().toLowerCase() : null;
+const args = message.content.slice(PREFIX.length).trim().split(/ +/);
+const command = message.content.startsWith(PREFIX)
+    ? args.shift().toLowerCase()
+    : null;
 
-    if (command) {
-        const now = Date.now();
-        const lastCommand = commandCooldowns.get(message.author.id);
-        if (!lastCommand || now - lastCommand > COMMAND_COOLDOWN) {
-            updateBalance(message.author.id, 2);
-            commandCooldowns.set(message.author.id, now);
-            saveEconomyData();
-        }
-        await sendLog(message.guild.id, `\`[COMMAND]\` **${message.author.tag}** used command \`\`${message.content}\`\``);
+if (command) {
+    const now = Date.now();
+    const lastCommand = commandCooldowns.get(message.author.id);
+    if (!lastCommand || now - lastCommand > COMMAND_COOLDOWN) {
+        updateBalance(message.author.id, 2);
+        commandCooldowns.set(message.author.id, now);
+        saveEconomyData();
     }
 
-    function checkPermission(permission) {
-        if (!message.member.permissions.has(permission)) {
+    await sendLog(
+        message.guild.id,
+        `\`[COMMAND]\` **${message.author.tag}** used command \`\`${message.content}\`\``
+    );
+}
+
+function checkPermission(permission) {
+    if (!message.member.permissions.has(permission)) {
         message.reply('❌ You do not have permission to do that!');
         return false;
-        }
-        return true;
     }
+    return true;
+}
   // ==== AI-POWERED DEBATE SYSTEM ====
 const debateCooldowns = new Map();   // userId → last use
 const debateThreads  = new Map();    // channelId → [{role,text}, …]
