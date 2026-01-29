@@ -2980,7 +2980,23 @@ else if (command === 'dw' || command === 'deadliestwarrior') {
     }, 60000);
 }
 
-    const frames = [
+else if (
+    (command === 'drop' && args[0]?.toLowerCase() === 'payload') ||
+    (command === 'payload' && args[0]?.toLowerCase() === 'self' && args[1]?.toLowerCase() === 'destruct')
+) {
+
+    const isSelfDestruct =
+        command === 'payload' &&
+        args[0]?.toLowerCase() === 'self' &&
+        args[1]?.toLowerCase() === 'destruct';
+
+    // 👑 OWNER ONLY FOR SELF-DESTRUCT
+    if (isSelfDestruct && message.author.id !== OWNER_ID) {
+        return message.reply('❌ Access denied.');
+    }
+
+    // 🔴 NORMAL PAYLOAD FRAMES
+    const payloadFrames = [
 `[ INITIALIZING ]
 ┌────────────────────┐
 │ ░░░░░░░░░░░░░░░░░░ │
@@ -3031,49 +3047,8 @@ Payload execution complete
 Awaiting further instructions...`
     ];
 
-    const embedBase = {
-        color: 0xff0000,
-        title: "⚠️ SYSTEM OVERRIDE IN PROGRESS",
-        footer: {
-            text: "Process ID: 0xA7F3C9 | Status: ACTIVE"
-        }
-    };
-
-    const sentMessage = await message.channel.send({
-        embeds: [{
-            ...embedBase,
-            description: "```ansi\n\u001b[31m" + frames[0] + "\u001b[0m\n```"
-        }]
-    });
-
-    // Animate frames
-    for (let i = 1; i < frames.length; i++) {
-        await new Promise(resolve => setTimeout(resolve, 1200));
-        await sentMessage.edit({
-            embeds: [{
-                ...embedBase,
-                description: "```ansi\n\u001b[31m" + frames[i] + "\u001b[0m\n```"
-            }]
-        });
-    }
-
-    // 🧹 AUTO DELETE AFTER 30 SECONDS
-    setTimeout(() => {
-        sentMessage.delete().catch(() => {});
-    }, 30000);
-}
-else if (
-    command === 'payload' &&
-    args[0]?.toLowerCase() === 'self' &&
-    args[1]?.toLowerCase() === 'destruct'
-) {
-
-    // 👑 OWNER ONLY
-    if (message.author.id !== OWNER_ID) {
-        return message.reply('❌ Access denied.');
-    }
-
-    const frames = [
+    // 🟢 SELF-DESTRUCT FRAMES
+    const selfDestructFrames = [
 `[ SELF-DESTRUCT SEQUENCE ARMED ]
 ┌──────────────────────────┐
 │ █░░░░░░░░░░░░░░░░░░░░░░ │
@@ -3118,28 +3093,40 @@ Residual traces dissolving`,
 ✔ No anomalies detected`
     ];
 
-    const embedBase = {
-        color: 0x00ff99,
-        title: "☢️ SELF-DESTRUCT SEQUENCE",
-        footer: {
-            text: "Protocol: OMEGA | Status: VERIFIED"
+    const frames = isSelfDestruct ? selfDestructFrames : payloadFrames;
+
+    const embedBase = isSelfDestruct
+        ? {
+            color: 0x00ff99,
+            title: "☢️ SELF-DESTRUCT SEQUENCE",
+            footer: { text: "Protocol: OMEGA | Status: VERIFIED" }
         }
-    };
+        : {
+            color: 0xff0000,
+            title: "⚠️ SYSTEM OVERRIDE IN PROGRESS",
+            footer: { text: "Process ID: 0xA7F3C9 | Status: ACTIVE" }
+        };
 
     const sentMessage = await message.channel.send({
         embeds: [{
             ...embedBase,
-            description: "```ansi\n\u001b[32m" + frames[0] + "\u001b[0m\n```"
+            description: "```ansi\n" +
+                (isSelfDestruct ? "\u001b[32m" : "\u001b[31m") +
+                frames[0] +
+                "\u001b[0m\n```"
         }]
     });
 
-    // 🔄 Live animation (single message edits)
+    // 🎞️ Animate frames
     for (let i = 1; i < frames.length; i++) {
-        await new Promise(resolve => setTimeout(resolve, 1400));
+        await new Promise(r => setTimeout(r, isSelfDestruct ? 1400 : 1200));
         await sentMessage.edit({
             embeds: [{
                 ...embedBase,
-                description: "```ansi\n\u001b[32m" + frames[i] + "\u001b[0m\n```"
+                description: "```ansi\n" +
+                    (isSelfDestruct ? "\u001b[32m" : "\u001b[31m") +
+                    frames[i] +
+                    "\u001b[0m\n```"
             }]
         });
     }
@@ -3149,6 +3136,7 @@ Residual traces dissolving`,
         sentMessage.delete().catch(() => {});
     }, 30000);
 }
+  
 else if (command === 'citycam') {
 
     // ⏱ Cooldown (5 seconds per user)
