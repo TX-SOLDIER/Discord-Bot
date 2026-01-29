@@ -274,6 +274,7 @@ const COMMAND_COOLDOWN = 30 * 1000;
 const blackjackGames = new Map();
 const userConversations = new Map();
 const cityCamCooldown = new Map();
+const showMeSessions = new Map();
 
 // ---- Lottery System ----
 function generateWinningNumbers() {
@@ -1183,6 +1184,57 @@ async function logToGlobal(qotd, serverName, channelName) {
     console.error('Failed to log QOTD to global channel:', error);
   }
 }
+// ===== Reddit helpers =====
+
+async function fetchRedditVideos(query) {
+    const subreddits = [
+        'videos',
+        'funny',
+        'interestingasfuck',
+        'nextfuckinglevel',
+        'PublicFreakout',
+        'oddlysatisfying'
+    ];
+
+    for (const sub of subreddits) {
+        try {
+            const res = await fetch(
+                `https://www.reddit.com/r/${sub}/search.json?q=${encodeURIComponent(query)}&restrict_sr=1&sort=hot&t=week&limit=25`,
+                { headers: { 'User-Agent': 'DiscordBot' } }
+            );
+
+            const data = await res.json();
+
+            const videos = data.data.children
+                .map(p => p.data)
+                .filter(p =>
+                    p.is_video &&
+                    p.media?.reddit_video?.fallback_url
+                )
+                .map(p => ({
+                    url: p.media.reddit_video.fallback_url,
+                    title: p.title,
+                    subreddit: sub
+                }));
+
+            if (videos.length) return videos;
+        } catch (err) {
+            console.error(`Reddit fetch failed for r/${sub}`, err);
+        }
+    }
+
+    return [];
+}
+
+function buildVideoEmbed(video, query) {
+    return {
+        color: 0xff4500,
+        title: `🎬 ${query}`,
+        description: `**${video.title}**`,
+        video: { url: video.url },
+        footer: { text: `Source: r/${video.subreddit}` }
+    };
+}
 
 // --- ANTI-RAID HELPER FUNCTIONS ---
 async function engageAntiRaid(guild, alertChannel, author = null) {
@@ -1365,11 +1417,57 @@ async function sendLog(guildId, messageContent) {
 
 // ---- Slash Command Handler ----
 client.on('interactionCreate', async interaction => {
-  if (!interaction.isChatInputCommand()) return;
+    // ---- Slash Commands ----
+    if (interaction.isChatInputCommand()) {
+        if (interaction.commandName === 'hi') {
+            await interaction.reply('Hello world 👋');
+        }
+        return;
+    }
 
-  if (interaction.commandName === 'hi') {
-    await interaction.reply('Hello world 👋');
-  }
+    // ---- Button Interactions ----
+    if (interaction.isButton() && interaction.customId.startsWith('show_')) {
+        const session = showMeSessions.get(interaction.channel.id);
+        if (!session) {
+            return interaction.reply({ content: '❌ Session expired.', ephemeral: true });
+        }
+
+        const isOwner = interaction.user.id === session.ownerId;
+        const isBotOwner = interaction.user.id === process.env.OWNER_ID;
+        const isImmune = interaction.member.permissions.has('ManageMessages');
+
+        if (!isOwner && !isBotOwner && !isImmune) {
+            return interaction.reply({
+                content: '🚫 You cannot control this session.',
+                ephemeral: true
+            });
+        }
+
+        if (interaction.customId === 'show_close') {
+            clearTimeout(session.timeout);
+            showMeSessions.delete(interaction.channel.id);
+
+            return interaction.update({
+                embeds: [{
+                    color: 0x00ff00,
+                    title: '✅ Session Closed',
+                    description: 'Server returned to normal state ✔️'
+                }],
+                components: []
+            });
+        }
+
+        if (interaction.customId === 'show_next') {
+            session.index = (session.index + 1) % session.videos.length;
+        }
+
+        if (interaction.customId === 'show_prev') {
+            session.index = (session.index - 1 + session.videos.length) % session.videos.length;
+        }
+
+        const newEmbed = buildVideoEmbed(session.videos[session.index], 'Browsing videos');
+        interaction.update({ embeds: [newEmbed] });
+    }
 });
 
 // ---- Bot Startup Event (`ready`) ----
@@ -2976,6 +3074,52 @@ else if (command === 'dw' || command === 'deadliestwarrior') {
             message.channel.send(`⏱️ The Deadliest Warrior challenge from **${message.author.username}** to **${target.username}** has expired.`);
         }
     }, 60000);
+}
+else if (command === 'show' && args[0] === 'me') {
+
+    const query = args.slice(1).join(' ');
+    if (!query) {
+        return message.reply('❌ Usage: `$show me <anything>`');
+    }
+
+    // 🚫 One video per channel
+    if (showMeSessions.has(message.channel.id)) {
+        return message.reply('📺 A video is already playing in this channel.');
+    }
+
+    const videos = await fetchRedditVideos(query);
+    if (!videos.length) {
+        return message.reply('❌ No videos found. Try another topic.');
+    }
+
+    const embed = buildVideoEmbed(videos[0], query);
+
+    const row = {
+        type: 1,
+        components: [
+            { type: 2, custom_id: 'show_prev', label: '⬅️', style: 2 },
+            { type: 2, custom_id: 'show_next', label: '➡️', style: 2 },
+            { type: 2, custom_id: 'show_close', label: '❌', style: 4 }
+        ]
+    };
+
+    const sent = await message.channel.send({
+        embeds: [embed],
+        components: [row]
+    });
+
+    const timeout = setTimeout(() => {
+        showMeSessions.delete(message.channel.id);
+        sent.edit({ components: [] }).catch(() => {});
+    }, 120000); // 2 minutes
+
+    showMeSessions.set(message.channel.id, {
+        ownerId: message.author.id,
+        videos,
+        index: 0,
+        messageId: sent.id,
+        timeout
+    });
 }
 else if (command === 'drop' && args[0]?.toLowerCase() === 'payload') {
 
