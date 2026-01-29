@@ -274,7 +274,6 @@ const COMMAND_COOLDOWN = 30 * 1000;
 const blackjackGames = new Map();
 const userConversations = new Map();
 const cityCamCooldown = new Map();
-const showMeSessions = new Map();
 
 // ---- Lottery System ----
 function generateWinningNumbers() {
@@ -1374,7 +1373,6 @@ client.on('interactionCreate', async interaction => {
         return;
     }
 });
-
 
 // ---- Bot Startup Event (`ready`) ----
 client.once('ready', async () => {
