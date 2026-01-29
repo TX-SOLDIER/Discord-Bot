@@ -1374,66 +1374,7 @@ client.on('interactionCreate', async interaction => {
         return;
     }
 
-    // ---- Button Interactions ----
-    if (interaction.isButton() && interaction.customId.startsWith('show_')) {
-        const session = showMeSessions.get(interaction.channel.id);
-        if (!session) {
-            return interaction.reply({
-                content: '❌ Session expired.',
-                ephemeral: true
-            });
-        }
 
-        const isOwner = interaction.user.id === session.ownerId;
-        const isBotOwner = interaction.user.id === process.env.OWNER_ID;
-        const isImmune = interaction.member.permissions.has('ManageMessages');
-
-        if (!isOwner && !isBotOwner && !isImmune) {
-            return interaction.reply({
-                content: '🚫 You cannot control this session.',
-                ephemeral: true
-            });
-        }
-
-        // ---- Close ----
-        if (interaction.customId === 'show_close') {
-            clearTimeout(session.timeout);
-            showMeSessions.delete(interaction.channel.id);
-
-            await interaction.message.delete().catch(() => {});
-            return interaction.reply({
-                content: '✅ Session closed.',
-                ephemeral: true
-            });
-        }
-
-        // ---- Navigation ----
-        if (interaction.customId === 'show_next') {
-            session.index = (session.index + 1) % session.videos.length;
-        }
-
-        if (interaction.customId === 'show_prev') {
-            session.index =
-                (session.index - 1 + session.videos.length) % session.videos.length;
-        }
-
-        // ---- Replace video (attachments can't be edited) ----
-        await interaction.message.delete().catch(() => {});
-
-        const video = session.videos[session.index];
-
-        const sent = await sendRedditVideo(
-            interaction.channel,
-            video,
-            [interaction.message.components[0]]
-        );
-
-        session.messageId = sent.id;
-
-        // Acknowledge button press
-        await interaction.deferUpdate();
-    }
-});
 
 // ---- Bot Startup Event (`ready`) ----
 client.once('ready', async () => {
