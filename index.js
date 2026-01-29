@@ -1184,66 +1184,6 @@ async function logToGlobal(qotd, serverName, channelName) {
     console.error('Failed to log QOTD to global channel:', error);
   }
 }
-// ===== Reddit helpers =====
-
-async function fetchRedditVideos(query) {
-    // 1. Added more subreddits for better results
-    const subreddits = [
-        'videos',
-        'funny',
-        'interestingasfuck',
-        'nextfuckinglevel',
-        'PublicFreakout',
-        'oddlysatisfying',
-        'unexpected',
-        'beamazed' 
-    ];
-
-    for (const sub of subreddits) {
-        try {
-            // 2. CHANGED: t=week -> t=all (Searches all history, not just last 7 days)
-            // 3. CHANGED: limit=25 -> limit=50 (Increases chance of finding a hit)
-            const res = await fetch(
-                `https://www.reddit.com/r/${sub}/search.json?q=${encodeURIComponent(query)}&restrict_sr=1&sort=relevance&t=all&limit=50`,
-                {
-                    headers: {
-                        'User-Agent': 'DiscordBot/1.0' // Reddit requires a User-Agent
-                    }
-                }
-            );
-
-            const data = await res.json();
-            
-            // Safety check in case Reddit is down or returns bad data
-            if (!data || !data.data || !data.data.children) continue;
-
-            const videos = data.data.children
-                .map(p => p.data)
-                .filter(p =>
-                    p.is_video &&
-                    p.media &&
-                    p.media.reddit_video &&
-                    p.media.reddit_video.fallback_url &&
-                    // 4. CRITICAL FIX: Changed .endsWith() to .includes()
-                    // Reddit URLs often look like "video.mp4?source=fallback", which failed your old check.
-                    p.media.reddit_video.fallback_url.includes('.mp4')
-                )
-                .map(p => ({
-                    // 5. Clean the URL so Discord embeds it correctly
-                    url: p.media.reddit_video.fallback_url.split('?')[0], 
-                    title: p.title,
-                    subreddit: sub
-                }));
-
-            if (videos.length) return videos;
-        } catch (err) {
-            console.error(`Reddit fetch failed for r/${sub}`, err);
-        }
-    }
-
-    return [];
-}
-
 
 // --- ANTI-RAID HELPER FUNCTIONS ---
 async function engageAntiRaid(guild, alertChannel, author = null) {
@@ -3100,58 +3040,6 @@ else if (command === 'dw' || command === 'deadliestwarrior') {
         }
     }, 60000);
 }
-else if (command === 'show' && args[0] === 'me') {
-
-    const query = args.slice(1).join(' ');
-    if (!query) {
-        return message.reply('❌ Usage: `$show me <anything>`');
-    }
-
-    // 🚫 One video per channel
-    if (showMeSessions.has(message.channel.id)) {
-        return message.reply('📺 A video is already playing in this channel.');
-    }
-
-    const videos = await fetchRedditVideos(query);
-    if (!videos.length) {
-        return message.reply('❌ No videos found. Try another topic.');
-    }
-
-    const embed = buildVideoEmbed(videos[0], query);
-
-    const row = {
-        type: 1,
-        components: [
-            { type: 2, custom_id: 'show_prev', label: '⬅️', style: 2 },
-            { type: 2, custom_id: 'show_next', label: '➡️', style: 2 },
-            { type: 2, custom_id: 'show_close', label: '❌', style: 4 }
-        ]
-    };
-
-    const sent = await message.channel.send({
-        embeds: [embed],
-        components: [row]
-    });
-
-    const timeout = setTimeout(() => {
-        showMeSessions.delete(message.channel.id);
-        sent.edit({ components: [] }).catch(() => {});
-    }, 120000); // 2 minutes
-
-    showMeSessions.set(message.channel.id, {
-        ownerId: message.author.id,
-        videos,
-        index: 0,
-        messageId: sent.id,
-        timeout
-    });
-}
-else if (command === 'drop' && args[0]?.toLowerCase() === 'payload') {
-
-    // 👑 OWNER ONLY
-    if (message.author.id !== OWNER_ID) {
-        return message.reply('❌ Access denied.');
-    }
 
     const frames = [
 `[ INITIALIZING ]
