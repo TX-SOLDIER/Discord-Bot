@@ -1187,37 +1187,50 @@ async function logToGlobal(qotd, serverName, channelName) {
 // ===== Reddit helpers =====
 
 async function fetchRedditVideos(query) {
+    // 1. Added more subreddits for better results
     const subreddits = [
         'videos',
         'funny',
         'interestingasfuck',
         'nextfuckinglevel',
         'PublicFreakout',
-        'oddlysatisfying'
+        'oddlysatisfying',
+        'unexpected',
+        'beamazed' 
     ];
 
     for (const sub of subreddits) {
         try {
+            // 2. CHANGED: t=week -> t=all (Searches all history, not just last 7 days)
+            // 3. CHANGED: limit=25 -> limit=50 (Increases chance of finding a hit)
             const res = await fetch(
-                `https://www.reddit.com/r/${sub}/search.json?q=${encodeURIComponent(query)}&restrict_sr=1&sort=hot&t=week&limit=25`,
+                `https://www.reddit.com/r/${sub}/search.json?q=${encodeURIComponent(query)}&restrict_sr=1&sort=relevance&t=all&limit=50`,
                 {
                     headers: {
-                        'User-Agent': 'DiscordBot'
+                        'User-Agent': 'DiscordBot/1.0' // Reddit requires a User-Agent
                     }
                 }
             );
 
             const data = await res.json();
+            
+            // Safety check in case Reddit is down or returns bad data
+            if (!data || !data.data || !data.data.children) continue;
 
             const videos = data.data.children
                 .map(p => p.data)
                 .filter(p =>
                     p.is_video &&
-                    p.media?.reddit_video?.fallback_url &&
-                    p.media.reddit_video.fallback_url.endsWith('.mp4')
+                    p.media &&
+                    p.media.reddit_video &&
+                    p.media.reddit_video.fallback_url &&
+                    // 4. CRITICAL FIX: Changed .endsWith() to .includes()
+                    // Reddit URLs often look like "video.mp4?source=fallback", which failed your old check.
+                    p.media.reddit_video.fallback_url.includes('.mp4')
                 )
                 .map(p => ({
-                    url: p.media.reddit_video.fallback_url,
+                    // 5. Clean the URL so Discord embeds it correctly
+                    url: p.media.reddit_video.fallback_url.split('?')[0], 
                     title: p.title,
                     subreddit: sub
                 }));
@@ -1231,17 +1244,6 @@ async function fetchRedditVideos(query) {
     return [];
 }
 
-/**
- * Sends a Reddit video so it ACTUALLY plays in Discord
- * (uploaded as a file, not an embed)
- */
-async function sendRedditVideo(channel, video, components = []) {
-    return channel.send({
-        content: `🎬 **${video.title}**\n📍 r/${video.subreddit}`,
-        files: [video.url],
-        components
-    });
-}
 
 // --- ANTI-RAID HELPER FUNCTIONS ---
 async function engageAntiRaid(guild, alertChannel, author = null) {
