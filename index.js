@@ -1200,7 +1200,11 @@ async function fetchRedditVideos(query) {
         try {
             const res = await fetch(
                 `https://www.reddit.com/r/${sub}/search.json?q=${encodeURIComponent(query)}&restrict_sr=1&sort=hot&t=week&limit=25`,
-                { headers: { 'User-Agent': 'DiscordBot' } }
+                {
+                    headers: {
+                        'User-Agent': 'DiscordBot'
+                    }
+                }
             );
 
             const data = await res.json();
@@ -1209,7 +1213,8 @@ async function fetchRedditVideos(query) {
                 .map(p => p.data)
                 .filter(p =>
                     p.is_video &&
-                    p.media?.reddit_video?.fallback_url
+                    p.media?.reddit_video?.fallback_url &&
+                    p.media.reddit_video.fallback_url.endsWith('.mp4')
                 )
                 .map(p => ({
                     url: p.media.reddit_video.fallback_url,
@@ -1226,14 +1231,16 @@ async function fetchRedditVideos(query) {
     return [];
 }
 
-function buildVideoEmbed(video, query) {
-    return {
-        color: 0xff4500,
-        title: `🎬 ${query}`,
-        description: `**${video.title}**`,
-        video: { url: video.url },
-        footer: { text: `Source: r/${video.subreddit}` }
-    };
+/**
+ * Sends a Reddit video so it ACTUALLY plays in Discord
+ * (uploaded as a file, not an embed)
+ */
+async function sendRedditVideo(channel, video, components = []) {
+    return channel.send({
+        content: `🎬 **${video.title}**\n📍 r/${video.subreddit}`,
+        files: [video.url],
+        components
+    });
 }
 
 // --- ANTI-RAID HELPER FUNCTIONS ---
@@ -1429,7 +1436,10 @@ client.on('interactionCreate', async interaction => {
     if (interaction.isButton() && interaction.customId.startsWith('show_')) {
         const session = showMeSessions.get(interaction.channel.id);
         if (!session) {
-            return interaction.reply({ content: '❌ Session expired.', ephemeral: true });
+            return interaction.reply({
+                content: '❌ Session expired.',
+                ephemeral: true
+            });
         }
 
         const isOwner = interaction.user.id === session.ownerId;
@@ -1443,30 +1453,43 @@ client.on('interactionCreate', async interaction => {
             });
         }
 
+        // ---- Close ----
         if (interaction.customId === 'show_close') {
             clearTimeout(session.timeout);
             showMeSessions.delete(interaction.channel.id);
 
-            return interaction.update({
-                embeds: [{
-                    color: 0x00ff00,
-                    title: '✅ Session Closed',
-                    description: 'Server returned to normal state ✔️'
-                }],
-                components: []
+            await interaction.message.delete().catch(() => {});
+            return interaction.reply({
+                content: '✅ Session closed.',
+                ephemeral: true
             });
         }
 
+        // ---- Navigation ----
         if (interaction.customId === 'show_next') {
             session.index = (session.index + 1) % session.videos.length;
         }
 
         if (interaction.customId === 'show_prev') {
-            session.index = (session.index - 1 + session.videos.length) % session.videos.length;
+            session.index =
+                (session.index - 1 + session.videos.length) % session.videos.length;
         }
 
-        const newEmbed = buildVideoEmbed(session.videos[session.index], 'Browsing videos');
-        interaction.update({ embeds: [newEmbed] });
+        // ---- Replace video (attachments can't be edited) ----
+        await interaction.message.delete().catch(() => {});
+
+        const video = session.videos[session.index];
+
+        const sent = await sendRedditVideo(
+            interaction.channel,
+            video,
+            [interaction.message.components[0]]
+        );
+
+        session.messageId = sent.id;
+
+        // Acknowledge button press
+        await interaction.deferUpdate();
     }
 });
 
