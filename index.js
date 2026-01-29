@@ -1373,7 +1373,7 @@ client.on('interactionCreate', async interaction => {
         }
         return;
     }
-
+});
 
 
 // ---- Bot Startup Event (`ready`) ----
