@@ -272,7 +272,8 @@ const commandCooldowns = new Map();
 const MESSAGE_COOLDOWN = 60 * 1000;
 const COMMAND_COOLDOWN = 30 * 1000;
 const blackjackGames = new Map();
-const userConversations = new Map(); 
+const userConversations = new Map();
+const cityCamCooldown = new Map();
 
 // ---- Lottery System ----
 function generateWinningNumbers() {
@@ -3156,11 +3157,12 @@ else if (command === 'citycam') {
 
     // ⏱ Simple cooldown (5 seconds per user)
     const now = Date.now();
-    if (!cityCamCooldown) global.cityCamCooldown = new Map();
     const last = cityCamCooldown.get(message.author.id);
+
     if (last && now - last < 5000) {
         return message.reply('⏳ Please wait a few seconds before using this again.');
     }
+
     cityCamCooldown.set(message.author.id, now);
 
     const cams = {
@@ -3203,6 +3205,51 @@ else if (command === 'citycam') {
     };
 
     const input = args.join(' ')?.toLowerCase();
+
+    // 📜 LIST COMMAND
+    if (!input || input === 'list') {
+        const list = Object.values(cams)
+            .map(c => `• ${c.name.split('–')[0].trim()}`)
+            .join('\n');
+
+        return message.channel.send({
+            embeds: [{
+                color: 0x00aaff,
+                title: "🌍 Available Live City Cams",
+                description: list + `\n\nUse: \`$citycam <city>\` or \`$citycam random\``,
+                footer: { text: "All feeds are public & live" }
+            }]
+        });
+    }
+
+    let cam;
+
+    if (input === 'random') {
+        cam = Object.values(cams)[Math.floor(Math.random() * Object.values(cams).length)];
+    } else {
+        cam = Object.values(cams).find(c =>
+            c.aliases.includes(input.replace(/\s+/g, ''))
+        );
+    }
+
+    if (!cam) {
+        return message.reply(
+            "❌ City not found.\nUse `$citycam list` to see available locations."
+        );
+    }
+
+    const embed = {
+        color: 0x00aaff,
+        title: "📡 LIVE CITY CAMERA",
+        description: `**${cam.name}**\n\n▶ Click to watch the live feed.`,
+        url: cam.url,
+        footer: {
+            text: `Source: ${cam.platform} • Free public stream`
+        }
+    };
+
+    message.channel.send({ embeds: [embed] });
+}
 
     // 📜 LIST COMMAND
     if (!input || input === 'list') {
