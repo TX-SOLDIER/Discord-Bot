@@ -11917,51 +11917,6 @@ else if (command === 'forcesave') {
 });
 
 // ==================================================
-// SECONDARY MESSAGE HANDLER - FORCESAVE FALLBACK
-// ==================================================
-client.on("messageCreate", async (message) => {
-  if (message.author.bot) return;
-
-  const prefix = "$";
-  if (!message.content.startsWith(prefix)) return;
-
-  const args = message.content.slice(prefix.length).trim().split(/ +/);
-  const command = args.shift().toLowerCase();
-
-  if (command === "forcesave") {
-    if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
-      return message.reply("❌ You don't have permission to force save.");
-    }
-
-    try {
-      const before = Date.now();
-      dirty = true;
-      await saveData();
-      const duration = ((Date.now() - before) / 1000).toFixed(2);
-
-      saveCount++;
-      lastSaveTime = new Date().toLocaleTimeString();
-
-      const infoEmbed = new EmbedBuilder()
-        .setColor(0x00FF00)
-        .setTitle('💾 Force Save Complete')
-        .addFields(
-          { name: '⏱️ Duration', value: `${duration}s`, inline: true },
-          { name: '🔢 Save Count', value: `${saveCount}`, inline: true },
-          { name: '🕐 Last Save', value: lastSaveTime, inline: true }
-        )
-        .setTimestamp();
-
-      message.reply({ embeds: [infoEmbed] });
-    } catch (err) {
-      console.error('[FORCESAVE ERROR]', err);
-      message.reply('❌ Failed to save data. Check console for errors.');
-    }
-    return;
-  }
-});
-
-// ==================================================
 // BOT LOGIN
 // ==================================================
 client.login(process.env.BOT_TOKEN);
