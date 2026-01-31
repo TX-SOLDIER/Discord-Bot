@@ -3509,6 +3509,7 @@ else if (command === 'investigate' || command === 'inv' || command === 'profile'
     
     const user = target.user;
     const userId = user.id;
+    const odId = userId; // Alias for compatibility
     const guildId = message.guild.id;
     
     // Send loading message
