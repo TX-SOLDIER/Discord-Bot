@@ -3319,7 +3319,7 @@ if (command === 'help') {
       `• \`${PREFIX}setxpsetting <key> <val>\` – Update XP (Immune)\n` +
       `• \`${PREFIX}addxp/removexp/setlevel/setprestige\` (Immune)\n` +
       `• \`${PREFIX}resetxp @user\` – Reset XP (Immune)\n\n` +
-      `**━━━ ECONOMY ���━━**\n` +
+      `**━━━ ECONOMY ━━**\n` +
       `• \`${PREFIX}balance [@user]\` / \`${PREFIX}bal\` – Check balance\n` +
       `• \`${PREFIX}pay @user <amount>\` – Pay someone\n` +
       `• \`${PREFIX}give @user <amt>\` / \`${PREFIX}add\` – Give (Immune)\n` +
@@ -3340,7 +3340,7 @@ if (command === 'help') {
       `• \`${PREFIX}unwatch @user\` – Remove from watch list (Immune)\n` +
       `• \`${PREFIX}watchlist\` – View watch list (Immune)\n` +
       `• \`${PREFIX}transactions @user\` – View transaction log (Immune)\n` +
-      `• \`${PREFIX}history @user\` – View name/avatar history (Immune)\n`
+      `• \`${PREFIX}history @user\` – View name/avatar history (Immune)\n` +
       `**━━━ CRIME SYSTEM ━━━**\n` +
       `• \`${PREFIX}rob @user\` / \`${PREFIX}steal\` – Rob someone\n` +
       `• \`${PREFIX}bailout\` / \`${PREFIX}bail\` – Escape jail\n` +
