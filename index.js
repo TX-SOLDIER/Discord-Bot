@@ -134,6 +134,29 @@ let botData = {
       maxPrestige: 10,
     },
     levelUpChannel: null,
+      // ==================================================
+    // COOLDOWN & REWARD DATA
+    // ==================================================
+    dailyData: {},
+    hourlyData: {},
+    workData: {},
+    fishData: {},
+    mineData: {},
+    huntData: {},
+
+    // NEW: Crime/Rob System Data
+    crimeData: {},
+
+    // NEW: Global Economy Statistics
+    globalEconomyStats: {
+        totalCoinsCirculation: 0,
+        totalTransactions: 0,
+        totalGambled: 0,
+        totalWonGambling: 0,
+        totalLostGambling: 0,
+        totalRobbed: 0,
+        lastUpdated: null,
+    },
 };
 
 // ==================================================
@@ -260,6 +283,13 @@ const saveLogChannels = markDirty;
 const saveMasterLog = markDirty;
 const saveXPData = markDirty;
 const saveXPSettings = markDirty;
+const saveCrimeData = markDirty;
+const saveDailyData = markDirty;
+const saveHourlyData = markDirty;
+const saveWorkData = markDirty;
+const saveFishData = markDirty;
+const saveMineData = markDirty;
+const saveHuntData = markDirty;
 
 // ==================================================
 // IMMUNITY SYSTEM - CHECK FUNCTION
@@ -307,6 +337,12 @@ const blackjackGames = new Map();
 const userConversations = new Map();
 const cityCamCooldown = new Map();
 const qotdIntervals = new Map();
+const lastDeletedMessages = new Map();
+const lastEditedMessages = new Map();
+const activeCrashGames = new Map();
+const activeBombGames = new Map();
+const activeHeistGames = new Map();
+const spinCooldowns = new Map();
 
 // ==================================================
 // LOTTERY SYSTEM - GENERATE WINNING NUMBERS
@@ -396,6 +432,154 @@ function updateBalance(userId, amount) {
     const currentBalance = getBalance(userId);
     botData.economyData[userId] = Math.max(0, currentBalance + amount);
     return botData.economyData[userId];
+}
+// ==================================================
+// CRIME SYSTEM - GET CRIME DATA
+// ==================================================
+function getCrimeData(odId) {
+    if (!botData.crimeData[odId]) {
+        botData.crimeData[odId] = {
+            lastRob: 0,
+            lastHeist: 0,
+            jailUntil: 0,
+            successfulRobs: 0,
+            failedRobs: 0,
+            totalStolen: 0,
+            timesRobbed: 0,
+            totalLostToRobbery: 0,
+        };
+    }
+    return botData.crimeData[odId];
+}
+
+// ==================================================
+// CRIME SYSTEM - CHECK IF IN JAIL
+// ==================================================
+function isInJail(odId) {
+    const crimeData = getCrimeData(odId);
+    if (crimeData.jailUntil && Date.now() < crimeData.jailUntil) {
+        return true;
+    }
+    return false;
+}
+
+// ==================================================
+// CRIME SYSTEM - GET JAIL TIME REMAINING
+// ==================================================
+function getJailTimeRemaining(odId) {
+    const crimeData = getCrimeData(odId);
+    if (!crimeData.jailUntil || Date.now() >= crimeData.jailUntil) {
+        return 0;
+    }
+    return crimeData.jailUntil - Date.now();
+}
+
+// ==================================================
+// CRIME SYSTEM - SEND TO JAIL
+// ==================================================
+function sendToJail(odId, durationMs) {
+    const crimeData = getCrimeData(odId);
+    crimeData.jailUntil = Date.now() + durationMs;
+    markDirty();
+}
+
+// ==================================================
+// CRIME SYSTEM - RELEASE FROM JAIL
+// ==================================================
+function releaseFromJail(odId) {
+    const crimeData = getCrimeData(odId);
+    crimeData.jailUntil = 0;
+    markDirty();
+}
+
+// ==================================================
+// ECONOMY STATS - UPDATE GLOBAL STATS
+// ==================================================
+function updateGlobalStats() {
+    let totalCirculation = 0;
+    
+    for (const odId in botData.economyData) {
+        totalCirculation += botData.economyData[odId] || 0;
+    }
+    
+    botData.globalEconomyStats.totalCoinsCirculation = totalCirculation;
+    botData.globalEconomyStats.lastUpdated = Date.now();
+    markDirty();
+}
+
+// ==================================================
+// ECONOMY STATS - TRACK TRANSACTION
+// ==================================================
+function trackTransaction(type, amount) {
+    if (!botData.globalEconomyStats) {
+        botData.globalEconomyStats = {
+            totalCoinsCirculation: 0,
+            totalTransactions: 0,
+            totalGambled: 0,
+            totalWonGambling: 0,
+            totalLostGambling: 0,
+            totalRobbed: 0,
+            lastUpdated: null,
+        };
+    }
+    
+    botData.globalEconomyStats.totalTransactions++;
+    
+    if (type === 'gamble_win') {
+        botData.globalEconomyStats.totalWonGambling += amount;
+        botData.globalEconomyStats.totalGambled += amount;
+    } else if (type === 'gamble_loss') {
+        botData.globalEconomyStats.totalLostGambling += amount;
+        botData.globalEconomyStats.totalGambled += amount;
+    } else if (type === 'rob') {
+        botData.globalEconomyStats.totalRobbed += amount;
+    }
+    
+    markDirty();
+}
+
+// ==================================================
+// LEADERBOARD - GET GLOBAL RICH LIST
+// ==================================================
+function getGlobalRichList(limit = 10) {
+    const allUsers = [];
+    
+    for (const odId in botData.economyData) {
+        const balance = botData.economyData[odId] || 0;
+        if (balance > 0) {
+            allUsers.push({
+                odId: odId,
+                balance: balance,
+            });
+        }
+    }
+    
+    allUsers.sort((a, b) => b.balance - a.balance);
+    
+    return allUsers.slice(0, limit);
+}
+
+// ==================================================
+// LEADERBOARD - GET SERVER RICH LIST
+// ==================================================
+function getServerRichList(guild, limit = 10) {
+    const serverUsers = [];
+    
+    guild.members.cache.forEach(member => {
+        if (member.user.bot) return;
+        const balance = botData.economyData[member.user.id] || 0;
+        if (balance > 0) {
+            serverUsers.push({
+                odId: member.user.id,
+                username: member.user.username,
+                balance: balance,
+            });
+        }
+    });
+    
+    serverUsers.sort((a, b) => b.balance - a.balance);
+    
+    return serverUsers.slice(0, limit);
 }
 
 // ==================================================
@@ -1273,7 +1457,7 @@ async function sendLog(guildId, messageContent) {
   }
   }
 // ==================================================
-// ANTI-RAID SYSTEM - ENGAGE
+// ANTI-RAID SYSTEM - ENGAGE (FIXED)
 // ==================================================
 async function engageAntiRaid(guild, alertChannel, author = null) {
     if (antiRaidActive.has(guild.id)) return false;
@@ -1288,7 +1472,7 @@ async function engageAntiRaid(guild, alertChannel, author = null) {
             const currentPerms = channel.permissionOverwrites.cache.get(everyoneRole.id);
             permsToStore.push({
                 channelId: channel.id,
-                sendMessages: currentPerms ? currentPerms.allow.has(PermissionsBitField.Flags.SendMessages) ? true : currentPerms.deny.has(PermissionsBitField.Flags.SendMessages) ? false : null : null
+                sendMessages: currentPerms ? (currentPerms.allow.has(PermissionsBitField.Flags.SendMessages) ? true : (currentPerms.deny.has(PermissionsBitField.Flags.SendMessages) ? false : null)) : null
             });
         }
     });
@@ -1297,25 +1481,79 @@ async function engageAntiRaid(guild, alertChannel, author = null) {
     try {
         await guild.setVerificationLevel(4);
 
-        guild.channels.cache.forEach(async (channel) => {
+        for (const channel of guild.channels.cache.values()) {
             if (channel.isTextBased()) {
-                 await channel.permissionOverwrites.edit(guild.roles.everyone, {
+                await channel.permissionOverwrites.edit(guild.roles.everyone, {
                     SendMessages: false
                 }).catch(err => console.error(`Failed to lock channel ${channel.name}:`, err));
             }
-        });
+        }
+
+        const manualEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('🚨 ANTI-RAID PROTOCOL ENGAGED 🚨')
+            .setDescription(
+                '**THIS IS NOT A DRILL.**\n\n' +
+                'All security measures are live. Unauthorized accounts will be **IDENTIFIED**, **TRACKED** and **ELIMINATED**.\n\n' +
+                '```ansi\n' +
+                '\u001b[31m╔═══════════════════════════════════════════╗\n' +
+                '║     ⚠️  SECURITY BREACH DETECTED  ⚠️      ║\n' +
+                '╠═══════════════════════════════════════════╣\n' +
+                '║  STATUS: LOCKDOWN ACTIVE                  ║\n' +
+                '║  THREAT LEVEL: MAXIMUM                    ║\n' +
+                '║  ALL CHANNELS: SECURED                    ║\n' +
+                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+                '```'
+            )
+            .addFields(
+                { name: '🔒 Actions Taken', value: '```• Verification level set to HIGHEST\n• All channels locked\n• Permissions saved for restore```', inline: false },
+                { name: '⚡ Engaged By', value: `<@${author.id}>`, inline: true },
+                { name: '🕐 Timestamp', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true }
+            )
+            .setImage('https://media1.giphy.com/media/v1.Y2lkPTc5MGI3NjExcWZrOHJnazFkNXJrY2Q3MWFneTVyMnBxNnBnMHp0cWtwb2lnNGtnaSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/l0HlQXKRgFTsSTUCQ/giphy.gif')
+            .setFooter({ text: '⚔️ Use $antiraid off or $restore to disengage' })
+            .setTimestamp();
+
+        const autoEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('🚨 AUTO-TRIGGER 🚨 ANTI-RAID PROTOCOL ENGAGED 🚨')
+            .setDescription(
+                '**THIS IS NOT A DRILL.**\n\n' +
+                'All security measures are live. Unauthorized accounts will be **IDENTIFIED**, **TRACKED** and **ELIMINATED**.\n\n' +
+                '```ansi\n' +
+                '\u001b[31m╔═══════════════════════════════════════════╗\n' +
+                '║   🤖 AUTOMATIC THREAT DETECTION ACTIVE    ║\n' +
+                '╠════════════════���══════════════════════════╣\n' +
+                '║  TRIGGER: RAPID JOIN DETECTED             ║\n' +
+                '║  STATUS: LOCKDOWN ACTIVE                  ║\n' +
+                '║  THREAT LEVEL: CRITICAL                   ║\n' +
+                '║  ALL CHANNELS: SECURED                    ║\n' +
+                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+                '```'
+            )
+            .addFields(
+                { name: '🔒 Actions Taken', value: '```• Verification level set to HIGHEST\n• All channels locked\n• Permissions saved for restore```', inline: false },
+                { name: '⚡ Engaged By', value: '`🤖 AUTOMATIC DETECTION`', inline: true },
+                { name: '🕐 Timestamp', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true }
+            )
+            .setImage('https://media1.giphy.com/media/v1.Y2lkPTc5MGI3NjExcWZrOHJnazFkNXJrY2Q3MWFneTVyMnBxNnBnMHp0cWtwb2lnNGtnaSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/l0HlQXKRgFTsSTUCQ/giphy.gif')
+            .setFooter({ text: '⚔️ Use $antiraid off or $restore to disengage' })
+            .setTimestamp();
+
+        if (alertChannel) {
+            if (author) {
+                await alertChannel.send({ embeds: [manualEmbed] });
+            } else {
+                await alertChannel.send({ embeds: [autoEmbed] });
+            }
+        }
 
         if (author) {
             await sendLog(guild.id, `\`[SECURITY]\` **${author.tag}** has engaged ANTI-RAID mode.`);
-            if (alertChannel) {
-                await alertChannel.send("🚨ANTI-RAID PROTOCOL ENGAGED🚨THIS IS NOT A DRILL. All security measures are live. Unauthorized accounts will be IDENTIFIED, TRACKED and ELIMINATED.");
-            }
         } else {
-             await sendLog(guild.id, `\`[SECURITY]\` **AUTOMATIC ANTI-RAID** has been engaged due to rapid joins.`);
-            if (alertChannel) {
-                await alertChannel.send("🚨**AUTO-TRIGGER**🚨ANTI-RAID PROTOCOL ENGAGED🚨THIS IS NOT A DRILL. All security measures are live. Unauthorized accounts will be IDENTIFIED, TRACKED and ELIMINATED.");
-            }
+            await sendLog(guild.id, `\`[SECURITY]\` **AUTOMATIC ANTI-RAID** has been engaged due to rapid joins.`);
         }
+        
         return true;
     } catch (err) {
         console.error("Anti-Raid ON Error:", err);
@@ -1326,11 +1564,25 @@ async function engageAntiRaid(guild, alertChannel, author = null) {
 }
 
 // ==================================================
-// ANTI-RAID SYSTEM - DISENGAGE
+// ANTI-RAID SYSTEM - DISENGAGE (FIXED)
 // ==================================================
 async function disengageAntiRaid(guild, replyChannel) {
     if (!antiRaidActive.has(guild.id)) {
-        if (replyChannel) await replyChannel.send("Anti-raid has been disengaged.")
+        if (replyChannel) {
+            const notActiveEmbed = new EmbedBuilder()
+                .setColor(0xFFFF00)
+                .setTitle('⚠️ Anti-Raid Not Active')
+                .setDescription(
+                    '```ansi\n' +
+                    '\u001b[33m╔═══════════════════════════════════════════╗\n' +
+                    '║      ⚠️  NO ACTIVE LOCKDOWN DETECTED      ║\n' +
+                    '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+                    '```\n' +
+                    'There is no active anti-raid lockdown for this server.'
+                )
+                .setTimestamp();
+            await replyChannel.send({ embeds: [notActiveEmbed] });
+        }
         return false;
     }
 
@@ -1344,34 +1596,88 @@ async function disengageAntiRaid(guild, replyChannel) {
     try {
         await guild.setVerificationLevel(originalLevel);
 
+        let restoredCount = 0;
+        let failedCount = 0;
+
         if (savedPerms) {
             for (const perm of savedPerms) {
                 const channel = guild.channels.cache.get(perm.channelId);
                 if (channel && channel.isTextBased()) {
-                    await channel.permissionOverwrites.edit(guild.roles.everyone, {
-                        SendMessages: perm.sendMessages
-                    }).catch(err => console.error(`Failed to restore channel ${channel.name}:`, err));
+                    try {
+                        await channel.permissionOverwrites.edit(guild.roles.everyone, {
+                            SendMessages: perm.sendMessages
+                        });
+                        restoredCount++;
+                    } catch (err) {
+                        console.error(`Failed to restore channel ${channel.name}:`, err);
+                        failedCount++;
+                    }
                 }
             }
         } else {
             console.warn(`[Anti-Raid] No saved permissions found for guild ${guild.id}. Using default unlock.`);
-            guild.channels.cache.forEach(async (channel) => {
+            for (const channel of guild.channels.cache.values()) {
                 if (channel.isTextBased()) {
-                    await channel.permissionOverwrites.edit(guild.roles.everyone, {
-                        SendMessages: null
-                    }).catch(err => console.error(`Failed to unlock channel ${channel.name}:`, err));
+                    try {
+                        await channel.permissionOverwrites.edit(guild.roles.everyone, {
+                            SendMessages: null
+                        });
+                        restoredCount++;
+                    } catch (err) {
+                        console.error(`Failed to unlock channel ${channel.name}:`, err);
+                        failedCount++;
+                    }
                 }
-            });
+            }
         }
 
+        const restoreEmbed = new EmbedBuilder()
+            .setColor(0x00FF00)
+            .setTitle('✅ ANTI-RAID PROTOCOL DISENGAGED')
+            .setDescription(
+                '**All systems restored to normal operations.**\n\n' +
+                '```ansi\n' +
+                '\u001b[32m╔═══════════════════════════════════════════╗\n' +
+                '║      🛡️  SYSTEM RESTORED  🛡️              ║\n' +
+                '╠═══════════════════════════════════════════╣\n' +
+                '║  STATUS: NORMAL OPERATIONS                ║\n' +
+                '║  THREAT LEVEL: CLEAR                      ║\n' +
+                '║  ALL CHANNELS: UNLOCKED                   ║\n' +
+                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+                '```'
+            )
+            .addFields(
+                { name: '🔓 Restoration Summary', value: `\`\`\`✅ Channels Restored: ${restoredCount}\n❌ Failed: ${failedCount}\n🔐 Verification Level: Restored\`\`\``, inline: false },
+                { name: '🕐 Completed At', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true }
+            )
+            .setImage('https://media1.giphy.com/media/v1.Y2lkPTc5MGI3NjExMjdjYWZoNWZqOWR4MWJ2bGgyOWsweXRtc2wzOHcyeWp3MnIyZGN5aCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/xT9IgzoKnwFNmISR8I/giphy.gif')
+            .setFooter({ text: '⚔️ Server returned to normal state • Stay vigilant' })
+            .setTimestamp();
+
         if (replyChannel) {
-            await replyChannel.send('✅ Anti-raid mode has been disengaged. All systems and channel permissions have been restored to their previous state.');
+            await replyChannel.send({ embeds: [restoreEmbed] });
         }
+        
+        await sendLog(guild.id, `\`[SECURITY]\` Anti-raid mode disengaged. ${restoredCount} channels restored.`);
+        
         return true;
     } catch (err) {
         console.error("Anti-Raid OFF Error:", err);
         if (replyChannel) {
-            await replyChannel.send("❌ Failed to fully disengage anti-raid mode. I might be missing permissions. Please check channels manually.");
+            const errorEmbed = new EmbedBuilder()
+                .setColor(0xFF0000)
+                .setTitle('❌ RESTORE FAILED')
+                .setDescription(
+                    '```ansi\n' +
+                    '\u001b[31m╔═══════════════════════════════════════════╗\n' +
+                    '║      ❌  RESTORATION ERROR  ❌             ║\n' +
+                    '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+                    '```\n' +
+                    'Failed to fully disengage anti-raid mode.\n' +
+                    'Please check channel permissions manually.'
+                )
+                .setTimestamp();
+            await replyChannel.send({ embeds: [errorEmbed] });
         }
         return false;
     }
@@ -1490,13 +1796,31 @@ client.once('ready', async () => {
 // EVENT HANDLER - MESSAGE UPDATE (EDIT DETECTION)
 // ==================================================
 client.on('messageUpdate', async (oldMessage, newMessage) => {
-  if (oldMessage.author.bot) return;
+  if (oldMessage.author?.bot) return;
   if (oldMessage.content === newMessage.content) return;
+
+  // Store for editsnipe command
+  if (oldMessage.guild && oldMessage.content) {
+    lastEditedMessages.set(oldMessage.channel.id, {
+      oldContent: oldMessage.content,
+      newContent: newMessage.content,
+      author: oldMessage.author,
+      timestamp: Date.now()
+    });
+    
+    // Auto-clear after 5 minutes
+    setTimeout(() => {
+      const stored = lastEditedMessages.get(oldMessage.channel.id);
+      if (stored && stored.timestamp === Date.now()) {
+        lastEditedMessages.delete(oldMessage.channel.id);
+      }
+    }, 5 * 60 * 1000);
+  }
 
   const guildCountingData = botData.countingData[newMessage.guild.id];
   if (guildCountingData && newMessage.channel.id === guildCountingData.channelId) {
     const nextNumber = guildCountingData.currentCount + 1;
-    const alertMessage = `⚠️ **EDIT DETECTED!**\n**User:** ${oldMessage.author}\n**Original Message:** \`${oldMessage.content}\`\n**Edited To:** \`${newMessage.content}\`\n\nTo avoid confusion, the next number is still **${nextNumber}**.`;
+    const alertMessage = `⚠️ **EDIT DETECTED!**\n**User:** ${oldMessage.author}\n**Original Message:** \`${oldMessage.content}\`\n**Edited To:** \`${newMessage.content}\`\n\nTo avoid confusion, the next number is **${nextNumber}**.`;
     await newMessage.channel.send(alertMessage);
   }
 
@@ -1510,11 +1834,29 @@ client.on('messageUpdate', async (oldMessage, newMessage) => {
 client.on('messageDelete', async message => {
   if (message.author?.bot) return;
 
+  // Store for snipe command
+  if (message.guild && message.content) {
+    lastDeletedMessages.set(message.channel.id, {
+      content: message.content,
+      author: message.author,
+      attachments: message.attachments.first()?.url || null,
+      timestamp: Date.now()
+    });
+    
+    // Auto-clear after 5 minutes
+    setTimeout(() => {
+      const stored = lastDeletedMessages.get(message.channel.id);
+      if (stored && stored.timestamp === Date.now()) {
+        lastDeletedMessages.delete(message.channel.id);
+      }
+    }, 5 * 60 * 1000);
+  }
+
   if (message.guild) {
     const guildCountingData = botData.countingData[message.guild.id];
     if (guildCountingData && message.channel.id === guildCountingData.channelId) {
         const nextNumber = guildCountingData.currentCount + 1;
-        const alertMessage = `⚠️ **DELETE DETECTED!**\n**User:** ${message.author || 'An unknown user'}\n**Deleted Message:** \`${message.content || '(Message content not available)'}\`\n\nThe next number is still **${nextNumber}**.`;
+        const alertMessage = `⚠️ **DELETE DETECTED!**\n**User:** ${message.author || 'An unknown user'}\n**Deleted Message:** \`${message.content || '(Message content not available)'}\`\n\nTo avoid confusion, the next number is **${nextNumber}**.`;
         await message.channel.send(alertMessage);
     }
   }
@@ -2329,127 +2671,205 @@ Stay polite and logical.
 if (command === 'help') {
   const embed1 = new EmbedBuilder()
     .setColor(0x39FF14)
+    .setTitle('📖 SOLDIER¹ Bot Commands (1/6)')
     .setDescription(
+      `**━━━ GENERAL ━━━**\n` +
       `• \`${PREFIX}prefix\` – Show the bot prefix\n` +
       `• \`${PREFIX}ping\` – Check bot response time\n` +
       `• \`${PREFIX}stats\` – Server member stats\n` +
       `• \`${PREFIX}uptime\` – Bot active time\n` +
       `• \`${PREFIX}botinfo\` – Info about the bot\n` +
       `• \`${PREFIX}invite\` – Get bot invite link\n` +
-      `• \`${PREFIX}setwelcome\` / \`${PREFIX}clearwelcome\` – Set/clear welcome message\n` +
-      `• \`${PREFIX}setleave\` / \`${PREFIX}clearleave\` – Set/clear leave message\n` +
-      `• \`${PREFIX}embed create <name> ~ <title> ~ <description> ~ <imageURL> ~ [color]\` – Create or edit a saved embed\n` +
-      `• \`${PREFIX}embed send <name> [#channel]\` – Send a saved embed (or GIF-only embed)\n` +
-      `• \`${PREFIX}embed delete <name>\` – Delete a saved embed\n` +
-      `• \`${PREFIX}embed list\` – Show all saved embed names\n` +
-      `• \`${PREFIX}setgif <URL>\` – Set the persistent GIF embed URL\n` +
-      `• \`${PREFIX}showgif\` – Display the persistently saved GIF embed\n` +
-      `• \`${PREFIX}rank\` – Show your rank card (prestige frames + progress bar)\n` +
-      `• \`${PREFIX}setbg <imageURL>\` – Set background image for your rank card\n` +
-      `• \`${PREFIX}prestige\` – Prestige when you reach max level (resets level, increments prestige)\n` +
-      `• \`${PREFIX}xpleaderboard\` / \`${PREFIX}xplb\` – Show server XP leaderboard\n` +
-      `• \`${PREFIX}xpinfo [@user]\` – Show XP/level/CP info and progress bar for a user\n` +
+      `• \`${PREFIX}userinfo [@user]\` – User info\n` +
+      `• \`${PREFIX}avatar [@user]\` – View avatar\n` +
+      `• \`${PREFIX}serverinfo\` – Server info\n` +
+      `• \`${PREFIX}serverlist\` – List all servers (Immune)\n\n` +
+      `**━━━ MESSAGES & EMBEDS ━━━**\n` +
+      `• \`${PREFIX}say [msg]\` – Echo message\n` +
+      `• \`${PREFIX}shout [msg]\` – Shout a message\n` +
+      `• \`${PREFIX}spoiler [msg]\` – Send spoiler message\n` +
+      `• \`${PREFIX}send <channelID> <message>\` – Send to channel\n` +
+      `• \`${PREFIX}embed create/send/delete/list\` – Manage embeds\n` +
+      `• \`${PREFIX}setgif <URL>\` – Set persistent GIF\n` +
+      `• \`${PREFIX}showgif\` – Display saved GIF\n\n` +
+      `**━━━ WELCOME & LEAVE ━━━**\n` +
+      `• \`${PREFIX}setwelcome [#channel] <msg> | [gif]\` – Set welcome\n` +
+      `• \`${PREFIX}clearwelcome\` – Clear welcome message\n` +
+      `• \`${PREFIX}setleave [#channel] <msg> | [gif]\` – Set leave\n` +
+      `• \`${PREFIX}clearleave\` – Clear leave message`
+    );
+
+  const embed2 = new EmbedBuilder()
+    .setColor(0x39FF14)
+    .setTitle('📖 SOLDIER¹ Bot Commands (2/6)')
+    .setDescription(
+      `**━━━ XP & LEVELING ━━━**\n` +
+      `• \`${PREFIX}rank [@user]\` – Show rank card\n` +
+      `• \`${PREFIX}xpinfo [@user]\` – XP/level/prestige info\n` +
+      `• \`${PREFIX}xpleaderboard\` / \`${PREFIX}xplb\` – XP leaderboard\n` +
+      `• \`${PREFIX}prestige\` – Prestige at max level\n` +
+      `• \`${PREFIX}setbg <URL>\` – Set rank background\n` +
+      `• \`${PREFIX}xpsettings\` – View XP settings\n` +
+      `• \`${PREFIX}setxpsetting <key> <val>\` – Update XP (Immune)\n` +
+      `• \`${PREFIX}addxp/removexp/setlevel/setprestige\` (Immune)\n` +
+      `• \`${PREFIX}resetxp @user\` – Reset XP (Immune)\n\n` +
+      `**━━━ ECONOMY ���━━**\n` +
+      `• \`${PREFIX}balance [@user]\` / \`${PREFIX}bal\` – Check balance\n` +
+      `• \`${PREFIX}pay @user <amount>\` – Pay someone\n` +
+      `• \`${PREFIX}give @user <amt>\` / \`${PREFIX}add\` – Give (Immune)\n` +
+      `• \`${PREFIX}take @user <amt>\` / \`${PREFIX}remove\` – Take (Immune)\n` +
+      `• \`${PREFIX}rich\` / \`${PREFIX}baltop\` – Server leaderboard\n` +
+      `• \`${PREFIX}globalrich\` – Global leaderboard\n` +
+      `• \`${PREFIX}economy\` / \`${PREFIX}econstats\` – Economy stats\n\n` +
+      `**━━━ CRIME SYSTEM ━━━**\n` +
+      `• \`${PREFIX}rob @user\` / \`${PREFIX}steal\` – Rob someone\n` +
+      `• \`${PREFIX}bailout\` / \`${PREFIX}bail\` – Escape jail\n` +
+      `• \`${PREFIX}jail [@user]\` – Check jail status\n` +
+      `• \`${PREFIX}crimestats [@user]\` – Crime statistics`
+    );
+
+  const embed3 = new EmbedBuilder()
+    .setColor(0x39FF14)
+    .setTitle('📖 SOLDIER¹ Bot Commands (3/6)')
+    .setDescription(
+      `**━━━ 💰 EARNING GAMES ━━━**\n` +
+      `• \`${PREFIX}daily\` – Daily reward (24h cooldown)\n` +
+      `• \`${PREFIX}hourly\` – Hourly reward (1h cooldown)\n` +
+      `• \`${PREFIX}work\` – Work for coins (30m cooldown)\n\n` +
+      `**━━━ ⛏️ MINECRAFT GRINDING ━━━**\n` +
+      `• \`${PREFIX}fish\` – Go fishing (45s cooldown)\n` +
+      `• \`${PREFIX}mine\` – Mine for ores (60s cooldown)\n` +
+      `• \`${PREFIX}hunt\` – Hunt Minecraft mobs (50s cooldown)\n\n` +
+      `**━━━ 🎰 GAMBLING GAMES ━━━**\n` +
+      `• \`${PREFIX}rps <r/p/s> <bet>\` – Rock Paper Scissors\n` +
+      `• \`${PREFIX}diceduel @user <bet>\` – PvP dice battle\n` +
+      `• \`${PREFIX}war <bet>\` – Card war vs bot\n` +
+      `• \`${PREFIX}crash <bet>\` – Crash game (cashout before boom!)\n` +
+      `• \`${PREFIX}cashout\` – Cash out from crash game\n` +
+      `• \`${PREFIX}spin\` / \`${PREFIX}wheel\` – Wheel of Fortune (3h)\n` +
+      `• \`${PREFIX}heist <bet>\` – Multi-stage bank heist\n` +
+      `• \`${PREFIX}continue\` – Continue heist to next stage\n` +
+      `• \`${PREFIX}escape\` – Escape heist with winnings\n` +
+      `• \`${PREFIX}bomb\` – Number bomb game (find the bomb!)\n\n` +
+      `**━━━ 🎲 MORE GAMBLING ━━━**\n` +
+      `• \`${PREFIX}flipbet <heads/tails> <bet>\` – Coin flip\n` +
+      `• \`${PREFIX}challengeflip @user <bet>\` – PvP flip\n` +
+      `• \`${PREFIX}slots <bet>\` – Slot machine\n` +
+      `• \`${PREFIX}roulette <type> <bet>\` – Roulette\n` +
+      `• \`${PREFIX}blackjack\` / \`${PREFIX}hit\` / \`${PREFIX}stand\` – Blackjack\n` +
+      `• \`${PREFIX}lottery\` / \`${PREFIX}buyticket\` – Lottery\n` +
+      `• \`${PREFIX}rr\` – Russian Roulette`
+    );
+
+  const embed4 = new EmbedBuilder()
+    .setColor(0x39FF14)
+    .setTitle('📖 SOLDIER¹ Bot Commands (4/6)')
+    .setDescription(
+      `**━━━ STORE & INVENTORY ━━━**\n` +
+      `• \`${PREFIX}store\` – View the shop\n` +
+      `• \`${PREFIX}store buy <id>\` – Purchase item\n` +
+      `• \`${PREFIX}store add/remove\` – Manage shop (Immune)\n` +
+      `• \`${PREFIX}inventory\` / \`${PREFIX}inv\` – View inventory\n` +
+      `• \`${PREFIX}loadout\` – View/equip/unequip items\n\n` +
+      `**━━━ BATTLE SYSTEMS ━━━**\n` +
+      `• \`${PREFIX}battle @user\` / \`${PREFIX}1v1\` – Auto battle\n` +
+      `• \`${PREFIX}dw @user\` – Deadliest Warrior\n\n` +
+      `**━━━ FUN & GAMES ━━━**\n` +
       `• \`${PREFIX}flip\` – Flip a coin\n` +
       `• \`${PREFIX}8ball [question]\` – Magic 8-ball\n` +
       `• \`${PREFIX}dice\` – Roll a die\n` +
       `• \`${PREFIX}rate @user\` – Rate someone\n` +
       `• \`${PREFIX}howgay @user\` – Gay meter\n` +
       `• \`${PREFIX}sus @user\` – Sus meter\n` +
-      `• \`${PREFIX}truth\` – Truth question\n` +
-      `• \`${PREFIX}dare\` – Dare\n` +
-      `• \`${PREFIX}roast @user\` – Roast\n` +
+      `• \`${PREFIX}truth\` / \`${PREFIX}dare\` / \`${PREFIX}tod\` – Truth or Dare\n` +
+      `• \`${PREFIX}roast @user\` – Roast someone\n` +
       `• \`${PREFIX}compliment @user\` – Compliment\n` +
-      `• \`${PREFIX}meme\` – Random meme\n` +
-      `• \`${PREFIX}nsfw-meme\` – Random NSFW meme (NSFW channels only)\n` +
-      `• \`${PREFIX}haunt\` / \`${PREFIX}unhaunt\` – Haunting on/off for a channel\n` +
-      `• \`${PREFIX}blackjack\`, \`${PREFIX}hit\`, \`${PREFIX}stand\` – Play Blackjack`
+      `• \`${PREFIX}meme\` / \`${PREFIX}nsfw-meme\` – Random memes\n` +
+      `• \`${PREFIX}haunt\` / \`${PREFIX}unhaunt\` – Haunting\n` +
+      `• \`${PREFIX}citycam [city]\` – Live city webcams`
     );
 
-  const embed2 = new EmbedBuilder()
+  const embed5 = new EmbedBuilder()
     .setColor(0x39FF14)
+    .setTitle('📖 SOLDIER¹ Bot Commands (5/6)')
     .setDescription(
-      `• \`${PREFIX}giveaway <duration> <prize>\` – Start a giveaway\n` +
-      `• \`${PREFIX}debate <question>\` – Start an ai powered debate\n` +
-      `• \`${PREFIX}kick @user [reason]\` – Kick a user\n` +
-      `• \`${PREFIX}ban @user [reason]\` – Ban a user\n` +
-      `• \`${PREFIX}mute @user [time]\` – Mute a user\n` +
-      `• \`${PREFIX}unmute @user\` – Unmute a user\n` +
-      `• \`${PREFIX}warn @user [reason]\` – Warn a user\n` +
-      `• \`${PREFIX}warnings @user\` – Show warnings\n` +
-      `• \`${PREFIX}clear [number]\` – Delete messages\n` +
-      `• \`${PREFIX}lock\` / \`${PREFIX}unlock\` – Lock/unlock channel (Manage Channels required)\n` +
-      `• \`${PREFIX}antiraid on|off\` – Engage/disengage server lockdown\n` +
-      `• \`${PREFIX}slowmode [seconds]\` – Set slowmode for current channel\n` +
-      `• \`${PREFIX}role add/remove @user <role>\` – Add or remove a role by name (Manage Roles required)\n` +
-      `• \`${PREFIX}nuke delete [count]\` – Delete bulk channels\n` +
-      `• \`${PREFIX}nuke rename <new-name> [count]\` – Rename bulk channels\n` +
-      `• \`${PREFIX}unauthorized\` – Unauthorized response template\n` +
+      `**━━━ MODERATION (Basic) ━━━**\n` +
+      `• \`${PREFIX}kick @user [reason]\` – Kick user\n` +
+      `• \`${PREFIX}ban @user [reason]\` – Ban user\n` +
+      `• \`${PREFIX}unban <userId>\` – Unban user (Immune)\n` +
+      `• \`${PREFIX}banlist\` – View banned users (Immune)\n` +
+      `• \`${PREFIX}mute @user [time]\` – Mute user\n` +
+      `• \`${PREFIX}unmute @user\` – Unmute user\n` +
+      `• \`${PREFIX}warn @user [reason]\` – Warn user\n` +
+      `• \`${PREFIX}warnings @user\` – View warnings\n` +
+      `• \`${PREFIX}clearwarns @user\` – Clear warns (Immune)\n` +
+      `• \`${PREFIX}clear [num]\` – Delete messages\n` +
+      `• \`${PREFIX}purgeuser @user [amt]\` – Purge user msgs (Immune)\n` +
+      `• \`${PREFIX}snipe\` – Last deleted msg (Immune)\n` +
+      `• \`${PREFIX}editsnipe\` – Last edited msg (Immune)\n\n` +
+      `**━━━ MODERATION (Advanced) ━━━**\n` +
+      `• \`${PREFIX}massban @user1 @user2...\` – Mass ban (Immune)\n` +
+      `• \`${PREFIX}masskick @user1 @user2...\` – Mass kick (Immune)\n` +
+      `• \`${PREFIX}lock\` / \`${PREFIX}unlock\` – Lock/unlock channel\n` +
+      `• \`${PREFIX}lockdown\` – Lock ALL channels (Immune)\n` +
+      `• \`${PREFIX}unlockall\` – Unlock ALL channels (Immune)\n` +
+      `• \`${PREFIX}slowmode [secs]\` – Set slowmode\n` +
+      `• \`${PREFIX}role add/remove @user <role>\` – Manage roles\n` +
+      `• \`${PREFIX}nick @user <name>\` – Change nick (Immune)\n` +
+      `• \`${PREFIX}resetnick @user\` – Reset nick (Immune)\n` +
+      `• \`${PREFIX}nuke delete/rename\` – Bulk channel ops\n` +
+      `• \`${PREFIX}tagspam @user <count>\` – Tag spam (Immune)\n` +
+      `• \`${PREFIX}autodelete <userId>\` – Auto-delete (Immune)\n\n` +
+      `**━━━ VOICE MODERATION ━━━**\n` +
+      `• \`${PREFIX}vcmute @user\` – Voice mute (Immune)\n` +
+      `• \`${PREFIX}vcunmute @user\` – Voice unmute (Immune)\n` +
+      `• \`${PREFIX}vckick @user\` – Voice kick (Immune)\n` +
+      `• \`${PREFIX}moveall #channel\` – Move all VC (Immune)`
+    );
+
+  const embed6 = new EmbedBuilder()
+    .setColor(0x39FF14)
+    .setTitle('📖 SOLDIER¹ Bot Commands (6/6)')
+    .setDescription(
+      `**━━━ SECURITY & ANTI-RAID ━━━**\n` +
+      `• \`${PREFIX}antiraid on\` – Engage lockdown (Immune)\n` +
+      `• \`${PREFIX}antiraid off\` – Disengage lockdown (Immune)\n` +
+      `• \`${PREFIX}restore\` – Manual restore (Immune)\n` +
+      `• \`${PREFIX}raidmode\` – Check raid status (Immune)\n\n` +
+      `**━━━ SERVER FEATURES ━━━**\n` +
+      `• \`${PREFIX}giveaway <duration> <prize>\` – Start giveaway\n` +
+      `• \`${PREFIX}continue <msgId>\` – Continue giveaway\n` +
+      `• \`${PREFIX}endgiveaway <msgId>\` – End giveaway\n` +
+      `• \`${PREFIX}debate <topic>\` – AI debate\n` +
+      `• \`${PREFIX}qotd on|off\` – Question of the Day\n` +
+      `• \`${PREFIX}counting set/off/leaderboard\` – Counting game\n\n` +
+      `**━━━ LOGGING ━━━**\n` +
       `• \`${PREFIX}logmode on [#channel]\` – Enable logging\n` +
       `• \`${PREFIX}logmode off\` – Disable logging\n` +
-      `• \`${PREFIX}logmode setmaster <channelID>\` – Set master log (Owner only)\n` +
-      `• \`${PREFIX}logmode masteron|masteroff\` – Enable/disable master log (Owner only)\n` +
-      `• \`${PREFIX}autodelete <userId> [on|off] [moreUserIds...]\` – Toggle auto-delete for user IDs (Owner/Immune only)\n` +
-      `• \`${PREFIX}autodelete list\` – Show auto-delete active list (Owner/Immune only)\n` +
-      `• \`${PREFIX}addxp @user <amount>\` – Add XP to a user (Immune only)\n` +
-      `• \`${PREFIX}removexp @user <amount>\` – Remove XP from a user (Immune only)\n` +
-      `• \`${PREFIX}setlevel @user <level>\` – Set user level (Immune only)\n` +
-      `• \`${PREFIX}setprestige @user <tier>\` – Set prestige level (Immune only)\n` +
-      `• \`${PREFIX}resetxp @user\` – Reset a user's XP data (Immune only)`
-    );
-
-  const embed3 = new EmbedBuilder()
-    .setColor(0x39FF14)
-    .setDescription(
-      `• \`${PREFIX}qotd on|off\` – Enable/disable Question of the Day in channel\n` +
-      `• \`${PREFIX}qotd everyone on|off\` – Enable/disable @everyone ping for QOTD\n` +
-      `• \`${PREFIX}counting set [#channel]\` – Set counting channel\n` +
-      `• \`${PREFIX}counting off\` – Disable counting game\n` +
-      `• \`${PREFIX}counting leaderboard\` – Show global counting leaderboard\n` +
-      `• \`${PREFIX}userinfo\` – User info\n` +
-      `• \`${PREFIX}avatar @user\` – Avatar\n` +
-      `• \`${PREFIX}serverinfo\` – Server info\n` +
-      `• \`${PREFIX}shout [msg]\` – Shout a message (all caps)\n` +
-      `• \`${PREFIX}spoiler [msg]\` – Send spoiler message\n` +
-      `• \`${PREFIX}say [msg]\` – Echo message\n` +
-      `• \`${PREFIX}send <channelID> <message>\` – Send message to channel ID\n` +
-      `• \`${PREFIX}ai <prompt>\` – Ask Google Gemini AI\n` +
-      `• \`@bot <prompt>\` – Ask OpenRouter AI\n` +
-      `• \`${PREFIX}balance [@user]\` / \`${PREFIX}bal\` – Check balance\n` +
-      `• \`${PREFIX}pay @user <amount>\` – Pay coins\n` +
-      `• \`${PREFIX}give / ${PREFIX}add / ${PREFIX}take / ${PREFIX}remove / ${PREFIX}subtract @user <amount>\` – Economy admin (Owner/Immune only)\n` +
-      `• \`${PREFIX}lottery\` – View active lottery info\n` +
-      `• \`${PREFIX}buyticket 1 2 3 4 5 6 7\` – Buy a lottery ticket (7 unique numbers)\n` +
-      `• \`${PREFIX}flipbet <heads|tails> <amount>\` – Coin flip wager\n` +
-      `• \`${PREFIX}challengeflip @user <amount>\` – Challenge another player to a coin flip\n` +
-      `• \`${PREFIX}higherlower\` / \`${PREFIX}hl\` – Guess higher or lower\n` +
-      `• \`${PREFIX}guessnumber\` / \`${PREFIX}gtn\` – Number guessing game\n` +
-      `• \`${PREFIX}roulette <betType> <amount>\` – Play roulette (red/black/even/odd/number)\n` +
-      `• \`${PREFIX}rr\` – Russian Roulette (loser muted 1hr)\n` +
-      `• \`${PREFIX}store [buy <item_id>]\` – Shop\n` +
-      `• \`${PREFIX}store add/remove ...\` – Manage shop (Owner/Immune only)\n` +
-      `• \`${PREFIX}inventory [@user]\` – View inventory\n` +
-      `• \`${PREFIX}loadout [equip/unequip <item_id>]\` – Manage loadout\n` +
-      `• \`${PREFIX}battle @user\` / \`${PREFIX}1v1\` – Automated 1v1 battle\n` +
-      `• \`${PREFIX}dw @user\` / \`${PREFIX}deadliestwarrior\` – Turn-based Deadliest Warrior\n` +
-      `• \`${PREFIX}setlevelupchannel #channel\` – Set channel for level-up announcements (Immune only)\n` +
-      `• \`${PREFIX}disablelevelup\` – Disable level-up announcements (Immune only)\n` +
-      `• \`${PREFIX}xpsettings\` – Show XP system settings\n` +
-      `• \`${PREFIX}setxpsetting <key> <value>\` – Update XP system settings (Immune only)\n` +
-      `• \`${PREFIX}promote/demote @user <rank>\` – Grant/revoke immunity PREFIX immunitylist for list of admin.(Owner only)\n` +
-      `• \`${PREFIX}serverlist\` – List servers (Owner/Immune only)\n` +
-      `• \`${PREFIX}forcesave\` – Manually save all bot data (Owner & Immune only)\n` +
-      `• Immunity Ranks: 2LT, 1LT, CPT, MAJ, LTC, COL, BG, MG, LTG, GEN\n` +
-      `• Economy Permissions:\n` +
-      `  - Bot Owner: Full control\n` +
-      `  - Immune Users: Give/take except owner\n` +
-      `  - Normal Users: Can only pay coins`
+      `• \`${PREFIX}logmode setmaster <id>\` – Set master (Owner)\n` +
+      `• \`${PREFIX}logmode masteron|masteroff\` – Toggle (Owner)\n\n` +
+      `**━━━ AI ━━━**\n` +
+      `• \`${PREFIX}ai <prompt>\` – Google Gemini AI\n` +
+      `• \`@bot <prompt>\` – OpenRouter AI\n\n` +
+      `**━━━ ADMIN (Owner/Immune) ━━━**\n` +
+      `• \`${PREFIX}promote @user <rank>\` – Grant immunity\n` +
+      `• \`${PREFIX}demote @user\` – Revoke immunity\n` +
+      `• \`${PREFIX}immunelist\` – List immune (Owner)\n` +
+      `• \`${PREFIX}forcesave\` – Force save data\n` +
+      `• \`${PREFIX}drop payload\` – Classified\n` +
+      `• \`${PREFIX}payload self destruct\` – Classified (Owner)\n\n` +
+      `**━━━ IMMUNITY RANKS ━━━**\n` +
+      `\`2LT\` • \`1LT\` • \`CPT\` • \`MAJ\` • \`LTC\` • \`COL\` • \`BG\` • \`MG\` • \`LTG\` • \`GEN\``
     )
-    .setFooter({ text: 'Bot developer and creator:TX_SOLDIER' })
+    .setFooter({ text: 'Bot developer and creator: TX_SOLDIER • (Immune) = Owner/Immune Only' })
     .setImage('https://media4.giphy.com/media/v1.Y2lkPTZjMDliOTUyOWgwYTdtYXNjdmpnOWpib256anFtNmI1M3IwZW84eHUxZG5tcTluZyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/6YjbrQ0dun9ydpEqhG/giphy.gif');
 
   await message.channel.send({ embeds: [embed1] });
   await message.channel.send({ embeds: [embed2] });
   await message.channel.send({ embeds: [embed3] });
+  await message.channel.send({ embeds: [embed4] });
+  await message.channel.send({ embeds: [embed5] });
+  await message.channel.send({ embeds: [embed6] });
 }
 
 // ==================================================
@@ -2533,7 +2953,2838 @@ else if (command === 'counting' || command === 'c') {
 
     return message.reply('❌ Invalid subcommand. Use `$counting set`, `$counting setnext`, `$counting off`, or `$counting leaderboard`.');
 }
+// ==================================================
+// COMMAND: ROB
+// ==================================================
+else if (command === 'rob' || command === 'steal') {
+    const target = message.mentions.users.first();
+    const odId = message.author.id;
+    const crimeData = getCrimeData(odId);
+    
+    // Check if user is in jail
+    if (isInJail(odId)) {
+        const timeLeft = getJailTimeRemaining(odId);
+        const minutes = Math.ceil(timeLeft / 60000);
+        return message.reply(`🔒 Youre in jail! Time remaining: **${minutes} minute(s)**.\nUse \`$bailout\` to pay your way out.`);
+    }
+    
+    // Check cooldown (10 minutes)
+    const ROB_COOLDOWN = 10 * 60 * 1000;
+    const timeSinceLastRob = Date.now() - (crimeData.lastRob || 0);
+    if (timeSinceLastRob < ROB_COOLDOWN) {
+        const timeLeft = Math.ceil((ROB_COOLDOWN - timeSinceLastRob) / 60000);
+        return message.reply(`⏳ You need to lay low for **${timeLeft} minute(s)** before robbing again.`);
+    }
+    
+    // Validate target
+    if (!target) {
+        return message.reply('❌ You need to mention someone to rob!\nUsage: `$rob @user`');
+    }
+    
+    if (target.id === odId) {
+        return message.reply('❌ You cant rob yourself, dummy.');
+    }
+    
+    if (target.bot) {
+        return message.reply('❌ You cant rob a bot. They have no soul... or money.');
+    }
+    
+    // ==================================================
+    // OWNER IMMUNITY - UNTOUCHABLE MESSAGE
+    // ==================================================
+    if (target.id === OWNER_ID) {
+        const untouchableEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('⚠️ CRITICAL ERROR: TARGET UNTOUCHABLE ⚠️')
+            .setDescription(
+                `\`\`\`ansi\n` +
+                `\u001b[31m[SYSTEM ALERT]\u001b[0m\n` +
+                `\u001b[33mTARGET IDENTIFICATION:\u001b[0m TX_SOLDIER\n` +
+                `\u001b[33mTHREAT LEVEL:\u001b[0m ████████████ MAXIMUM\n` +
+                `\u001b[33mSTATUS:\u001b[0m \u001b[31mUNTOUCHABLE\u001b[0m\n` +
+                `\`\`\``
+            )
+            .addFields(
+                { 
+                    name: '🚫 ACCESS DENIED', 
+                    value: '```You dare attempt to rob the OWNER?\nThis target exists beyond your reach.\nNo mortal can touch what is divine.```', 
+                    inline: false 
+                },
+                { 
+                    name: '⚡ CONSEQUENCES', 
+                    value: '```Your audacity has been noted.\nThe shadows remember your name.\nPray you never cross paths again.```', 
+                    inline: false 
+                },
+                {
+                    name: '👑 THE UNTOUCHABLE',
+                    value: `**${target.username}** is the **Creator**, the **Owner**, the **God** of this realm.\n\n*Some targets are simply... out of your league.*`,
+                    inline: false
+                }
+            )
+            .setImage('https://media1.giphy.com/media/v1.Y2lkPTc5MGI3NjExcDd6OHJtOWZrNnBmNXc0MnRqbWs0a2JqbWFnMWp5MHNqeWJsNXB3aSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/l41lUJ1YoZB1lHVPG/giphy.gif')
+            .setFooter({ text: '🛡️ OWNER IMMUNITY ACTIVE • Nice try though.' })
+            .setTimestamp();
+        
+        // Fine the user for attempting to rob owner
+        const audacityFine = Math.floor(getBalance(odId) * 0.05);
+        if (audacityFine > 0) {
+            updateBalance(odId, -audacityFine);
+            saveEconomyData();
+            untouchableEmbed.addFields({
+                name: '💸 Audacity Tax',
+                value: `You lost **${audacityFine.toLocaleString()}** Gold Coins for your insolence.`,
+                inline: false
+            });
+        }
+        
+        await sendLog(message.guild.id, `\`[ROB BLOCKED]\` **${message.author.tag}** attempted to rob the OWNER and was denied.`);
+        
+        return message.channel.send({ embeds: [untouchableEmbed] });
+    }
+    
+    // Check if target is in jail
+    if (isInJail(target.id)) {
+        return message.reply('❌ Your target is already in jail. No honor among thieves?');
+    }
+    
+    const targetBalance = getBalance(target.id);
+    const robberBalance = getBalance(odId);
+    
+    const MIN_TARGET_BALANCE = 500;
+    const MIN_ROBBER_BALANCE = 100;
+    
+    if (targetBalance < MIN_TARGET_BALANCE) {
+        return message.reply(`❌ **${target.username}** is too broke to rob. They need at least **${MIN_TARGET_BALANCE}** Gold Coins.`);
+    }
+    
+    if (robberBalance < MIN_ROBBER_BALANCE) {
+        return message.reply(`❌ You need at least **${MIN_ROBBER_BALANCE}** Gold Coins to attempt a robbery (for equipment costs).`);
+    }
+    
+    crimeData.lastRob = Date.now();
+    
+    let successChance = 45;
+    
+    const robberXP = getXPData(odId);
+    const levelBonus = Math.min(10, Math.floor(robberXP.level / 5));
+    successChance += levelBonus;
+    successChance += robberXP.prestige * 2;
+    
+    if (targetBalance > robberBalance * 2) {
+        successChance += 5;
+    }
+    
+    successChance = Math.min(65, successChance);
+    
+    const roll = Math.random() * 100;
+    const success = roll < successChance;
+    
+    const stealPercent = 0.10 + (Math.random() * 0.20);
+    const maxSteal = 50000;
+    let stealAmount = Math.floor(targetBalance * stealPercent);
+    stealAmount = Math.min(stealAmount, maxSteal);
+    
+    const finePercent = 0.15 + (Math.random() * 0.10);
+    let fineAmount = Math.floor(robberBalance * finePercent);
+    fineAmount = Math.max(fineAmount, 100);
+    
+    const embed = new EmbedBuilder()
+        .setTimestamp()
+        .setFooter({ text: `Success chance was ${successChance.toFixed(1)}%` });
+    
+    if (success) {
+        updateBalance(target.id, -stealAmount);
+        updateBalance(odId, stealAmount);
+        
+        crimeData.successfulRobs++;
+        crimeData.totalStolen += stealAmount;
+        
+        const targetCrimeData = getCrimeData(target.id);
+        targetCrimeData.timesRobbed++;
+        targetCrimeData.totalLostToRobbery += stealAmount;
+        
+        trackTransaction('rob', stealAmount);
+        saveEconomyData();
+        
+        embed.setColor(0x00FF00)
+            .setTitle('🔫 Robbery Successful!')
+            .setDescription(
+                `**${message.author.username}** successfully robbed **${target.username}**!\n\n` +
+                `💰 **Stolen:** ${stealAmount.toLocaleString()} Gold Coins\n` +
+                `👛 **Your new balance:** ${getBalance(odId).toLocaleString()} Gold Coins`
+            )
+            .setThumbnail('https://i.imgur.com/JtqKbGs.gif')
+            .addFields(
+                { name: '🎯 Victim', value: `${target.username}`, inline: true },
+                { name: '💸 Their Loss', value: `${stealAmount.toLocaleString()}`, inline: true },
+                { name: '📊 Your Rob Stats', value: `${crimeData.successfulRobs} successful / ${crimeData.failedRobs} failed`, inline: false }
+            );
+        
+        try {
+            await target.send(`🚨 **Youve been robbed!**\n**${message.author.username}** stole **${stealAmount.toLocaleString()}** Gold Coins from you in **${message.guild.name}**!`);
+        } catch (e) {}
+        
+        await sendLog(message.guild.id, `\`[ROB]\` **${message.author.tag}** robbed **${target.tag}** for **${stealAmount.toLocaleString()}** Gold Coins.`);
+        
+    } else {
+        updateBalance(odId, -fineAmount);
+        
+        crimeData.failedRobs++;
+        
+        const jailTime = (5 + Math.floor(Math.random() * 10)) * 60 * 1000;
+        sendToJail(odId, jailTime);
+        
+        const jailMinutes = Math.ceil(jailTime / 60000);
+        
+        saveEconomyData();
+        
+        embed.setColor(0xFF0000)
+            .setTitle('🚔 Robbery Failed!')
+            .setDescription(
+                `**${message.author.username}** got caught trying to rob **${target.username}**!\n\n` +
+                `💸 **Fine paid:** ${fineAmount.toLocaleString()} Gold Coins\n` +
+                `⛓️ **Jail time:** ${jailMinutes} minutes\n` +
+                `👛 **Your new balance:** ${getBalance(odId).toLocaleString()} Gold Coins`
+            )
+            .setThumbnail('https://i.imgur.com/IvDnXEH.gif')
+            .addFields(
+                { name: '🎯 Intended Victim', value: `${target.username}`, inline: true },
+                { name: '⏰ Release Time', value: `<t:${Math.floor(crimeData.jailUntil / 1000)}:R>`, inline: true },
+                { name: '📊 Your Rob Stats', value: `${crimeData.successfulRobs} successful / ${crimeData.failedRobs} failed`, inline: false }
+            );
+        
+        await sendLog(message.guild.id, `\`[ROB FAILED]\` **${message.author.tag}** failed to rob **${target.tag}** and was jailed for ${jailMinutes} minutes.`);
+    }
+    
+    message.channel.send({ embeds: [embed] });
+}
 
+// ==================================================
+// COMMAND: BAILOUT
+// ==================================================
+else if (command === 'bailout' || command === 'bail') {
+    const odId = message.author.id;
+    
+    if (!isInJail(odId)) {
+        return message.reply('✅ Youre not in jail!');
+    }
+    
+    const timeLeft = getJailTimeRemaining(odId);
+    const minutesLeft = Math.ceil(timeLeft / 60000);
+    
+    const bailCost = minutesLeft * 500;
+    const balance = getBalance(odId);
+    
+    if (args[0]?.toLowerCase() === 'confirm') {
+        if (balance < bailCost) {
+            return message.reply(`❌ You need **${bailCost.toLocaleString()}** Gold Coins to bail out, but you only have **${balance.toLocaleString()}**.`);
+        }
+        
+        updateBalance(odId, -bailCost);
+        releaseFromJail(odId);
+        saveEconomyData();
+        
+        const embed = new EmbedBuilder()
+            .setColor(0x00FF00)
+            .setTitle('🔓 Bailed Out!')
+            .setDescription(
+                `You paid **${bailCost.toLocaleString()}** Gold Coins and are now free!\n\n` +
+                `👛 **New balance:** ${getBalance(odId).toLocaleString()} Gold Coins`
+            )
+            .setTimestamp();
+        
+        return message.channel.send({ embeds: [embed] });
+    }
+    
+    const embed = new EmbedBuilder()
+        .setColor(0xFFA500)
+        .setTitle('⛓️ Jail Status')
+        .setDescription(
+            `You are currently in jail!\n\n` +
+            `⏰ **Time remaining:** ${minutesLeft} minute(s)\n` +
+            `💰 **Bail cost:** ${bailCost.toLocaleString()} Gold Coins\n` +
+            `👛 **Your balance:** ${balance.toLocaleString()} Gold Coins\n\n` +
+            `Use \`$bailout confirm\` to pay and get out.`
+        )
+        .setTimestamp();
+    
+    message.channel.send({ embeds: [embed] });
+}
+
+// ==================================================
+// COMMAND: JAIL STATUS
+// ==================================================
+else if (command === 'jail' || command === 'jailstatus') {
+    const target = message.mentions.users.first() || message.author;
+    
+    if (!isInJail(target.id)) {
+        return message.reply(`✅ **${target.username}** is not in jail.`);
+    }
+    
+    const timeLeft = getJailTimeRemaining(target.id);
+    const minutesLeft = Math.ceil(timeLeft / 60000);
+    const crimeData = getCrimeData(target.id);
+    
+    const embed = new EmbedBuilder()
+        .setColor(0xFF6600)
+        .setTitle(`⛓️ ${target.username}'s Jail Status`)
+        .addFields(
+            { name: '⏰ Time Remaining', value: `${minutesLeft} minute(s)`, inline: true },
+            { name: '🔓 Release Time', value: `<t:${Math.floor(crimeData.jailUntil / 1000)}:R>`, inline: true },
+            { name: '📊 Crime Record', value: `${crimeData.successfulRobs} successful robs\n${crimeData.failedRobs} failed attempts`, inline: false }
+        )
+        .setTimestamp();
+    
+    message.channel.send({ embeds: [embed] });
+}
+
+// ==================================================
+// COMMAND: CRIME STATS
+// ==================================================
+else if (command === 'crimestats' || command === 'robstats') {
+    const target = message.mentions.users.first() || message.author;
+    const crimeData = getCrimeData(target.id);
+    
+    const successRate = crimeData.successfulRobs + crimeData.failedRobs > 0
+        ? ((crimeData.successfulRobs / (crimeData.successfulRobs + crimeData.failedRobs)) * 100).toFixed(1)
+        : 0;
+    
+    const embed = new EmbedBuilder()
+        .setColor(0x8B0000)
+        .setTitle(`🔫 ${target.username}'s Crime Statistics`)
+        .setThumbnail(target.displayAvatarURL({ dynamic: true }))
+        .addFields(
+            { name: '✅ Successful Robs', value: `${crimeData.successfulRobs}`, inline: true },
+            { name: '❌ Failed Robs', value: `${crimeData.failedRobs}`, inline: true },
+            { name: '📈 Success Rate', value: `${successRate}%`, inline: true },
+            { name: '💰 Total Stolen', value: `${crimeData.totalStolen.toLocaleString()} Gold Coins`, inline: true },
+            { name: '😢 Times Robbed', value: `${crimeData.timesRobbed}`, inline: true },
+            { name: '💸 Lost to Robbery', value: `${crimeData.totalLostToRobbery.toLocaleString()} Gold Coins`, inline: true }
+        )
+        .setTimestamp();
+    
+    if (isInJail(target.id)) {
+        const timeLeft = Math.ceil(getJailTimeRemaining(target.id) / 60000);
+        embed.addFields({ name: '⛓️ Currently Jailed', value: `${timeLeft} minute(s) remaining`, inline: false });
+    }
+    
+    message.channel.send({ embeds: [embed] });
+}
+// ==================================================
+// COMMAND: RICH (Server Leaderboard)
+// ==================================================
+else if (command === 'rich' || command === 'richest' || command === 'baltop') {
+    await message.guild.members.fetch();
+    
+    const serverUsers = [];
+    
+    message.guild.members.cache.forEach(member => {
+        if (member.user.bot) return;
+        const balance = getBalance(member.user.id);
+        if (balance > 0) {
+            serverUsers.push({
+                id: member.user.id,
+                username: member.user.username,
+                displayName: member.displayName,
+                balance: balance,
+            });
+        }
+    });
+    
+    serverUsers.sort((a, b) => b.balance - a.balance);
+    
+    const top10 = serverUsers.slice(0, 10);
+    
+    if (top10.length === 0) {
+        return message.reply('❌ No one in this server has any Gold Coins yet!');
+    }
+    
+    const medals = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
+    
+    let leaderboardText = '';
+    top10.forEach((user, index) => {
+        leaderboardText += `${medals[index]} **${user.username}**\n`;
+        leaderboardText += `┗ 💰 ${user.balance.toLocaleString()} Gold Coins\n`;
+        leaderboardText += `┗ 🆔 \`${user.id}\`\n\n`;
+    });
+    
+    // Calculate server total
+    const serverTotal = serverUsers.reduce((sum, user) => sum + user.balance, 0);
+    
+    // Find requester's rank
+    const requesterRank = serverUsers.findIndex(u => u.id === message.author.id) + 1;
+    const requesterBalance = getBalance(message.author.id);
+    
+    const embed = new EmbedBuilder()
+        .setColor(0xFFD700)
+        .setTitle(`🏆 ${message.guild.name} - Richest Members`)
+        .setDescription(leaderboardText)
+        .setThumbnail(message.guild.iconURL({ dynamic: true }))
+        .addFields(
+            { name: '💎 Server Total Wealth', value: `${serverTotal.toLocaleString()} Gold Coins`, inline: true },
+            { name: '👥 Ranked Members', value: `${serverUsers.length}`, inline: true },
+            { name: '📊 Your Rank', value: requesterRank > 0 ? `#${requesterRank} (${requesterBalance.toLocaleString()} coins)` : 'Unranked', inline: true }
+        )
+        .setFooter({ text: `Requested by ${message.author.username}` })
+        .setTimestamp();
+    
+    message.channel.send({ embeds: [embed] });
+}
+
+// ==================================================
+// COMMAND: GLOBALRICH (All Servers Leaderboard)
+// ==================================================
+else if (command === 'globalrich' || command === 'globalbal' || command === 'worldrich') {
+    const allUsers = [];
+    
+    for (const odId in botData.economyData) {
+        const balance = botData.economyData[odId] || 0;
+        if (balance > 0) {
+            allUsers.push({
+                id: odId,
+                balance: balance,
+            });
+        }
+    }
+    
+    allUsers.sort((a, b) => b.balance - a.balance);
+    
+    const top15 = allUsers.slice(0, 15);
+    
+    if (top15.length === 0) {
+        return message.reply('❌ No users have any Gold Coins yet!');
+    }
+    
+    const medals = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟', '11', '12', '13', '14', '15'];
+    
+    let leaderboardText = '';
+    
+    for (let i = 0; i < top15.length; i++) {
+        const userData = top15[i];
+        let username = 'Unknown User';
+        let serverName = 'Unknown Server';
+        
+        // Try to find the user
+        try {
+            const user = await client.users.fetch(userData.id).catch(() => null);
+            if (user) {
+                username = user.username;
+            }
+            
+            // Find which server they share with the bot
+            for (const [guildId, guild] of client.guilds.cache) {
+                const member = guild.members.cache.get(userData.id);
+                if (member) {
+                    serverName = guild.name;
+                    break;
+                }
+            }
+        } catch (e) {}
+        
+        leaderboardText += `${medals[i]} **${username}**\n`;
+        leaderboardText += `┣ 💰 ${userData.balance.toLocaleString()} Gold Coins\n`;
+        leaderboardText += `┣ 🆔 \`${userData.id}\`\n`;
+        leaderboardText += `┗ 🏠 ${serverName}\n\n`;
+    }
+    
+    // Calculate global stats
+    const totalCirculation = allUsers.reduce((sum, user) => sum + user.balance, 0);
+    const totalUsers = allUsers.length;
+    const averageBalance = Math.floor(totalCirculation / totalUsers);
+    
+    // Find requester's global rank
+    const requesterGlobalRank = allUsers.findIndex(u => u.id === message.author.id) + 1;
+    const requesterBalance = getBalance(message.author.id);
+    
+    const embed = new EmbedBuilder()
+        .setColor(0x9B59B6)
+        .setTitle('🌍 GLOBAL LEADERBOARD - All Servers')
+        .setDescription(leaderboardText)
+        .setThumbnail('https://i.imgur.com/AfFp7pu.png')
+        .addFields(
+            { name: '💎 Total Circulation', value: `${totalCirculation.toLocaleString()} Gold Coins`, inline: true },
+            { name: '👥 Total Users', value: `${totalUsers.toLocaleString()}`, inline: true },
+            { name: '📈 Average Balance', value: `${averageBalance.toLocaleString()} Gold Coins`, inline: true },
+            { name: '🌐 Your Global Rank', value: requesterGlobalRank > 0 ? `#${requesterGlobalRank} of ${totalUsers}` : 'Unranked', inline: true },
+            { name: '💰 Your Balance', value: `${requesterBalance.toLocaleString()} Gold Coins`, inline: true },
+            { name: '🏠 Bot Servers', value: `${client.guilds.cache.size}`, inline: true }
+        )
+        .setFooter({ text: `Requested by ${message.author.username} • Top 15 Richest Players Worldwide` })
+        .setTimestamp();
+    
+    message.channel.send({ embeds: [embed] });
+}
+
+// ==================================================
+// COMMAND: ECONOMY STATS (Global Economy Overview)
+// ==================================================
+else if (command === 'econstats' || command === 'economystats' || command === 'economy') {
+    // Update global stats first
+    updateGlobalStats();
+    
+    const stats = botData.globalEconomyStats;
+    
+    // Count users with balance
+    let totalUsers = 0;
+    let richestUser = { id: null, balance: 0 };
+    let poorestUser = { id: null, balance: Infinity };
+    
+    for (const odId in botData.economyData) {
+        const balance = botData.economyData[odId] || 0;
+        if (balance > 0) {
+            totalUsers++;
+            if (balance > richestUser.balance) {
+                richestUser = { id: odId, balance: balance };
+            }
+            if (balance < poorestUser.balance) {
+                poorestUser = { id: odId, balance: balance };
+            }
+        }
+    }
+    
+    if (poorestUser.balance === Infinity) {
+        poorestUser = { id: null, balance: 0 };
+    }
+    
+    // Get usernames
+    let richestName = 'No one yet';
+    let poorestName = 'No one yet';
+    
+    if (richestUser.id) {
+        try {
+            const user = await client.users.fetch(richestUser.id).catch(() => null);
+            if (user) richestName = user.username;
+        } catch (e) {}
+    }
+    
+    if (poorestUser.id) {
+        try {
+            const user = await client.users.fetch(poorestUser.id).catch(() => null);
+            if (user) poorestName = user.username;
+        } catch (e) {}
+    }
+    
+    const averageBalance = totalUsers > 0 ? Math.floor(stats.totalCoinsCirculation / totalUsers) : 0;
+    
+    // Crime stats
+    let totalRobberies = 0;
+    let totalJailed = 0;
+    
+    for (const odId in botData.crimeData) {
+        const crime = botData.crimeData[odId];
+        totalRobberies += (crime.successfulRobs || 0) + (crime.failedRobs || 0);
+        if (isInJail(odId)) totalJailed++;
+    }
+    
+    const embed = new EmbedBuilder()
+        .setColor(0x00CED1)
+        .setTitle('📊 GLOBAL ECONOMY STATISTICS')
+        .setDescription('*Real-time economy data across all servers*')
+        .setThumbnail('https://i.imgur.com/kVxsHk2.gif')
+        .addFields(
+            { name: '💰 Total Circulation', value: `\`\`\`${stats.totalCoinsCirculation.toLocaleString()} Gold Coins\`\`\``, inline: false },
+            { name: '👥 Total Users', value: `${totalUsers.toLocaleString()}`, inline: true },
+            { name: '📈 Average Balance', value: `${averageBalance.toLocaleString()}`, inline: true },
+            { name: '🏠 Total Servers', value: `${client.guilds.cache.size}`, inline: true },
+            { name: '👑 Richest Player', value: `**${richestName}**\n${richestUser.balance.toLocaleString()} coins`, inline: true },
+            { name: '😢 Poorest Player', value: `**${poorestName}**\n${poorestUser.balance.toLocaleString()} coins`, inline: true },
+            { name: '📉 Wealth Gap', value: `${(richestUser.balance - poorestUser.balance).toLocaleString()} coins`, inline: true },
+            { name: '🔫 Total Robberies', value: `${totalRobberies.toLocaleString()}`, inline: true },
+            { name: '💸 Total Robbed', value: `${stats.totalRobbed.toLocaleString()} coins`, inline: true },
+            { name: '⛓️ Currently Jailed', value: `${totalJailed} user(s)`, inline: true }
+        )
+        .setFooter({ text: `Last updated: ${stats.lastUpdated ? new Date(stats.lastUpdated).toLocaleString() : 'Never'}` })
+        .setTimestamp();
+    
+    message.channel.send({ embeds: [embed] });
+}
+// ==================================================
+// COMMAND: DAILY
+// ==================================================
+else if (command === 'daily') {
+    const userId = message.author.id;
+    const now = Date.now();
+    const DAILY_COOLDOWN = 24 * 60 * 60 * 1000; // 24 hours
+    
+    if (!botData.dailyData[userId]) {
+        botData.dailyData[userId] = {
+            lastClaim: 0,
+            streak: 0,
+            totalClaimed: 0
+        };
+    }
+    
+    const userData = botData.dailyData[userId];
+    const timeSinceClaim = now - userData.lastClaim;
+    
+    if (timeSinceClaim < DAILY_COOLDOWN) {
+        const timeLeft = DAILY_COOLDOWN - timeSinceClaim;
+        const hours = Math.floor(timeLeft / (60 * 60 * 1000));
+        const minutes = Math.floor((timeLeft % (60 * 60 * 1000)) / (60 * 1000));
+        
+        const cooldownEmbed = new EmbedBuilder()
+            .setColor(0xFF6600)
+            .setTitle('⏰ DAILY REWARD')
+            .setDescription(
+                '```ansi\n' +
+                '\u001b[33m╔═══════════════════════════════════════════╗\n' +
+                '║     ⏳  ALREADY CLAIMED TODAY  ⏳          ║\n' +
+                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+                '```\n' +
+                `Come back in **${hours}h ${minutes}m** for your next reward!`
+            )
+            .addFields(
+                { name: '🔥 Current Streak', value: `\`${userData.streak} days\``, inline: true },
+                { name: '💰 Total Claimed', value: `\`${userData.totalClaimed.toLocaleString()}\``, inline: true }
+            )
+            .setFooter({ text: '💡 Tip: Claim daily every day to build your streak!' })
+            .setTimestamp();
+        
+        return message.channel.send({ embeds: [cooldownEmbed] });
+    }
+    
+    // Check if streak continues (claimed within 48 hours) or resets
+    const STREAK_WINDOW = 48 * 60 * 60 * 1000;
+    if (timeSinceClaim > STREAK_WINDOW) {
+        userData.streak = 0;
+    }
+    
+    userData.streak++;
+    userData.lastClaim = now;
+    
+    // Base reward + streak bonus
+    const baseReward = 100 + Math.floor(Math.random() * 401); // 100-500
+    const streakBonus = Math.min(userData.streak * 25, 500); // +25 per day, max +500
+    const totalReward = baseReward + streakBonus;
+    
+    userData.totalClaimed += totalReward;
+    updateBalance(userId, totalReward);
+    saveDailyData();
+    saveEconomyData();
+    
+    const claimEmbed = new EmbedBuilder()
+        .setColor(0x00FF00)
+        .setTitle('🎁 DAILY REWARD CLAIMED!')
+        .setDescription(
+            '```ansi\n' +
+            '\u001b[32m╔═══════════════════════════════════════════╗\n' +
+            '║                                           ║\n' +
+            '║     💰  REWARD COLLECTED!  💰            ║\n' +
+            '║                                           ║\n' +
+            '║     ███████████████████████████           ║\n' +
+            '║     █                         █           ║\n' +
+            '║     █    ' + String(totalReward).padStart(5, ' ') + ' GOLD COINS    █           ║\n' +
+            '║     █                         █           ║\n' +
+            '║     ███████████████████████████           ║\n' +
+            '║                                           ║\n' +
+            '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+            '```'
+        )
+        .addFields(
+            { name: '💵 Base Reward', value: `\`${baseReward}\``, inline: true },
+            { name: '🔥 Streak Bonus', value: `\`+${streakBonus}\``, inline: true },
+            { name: '💰 Total', value: `\`${totalReward}\``, inline: true },
+            { name: '📅 Streak', value: `\`${userData.streak} day${userData.streak > 1 ? 's' : ''}\``, inline: true },
+            { name: '👛 New Balance', value: `\`${getBalance(userId).toLocaleString()}\``, inline: true }
+        )
+        .setThumbnail('https://i.imgur.com/AfFp7pu.png')
+        .setFooter({ text: '🔥 Keep your streak alive! Claim again in 24 hours.' })
+        .setTimestamp();
+    
+    if (userData.streak >= 7) {
+        claimEmbed.addFields({ name: '🏆 STREAK MASTER!', value: `\`\`\`You've claimed ${userData.streak} days in a row!\`\`\``, inline: false });
+    }
+    
+    message.channel.send({ embeds: [claimEmbed] });
+}
+
+// ==================================================
+// COMMAND: HOURLY
+// ==================================================
+else if (command === 'hourly') {
+    const userId = message.author.id;
+    const now = Date.now();
+    const HOURLY_COOLDOWN = 60 * 60 * 1000; // 1 hour
+    
+    if (!botData.hourlyData[userId]) {
+        botData.hourlyData[userId] = {
+            lastClaim: 0,
+            totalClaimed: 0,
+            claimCount: 0
+        };
+    }
+    
+    const userData = botData.hourlyData[userId];
+    const timeSinceClaim = now - userData.lastClaim;
+    
+    if (timeSinceClaim < HOURLY_COOLDOWN) {
+        const timeLeft = HOURLY_COOLDOWN - timeSinceClaim;
+        const minutes = Math.floor(timeLeft / (60 * 1000));
+        const seconds = Math.floor((timeLeft % (60 * 1000)) / 1000);
+        
+        const cooldownEmbed = new EmbedBuilder()
+            .setColor(0xFF6600)
+            .setTitle('⏰ HOURLY REWARD')
+            .setDescription(
+                '```ansi\n' +
+                '\u001b[33m╔═══════════════════════════════════════════╗\n' +
+                '║      ⏳  PATIENCE, SOLDIER  ⏳             ║\n' +
+                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+                '```\n' +
+                `Come back in **${minutes}m ${seconds}s** for your next reward!`
+            )
+            .addFields(
+                { name: '📊 Times Claimed', value: `\`${userData.claimCount}\``, inline: true },
+                { name: '💰 Total Earned', value: `\`${userData.totalClaimed.toLocaleString()}\``, inline: true }
+            )
+            .setFooter({ text: '⏰ Hourly rewards reset every 60 minutes!' })
+            .setTimestamp();
+        
+        return message.channel.send({ embeds: [cooldownEmbed] });
+    }
+    
+    userData.lastClaim = now;
+    userData.claimCount++;
+    
+    const reward = 25 + Math.floor(Math.random() * 76); // 25-100
+    userData.totalClaimed += reward;
+    
+    updateBalance(userId, reward);
+    saveHourlyData();
+    saveEconomyData();
+    
+    const claimEmbed = new EmbedBuilder()
+        .setColor(0x00BFFF)
+        .setTitle('⏰ HOURLY REWARD CLAIMED!')
+        .setDescription(
+            '```ansi\n' +
+            '\u001b[36m╔═══════════════════════════════════════════╗\n' +
+            '║                                           ║\n' +
+            '║         ⏰  HOURLY LOOT  ⏰               ║\n' +
+            '║                                           ║\n' +
+            '║            +' + String(reward).padStart(3, ' ') + ' COINS                   ║\n' +
+            '║                                           ║\n' +
+            '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+            '```'
+        )
+        .addFields(
+            { name: '💵 Reward', value: `\`${reward} coins\``, inline: true },
+            { name: '👛 Balance', value: `\`${getBalance(userId).toLocaleString()}\``, inline: true },
+            { name: '📊 Total Claims', value: `\`${userData.claimCount}\``, inline: true }
+        )
+        .setFooter({ text: '⏰ Next hourly available in 1 hour!' })
+        .setTimestamp();
+    
+    message.channel.send({ embeds: [claimEmbed] });
+}
+
+// ==================================================
+// COMMAND: WORK
+// ==================================================
+else if (command === 'work') {
+    const userId = message.author.id;
+    const now = Date.now();
+    const WORK_COOLDOWN = 30 * 60 * 1000; // 30 minutes
+    
+    if (!botData.workData[userId]) {
+        botData.workData[userId] = {
+            lastWork: 0,
+            totalEarned: 0,
+            timesWorked: 0
+        };
+    }
+    
+    const userData = botData.workData[userId];
+    const timeSinceWork = now - userData.lastWork;
+    
+    if (timeSinceWork < WORK_COOLDOWN) {
+        const timeLeft = WORK_COOLDOWN - timeSinceWork;
+        const minutes = Math.floor(timeLeft / (60 * 1000));
+        const seconds = Math.floor((timeLeft % (60 * 1000)) / 1000);
+        
+        const cooldownEmbed = new EmbedBuilder()
+            .setColor(0xFF6600)
+            .setTitle('💼 WORK')
+            .setDescription(
+                '```ansi\n' +
+                '\u001b[33m╔═══════════════════════════════════════════╗\n' +
+                '║       😓  YOURE EXHAUSTED  😓             ║\n' +
+                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+                '```\n' +
+                `You need to rest! Work again in **${minutes}m ${seconds}s**`
+            )
+            .addFields(
+                { name: '💼 Times Worked', value: `\`${userData.timesWorked}\``, inline: true },
+                { name: '💰 Career Earnings', value: `\`${userData.totalEarned.toLocaleString()}\``, inline: true }
+            )
+            .setFooter({ text: '💡 Tip: Use $daily and $hourly while waiting!' })
+            .setTimestamp();
+        
+        return message.channel.send({ embeds: [cooldownEmbed] });
+    }
+    
+    const jobs = [
+        { job: 'Software Developer', emoji: '💻', min: 150, max: 250 },
+        { job: 'Chef', emoji: '👨‍🍳', min: 80, max: 150 },
+        { job: 'Doctor', emoji: '👨‍⚕️', min: 200, max: 300 },
+        { job: 'Streamer', emoji: '🎮', min: 50, max: 400 },
+        { job: 'Uber Driver', emoji: '🚗', min: 60, max: 120 },
+        { job: 'YouTuber', emoji: '📹', min: 30, max: 500 },
+        { job: 'Teacher', emoji: '👨‍🏫', min: 100, max: 180 },
+        { job: 'Firefighter', emoji: '🚒', min: 120, max: 220 },
+        { job: 'Police Officer', emoji: '👮', min: 130, max: 230 },
+        { job: 'Musician', emoji: '🎸', min: 40, max: 350 },
+        { job: 'Artist', emoji: '🎨', min: 50, max: 300 },
+        { job: 'Pilot', emoji: '✈️', min: 180, max: 280 },
+        { job: 'Astronaut', emoji: '🚀', min: 250, max: 400 },
+        { job: 'Pro Gamer', emoji: '🕹️', min: 100, max: 450 },
+        { job: 'Crypto Trader', emoji: '📈', min: 10, max: 600 },
+        { job: 'Hitman', emoji: '🔫', min: 200, max: 500 },
+        { job: 'Drug Dealer', emoji: '💊', min: 150, max: 550 },
+        { job: 'Hacker', emoji: '🖥️', min: 180, max: 480 },
+        { job: 'Janitor', emoji: '🧹', min: 50, max: 100 },
+        { job: 'Fast Food Worker', emoji: '🍔', min: 40, max: 90 },
+    ];
+    
+    const selectedJob = jobs[Math.floor(Math.random() * jobs.length)];
+    const reward = selectedJob.min + Math.floor(Math.random() * (selectedJob.max - selectedJob.min + 1));
+    
+    userData.lastWork = now;
+    userData.timesWorked++;
+    userData.totalEarned += reward;
+    
+    updateBalance(userId, reward);
+    saveWorkData();
+    saveEconomyData();
+    
+    const workEmbed = new EmbedBuilder()
+        .setColor(0x9B59B6)
+        .setTitle('💼 WORK COMPLETE!')
+        .setDescription(
+            '```ansi\n' +
+            '\u001b[35m╔═══════════════════════════════════════════╗\n' +
+            '║                                           ║\n' +
+            '║    ' + selectedJob.emoji + '  JOB COMPLETED SUCCESSFULLY  ' + selectedJob.emoji + '   ║\n' +
+            '║                                           ║\n' +
+            '╠═══════════════════════════════════════════╣\n' +
+            '║                                           ║\n' +
+            '║       PAYCHECK: +' + String(reward).padStart(4, ' ') + ' GOLD COINS        ║\n' +
+            '║                                           ║\n' +
+            '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+            '```\n' +
+            `You worked as a **${selectedJob.job}** ${selectedJob.emoji}`
+        )
+        .addFields(
+            { name: '💵 Earned', value: `\`${reward} coins\``, inline: true },
+            { name: '👛 Balance', value: `\`${getBalance(userId).toLocaleString()}\``, inline: true },
+            { name: '💼 Career Stats', value: `\`${userData.timesWorked} jobs | ${userData.totalEarned.toLocaleString()} earned\``, inline: false }
+        )
+        .setFooter({ text: '⏰ Next shift available in 30 minutes!' })
+        .setTimestamp();
+    
+    message.channel.send({ embeds: [workEmbed] });
+      }
+// ==================================================
+// COMMAND: FISH
+// ==================================================
+else if (command === 'fish') {
+    const userId = message.author.id;
+    const now = Date.now();
+    const FISH_COOLDOWN = 45 * 1000; // 45 seconds
+    
+    if (!botData.fishData[userId]) {
+        botData.fishData[userId] = {
+            lastFish: 0,
+            totalCatches: 0,
+            totalEarned: 0,
+            rareCatches: 0,
+            legendaryCount: 0
+        };
+    }
+    
+    const userData = botData.fishData[userId];
+    const timeSinceFish = now - userData.lastFish;
+    
+    if (timeSinceFish < FISH_COOLDOWN) {
+        const timeLeft = Math.ceil((FISH_COOLDOWN - timeSinceFish) / 1000);
+        return message.reply(`🎣 Your fishing rod is tangled! Wait **${timeLeft}s** before fishing again.`);
+    }
+    
+    userData.lastFish = now;
+    
+    const catches = [
+        // Junk (30% chance)
+        { name: 'Leather Boots', emoji: '👢', value: 5, rarity: 'junk', chance: 10 },
+        { name: 'Lily Pad', emoji: '🌿', value: 8, rarity: 'junk', chance: 10 },
+        { name: 'Bowl', emoji: '🥣', value: 3, rarity: 'junk', chance: 5 },
+        { name: 'Stick', emoji: '🪵', value: 2, rarity: 'junk', chance: 5 },
+        // Common (35% chance)
+        { name: 'Raw Cod', emoji: '🐟', value: 25, rarity: 'common', chance: 15 },
+        { name: 'Raw Salmon', emoji: '🐠', value: 35, rarity: 'common', chance: 12 },
+        { name: 'Pufferfish', emoji: '🐡', value: 50, rarity: 'common', chance: 8 },
+        // Uncommon (20% chance)
+        { name: 'Tropical Fish', emoji: '🐠✨', value: 75, rarity: 'uncommon', chance: 8 },
+        { name: 'Name Tag', emoji: '🏷️', value: 100, rarity: 'uncommon', chance: 6 },
+        { name: 'Saddle', emoji: '🐴', value: 125, rarity: 'uncommon', chance: 4 },
+        { name: 'Nautilus Shell', emoji: '🐚', value: 150, rarity: 'uncommon', chance: 2 },
+        // Rare (12% chance)
+        { name: 'Enchanted Book', emoji: '📖✨', value: 250, rarity: 'rare', chance: 5 },
+        { name: 'Bow', emoji: '🏹', value: 200, rarity: 'rare', chance: 4 },
+        { name: 'Fishing Rod', emoji: '🎣', value: 175, rarity: 'rare', chance: 3 },
+        // Legendary (3% chance)
+        { name: 'Mending Book', emoji: '📕💫', value: 500, rarity: 'legendary', chance: 1.5 },
+        { name: 'Trident', emoji: '🔱', value: 750, rarity: 'legendary', chance: 1 },
+        { name: 'Heart of the Sea', emoji: '💙', value: 1000, rarity: 'legendary', chance: 0.3 },
+        { name: 'Enchanted Golden Apple', emoji: '🍎✨', value: 1500, rarity: 'mythic', chance: 0.15 },
+        { name: 'Totem of Undying', emoji: '🗿✨', value: 2000, rarity: 'mythic', chance: 0.05 },
+    ];
+    
+    // Weighted random selection
+    const totalChance = catches.reduce((sum, c) => sum + c.chance, 0);
+    let random = Math.random() * totalChance;
+    let selectedCatch = catches[0];
+    
+    for (const c of catches) {
+        random -= c.chance;
+        if (random <= 0) {
+            selectedCatch = c;
+            break;
+        }
+    }
+    
+    userData.totalCatches++;
+    userData.totalEarned += selectedCatch.value;
+    
+    if (selectedCatch.rarity === 'rare' || selectedCatch.rarity === 'legendary' || selectedCatch.rarity === 'mythic') {
+        userData.rareCatches++;
+    }
+    if (selectedCatch.rarity === 'legendary' || selectedCatch.rarity === 'mythic') {
+        userData.legendaryCount++;
+    }
+    
+    updateBalance(userId, selectedCatch.value);
+    saveFishData();
+    saveEconomyData();
+    
+    const rarityColors = {
+        'junk': 0x808080,
+        'common': 0xFFFFFF,
+        'uncommon': 0x55FF55,
+        'rare': 0x5555FF,
+        'legendary': 0xFFAA00,
+        'mythic': 0xFF55FF
+    };
+    
+    const rarityText = {
+        'junk': '```ansi\n\u001b[30m░░░ JUNK ░░░\u001b[0m\n```',
+        'common': '```ansi\n\u001b[37m▒▒▒ COMMON ▒▒▒\u001b[0m\n```',
+        'uncommon': '```ansi\n\u001b[32m▓▓▓ UNCOMMON ▓▓▓\u001b[0m\n```',
+        'rare': '```ansi\n\u001b[34m███ RARE ███\u001b[0m\n```',
+        'legendary': '```ansi\n\u001b[33m✦✦✦ LEGENDARY ✦✦✦\u001b[0m\n```',
+        'mythic': '```ansi\n\u001b[35m★★★ MYTHIC ★★★\u001b[0m\n```'
+    };
+    
+    let fishArt = '';
+    if (selectedCatch.rarity === 'legendary' || selectedCatch.rarity === 'mythic') {
+        fishArt = 
+            '```\n' +
+            '    ⛏️ MINECRAFT FISHING ⛏️\n' +
+            '    ╔══════════════════════════╗\n' +
+            '    ║   ✨ TREASURE CATCH! ✨  ║\n' +
+            '    ╠═════════════════��════════╣\n' +
+            '    ║  ~~~~~🎣~~~~~            ║\n' +
+            '    ║       |                  ║\n' +
+            '    ║       |  ' + selectedCatch.emoji + '              ║\n' +
+            '    ║    ≋≋≋≋≋≋≋≋≋≋≋≋          ║\n' +
+            '    ╚══════════════════════════╝\n' +
+            '```';
+    } else {
+        fishArt = 
+            '```\n' +
+            '        🧍 🎣\n' +
+            '           |\n' +
+            '    ≋≋≋≋≋≋≋|≋≋≋≋≋≋≋\n' +
+            '           |  ' + selectedCatch.emoji + '\n' +
+            '           \\\n' +
+            '```';
+    }
+    
+    const fishEmbed = new EmbedBuilder()
+        .setColor(rarityColors[selectedCatch.rarity])
+        .setTitle('🎣 MINECRAFT FISHING')
+        .setDescription(
+            fishArt +
+            rarityText[selectedCatch.rarity] +
+            `\nYou caught **${selectedCatch.name}** ${selectedCatch.emoji}!`
+        )
+        .addFields(
+            { name: '💰 Value', value: `\`${selectedCatch.value} coins\``, inline: true },
+            { name: '👛 Balance', value: `\`${getBalance(userId).toLocaleString()}\``, inline: true },
+            { name: '🎣 Total Catches', value: `\`${userData.totalCatches}\``, inline: true }
+        )
+        .setFooter({ text: `⏰ Fish again in 45 seconds • Treasure catches: ${userData.rareCatches}` })
+        .setTimestamp();
+    
+    message.channel.send({ embeds: [fishEmbed] });
+}
+
+// ==================================================
+// COMMAND: MINE
+// ==================================================
+else if (command === 'mine') {
+    const userId = message.author.id;
+    const now = Date.now();
+    const MINE_COOLDOWN = 60 * 1000; // 60 seconds
+    
+    if (!botData.mineData[userId]) {
+        botData.mineData[userId] = {
+            lastMine: 0,
+            totalMines: 0,
+            totalEarned: 0,
+            diamondsFound: 0,
+            netheritesFound: 0
+        };
+    }
+    
+    const userData = botData.mineData[userId];
+    const timeSinceMine = now - userData.lastMine;
+    
+    if (timeSinceMine < MINE_COOLDOWN) {
+        const timeLeft = Math.ceil((MINE_COOLDOWN - timeSinceMine) / 1000);
+        return message.reply(`⛏️ Your pickaxe broke! Wait **${timeLeft}s** before mining again.`);
+    }
+    
+    userData.lastMine = now;
+    
+    const ores = [
+        // Common (50% chance)
+        { name: 'Dirt', emoji: '🟫', value: 3, rarity: 'junk', chance: 12 },
+        { name: 'Cobblestone', emoji: '🪨', value: 5, rarity: 'junk', chance: 10 },
+        { name: 'Gravel', emoji: '�ite', value: 4, rarity: 'junk', chance: 8 },
+        { name: 'Coal', emoji: '⬛', value: 20, rarity: 'common', chance: 12 },
+        { name: 'Raw Copper', emoji: '🟧', value: 30, rarity: 'common', chance: 8 },
+        // Uncommon (30% chance)
+        { name: 'Raw Iron', emoji: '⬜', value: 50, rarity: 'uncommon', chance: 10 },
+        { name: 'Lapis Lazuli', emoji: '🔵', value: 75, rarity: 'uncommon', chance: 8 },
+        { name: 'Raw Gold', emoji: '🟨', value: 100, rarity: 'uncommon', chance: 7 },
+        { name: 'Redstone', emoji: '🔴', value: 65, rarity: 'uncommon', chance: 5 },
+        // Rare (15% chance)
+        { name: 'Diamond', emoji: '💎', value: 250, rarity: 'rare', chance: 6 },
+        { name: 'Emerald', emoji: '💚', value: 300, rarity: 'rare', chance: 5 },
+        { name: 'Amethyst Shard', emoji: '💜', value: 150, rarity: 'rare', chance: 4 },
+        // Legendary (4% chance)
+        { name: 'Diamond Block', emoji: '💎💎💎', value: 750, rarity: 'legendary', chance: 2 },
+        { name: 'Ancient Debris', emoji: '🟤🔥', value: 500, rarity: 'legendary', chance: 1.5 },
+        { name: 'Netherite Scrap', emoji: '⬛🔥', value: 650, rarity: 'legendary', chance: 0.5 },
+        // Mythic (1% chance)
+        { name: 'Netherite Ingot', emoji: '🖤✨', value: 1500, rarity: 'mythic', chance: 0.3 },
+        { name: 'Enchanted Netherite Block', emoji: '🖤💫', value: 2500, rarity: 'mythic', chance: 0.15 },
+        { name: 'Notch Apple', emoji: '🍎👑', value: 3000, rarity: 'mythic', chance: 0.05 },
+    ];
+    
+    // Weighted random selection
+    const totalChance = ores.reduce((sum, o) => sum + o.chance, 0);
+    let random = Math.random() * totalChance;
+    let selectedOre = ores[0];
+    
+    for (const o of ores) {
+        random -= o.chance;
+        if (random <= 0) {
+            selectedOre = o;
+            break;
+        }
+    }
+    
+    userData.totalMines++;
+    userData.totalEarned += selectedOre.value;
+    
+    if (selectedOre.name === 'Diamond' || selectedOre.name === 'Diamond Block') {
+        userData.diamondsFound++;
+    }
+    if (selectedOre.rarity === 'mythic' || selectedOre.name.includes('Netherite')) {
+        userData.netheritesFound++;
+    }
+    
+    updateBalance(userId, selectedOre.value);
+    saveMineData();
+    saveEconomyData();
+    
+    const rarityColors = {
+        'junk': 0x808080,
+        'common': 0xFFFFFF,
+        'uncommon': 0x55FF55,
+        'rare': 0x55FFFF,
+        'legendary': 0xFFAA00,
+        'mythic': 0xFF55FF
+    };
+    
+    const rarityText = {
+        'junk': '```ansi\n\u001b[30m░░░ JUNK ░░░\u001b[0m\n```',
+        'common': '```ansi\n\u001b[37m▒▒▒ COMMON ▒▒▒\u001b[0m\n```',
+        'uncommon': '```ansi\n\u001b[32m▓▓▓ UNCOMMON ▓▓▓\u001b[0m\n```',
+        'rare': '```ansi\n\u001b[36m███ RARE ███\u001b[0m\n```',
+        'legendary': '```ansi\n\u001b[33m✦✦✦ LEGENDARY ✦✦✦\u001b[0m\n```',
+        'mythic': '```ansi\n\u001b[35m★★★ MYTHIC ★★★\u001b[0m\n```'
+    };
+    
+    let mineArt = '';
+    if (selectedOre.rarity === 'mythic') {
+        mineArt = 
+            '```\n' +
+            '    ⛏️ MINECRAFT MINING ⛏️\n' +
+            '    ╔══════════════════════════════╗\n' +
+            '    ║  🔥 NETHERITE DISCOVERED! 🔥 ║\n' +
+            '    ╠══════════════════════════════╣\n' +
+            '    ║  ite▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓   ║\n' +
+            '    ║  ▓▓▓▓' + selectedOre.emoji + '▓▓▓▓▓▓▓▓▓▓▓▓   ║\n' +
+            '    ║  ▓▓▓▓▓▓▓▓▓' + selectedOre.emoji + '▓▓▓▓▓▓▓   ║\n' +
+            '    ║  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓   ║\n' +
+            '    ╚══════════════════════════════╝\n' +
+            '```';
+    } else if (selectedOre.rarity === 'legendary') {
+        mineArt = 
+            '```\n' +
+            '    ⛏️ MINECRAFT MINING ⛏️\n' +
+            '    ╔══════════════════════════════╗\n' +
+            '    ║    ✨ JACKPOT VEIN! ✨       ║\n' +
+            '    ╠══════════════════════════════╣\n' +
+            '    ║  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓   ║\n' +
+            '    ║  ▓▓▓' + selectedOre.emoji + '▓▓▓' + selectedOre.emoji + '▓▓▓▓▓▓▓▓   ║\n' +
+            '    ║  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓   ║\n' +
+            '    ╚══════════════════════════════╝\n' +
+            '```';
+    } else if (selectedOre.rarity === 'rare') {
+        mineArt = 
+            '```\n' +
+            '         ⛏️💥\n' +
+            '    ▓▓▓▓▓▓▓▓▓▓▓▓▓\n' +
+            '    ▓▓▓▓' + selectedOre.emoji + '▓▓▓▓▓▓\n' +
+            '    ▓▓▓▓▓▓▓▓▓▓▓▓▓\n' +
+            '    ▓▓▓▓▓▓▓▓▓▓▓▓▓\n' +
+            '```';
+    } else {
+        mineArt = 
+            '```\n' +
+            '         ⛏️\n' +
+            '    ▓▓▓▓▓▓▓▓▓▓▓\n' +
+            '    ▓▓▓' + selectedOre.emoji + '▓▓▓▓▓\n' +
+            '    ▓▓▓▓▓▓▓▓▓▓▓\n' +
+            '```';
+    }
+    
+    const mineEmbed = new EmbedBuilder()
+        .setColor(rarityColors[selectedOre.rarity])
+        .setTitle('⛏️ MINECRAFT MINING')
+        .setDescription(
+            mineArt +
+            rarityText[selectedOre.rarity] +
+            `\nYou mined **${selectedOre.name}** ${selectedOre.emoji}!`
+        )
+        .addFields(
+            { name: '💰 Value', value: `\`${selectedOre.value} coins\``, inline: true },
+            { name: '👛 Balance', value: `\`${getBalance(userId).toLocaleString()}\``, inline: true },
+            { name: '⛏️ Total Mines', value: `\`${userData.totalMines}\``, inline: true }
+        )
+        .setFooter({ text: `⏰ Mine again in 60 seconds • 💎 Diamonds: ${userData.diamondsFound} • 🖤 Netherite: ${userData.netheritesFound}` })
+        .setTimestamp();
+    
+    message.channel.send({ embeds: [mineEmbed] });
+}
+
+// ==================================================
+// COMMAND: HUNT
+// ==================================================
+else if (command === 'hunt') {
+    const userId = message.author.id;
+    const now = Date.now();
+    const HUNT_COOLDOWN = 50 * 1000; // 50 seconds
+    
+    if (!botData.huntData[userId]) {
+        botData.huntData[userId] = {
+            lastHunt: 0,
+            totalHunts: 0,
+            totalEarned: 0,
+            bossKills: 0,
+            witherKills: 0
+        };
+    }
+    
+    const userData = botData.huntData[userId];
+    const timeSinceHunt = now - userData.lastHunt;
+    
+    if (timeSinceHunt < HUNT_COOLDOWN) {
+        const timeLeft = Math.ceil((HUNT_COOLDOWN - timeSinceHunt) / 1000);
+        return message.reply(`🗡️ Your sword is recharging! Wait **${timeLeft}s** before hunting again.`);
+    }
+    
+    userData.lastHunt = now;
+    
+    const mobs = [
+        // Common (50% chance) - Passive & Easy Mobs
+        { name: 'Chicken', emoji: '🐔', value: 10, rarity: 'common', chance: 12, drop: 'Raw Chicken' },
+        { name: 'Pig', emoji: '🐷', value: 15, rarity: 'common', chance: 12, drop: 'Raw Porkchop' },
+        { name: 'Cow', emoji: '🐄', value: 20, rarity: 'common', chance: 10, drop: 'Raw Beef & Leather' },
+        { name: 'Sheep', emoji: '🐑', value: 18, rarity: 'common', chance: 10, drop: 'Mutton & Wool' },
+        { name: 'Rabbit', emoji: '🐰', value: 12, rarity: 'common', chance: 6, drop: 'Rabbit Hide' },
+        // Uncommon (28% chance) - Hostile Mobs
+        { name: 'Zombie', emoji: '🧟', value: 40, rarity: 'uncommon', chance: 8, drop: 'Rotten Flesh' },
+        { name: 'Skeleton', emoji: '💀', value: 50, rarity: 'uncommon', chance: 7, drop: 'Bones & Arrows' },
+        { name: 'Spider', emoji: '🕷️', value: 45, rarity: 'uncommon', chance: 6, drop: 'String & Spider Eye' },
+        { name: 'Creeper', emoji: '💚💥', value: 75, rarity: 'uncommon', chance: 4, drop: 'Gunpowder' },
+        { name: 'Drowned', emoji: '🧟‍♂️🌊', value: 60, rarity: 'uncommon', chance: 3, drop: 'Copper Ingot' },
+        // Rare (15% chance) - Dangerous Mobs
+        { name: 'Enderman', emoji: '🖤👁️', value: 150, rarity: 'rare', chance: 5, drop: 'Ender Pearl' },
+        { name: 'Blaze', emoji: '🔥😈', value: 175, rarity: 'rare', chance: 4, drop: 'Blaze Rod' },
+        { name: 'Ghast', emoji: '👻🔥', value: 200, rarity: 'rare', chance: 3, drop: 'Ghast Tear' },
+        { name: 'Witch', emoji: '🧙‍♀️', value: 125, rarity: 'rare', chance: 3, drop: 'Potions & Redstone' },
+        // Legendary (5% chance) - Mini Bosses
+        { name: 'Warden', emoji: '🦷👤', value: 500, rarity: 'legendary', chance: 2, drop: 'Sculk Catalyst' },
+        { name: 'Elder Guardian', emoji: '🐡👁️', value: 450, rarity: 'legendary', chance: 1.5, drop: 'Sponge & Prismarine' },
+        { name: 'Ravager', emoji: '🦏😤', value: 400, rarity: 'legendary', chance: 1.5, drop: 'Saddle & Pillager Loot' },
+        // Mythic (2% chance) - BOSSES
+        { name: 'Ender Dragon', emoji: '🐉💜', value: 1500, rarity: 'mythic', chance: 1, drop: 'Dragon Egg & XP' },
+        { name: 'Wither', emoji: '💀💀💀', value: 2000, rarity: 'mythic', chance: 0.7, drop: 'Nether Star' },
+        { name: 'Herobrine', emoji: '👁️‍🗨️⬜', value: 5000, rarity: 'mythic', chance: 0.1, drop: '???' },
+    ];
+    
+    // 10% chance to find nothing
+    if (Math.random() < 0.1) {
+        const missEmbed = new EmbedBuilder()
+            .setColor(0x808080)
+            .setTitle('🗡️ MINECRAFT HUNTING')
+            .setDescription(
+                '```\n' +
+                '         🗡️\n' +
+                '        /  \\\n' +
+                '       /    \\\n' +
+                '      💨     💨\n' +
+                '\n' +
+                '    The mobs despawned!\n' +
+                '```\n' +
+                '**You missed!** No mobs were found.'
+            )
+            .setFooter({ text: '⏰ Try again in 50 seconds!' })
+            .setTimestamp();
+        
+        userData.totalHunts++;
+        saveHuntData();
+        return message.channel.send({ embeds: [missEmbed] });
+    }
+    
+    // Weighted random selection
+    const totalChance = mobs.reduce((sum, m) => sum + m.chance, 0);
+    let random = Math.random() * totalChance;
+    let selectedMob = mobs[0];
+    
+    for (const m of mobs) {
+        random -= m.chance;
+        if (random <= 0) {
+            selectedMob = m;
+            break;
+        }
+    }
+    
+    userData.totalHunts++;
+    userData.totalEarned += selectedMob.value;
+    
+    if (selectedMob.rarity === 'legendary' || selectedMob.rarity === 'mythic') {
+        userData.bossKills++;
+    }
+    if (selectedMob.name === 'Wither') {
+        userData.witherKills++;
+    }
+    
+    updateBalance(userId, selectedMob.value);
+    saveHuntData();
+    saveEconomyData();
+    
+    const rarityColors = {
+        'common': 0xFFFFFF,
+        'uncommon': 0x55FF55,
+        'rare': 0x5555FF,
+        'legendary': 0xFFAA00,
+        'mythic': 0xFF55FF
+    };
+    
+    const rarityText = {
+        'common': '```ansi\n\u001b[37m▒▒▒ COMMON MOB ▒▒▒\u001b[0m\n```',
+        'uncommon': '```ansi\n\u001b[32m▓▓▓ HOSTILE MOB ▓▓▓\u001b[0m\n```',
+        'rare': '```ansi\n\u001b[34m███ RARE MOB ███\u001b[0m\n```',
+        'legendary': '```ansi\n\u001b[33m✦✦✦ MINI BOSS ✦✦✦\u001b[0m\n```',
+        'mythic': '```ansi\n\u001b[35m★★★ BOSS DEFEATED ★★★\u001b[0m\n```'
+    };
+    
+    let huntArt = '';
+    if (selectedMob.name === 'Ender Dragon') {
+        huntArt = 
+            '```\n' +
+            '    ⚔️ MINECRAFT HUNTING ⚔️\n' +
+            '    ╔══════════════════════════════════╗\n' +
+            '    ║    🐉 ENDER DRAGON SLAIN! 🐉     ║\n' +
+            '    ╠══════════════════════════════════╣\n' +
+            '    ║         💜    💜    💜           ║\n' +
+            '    ║      💜   🐉🐉🐉   💜           ║\n' +
+            '    ║         💜    💜    💜           ║\n' +
+            '    ║                                  ║\n' +
+            '    ║    +' + String(selectedMob.value).padStart(5, ' ') + ' GOLD COINS          ║\n' +
+            '    ╚══════════════════════════════════╝\n' +
+            '```';
+    } else if (selectedMob.name === 'Wither') {
+        huntArt = 
+            '```\n' +
+            '    ⚔️ MINECRAFT HUNTING ⚔️\n' +
+            '    ╔══════════════════════════════════╗\n' +
+            '    ║    💀 WITHER DESTROYED! 💀       ║\n' +
+            '    ╠══════════════════════════════════╣\n' +
+            '    ║          💀  💀  💀              ║\n' +
+            '    ║             \\|/                 ║\n' +
+            '    ║              💥                  ║\n' +
+            '    ║                                  ║\n' +
+            '    ║    +' + String(selectedMob.value).padStart(5, ' ') + ' GOLD COINS          ║\n' +
+            '    ╚══════════════════════════════════╝\n' +
+            '```';
+    } else if (selectedMob.name === 'Herobrine') {
+        huntArt = 
+            '```\n' +
+            '    ⚔️ MINECRAFT HUNTING ⚔️\n' +
+            '    ╔══════════════════════════════════╗\n' +
+            '    ║  👁️‍🗨️ HEROBRINE VANQUISHED! 👁️‍🗨️   ║\n' +
+            '    ╠══════════════════════════════════╣\n' +
+            '    ║                                  ║\n' +
+            '    ║           ⬜⬜⬜                 ║\n' +
+            '    ║           👁️ 👁️                ║\n' +
+            '    ║            ⬜                    ║\n' +
+            '    ║           💥💥💥                 ║\n' +
+            '    ║                                  ║\n' +
+            '    ║    +' + String(selectedMob.value).padStart(5, ' ') + ' GOLD COINS          ║\n' +
+            '    ╚══════════════════════════════════╝\n' +
+            '```';
+    } else if (selectedMob.rarity === 'legendary') {
+        huntArt = 
+            '```\n' +
+            '    ⚔️ MINECRAFT HUNTING ⚔️\n' +
+            '    ╔══════════════════════════════════╗\n' +
+            '    ║     ⚔️ MINI BOSS SLAIN! ⚔️       ║\n' +
+            '    ╠══════════════════════════════════╣\n' +
+            '    ║                                  ║\n' +
+            '    ║         🗡️ ══> ' + selectedMob.emoji + ' 💥        ║\n' +
+            '    ║                                  ║\n' +
+            '    ╚══════════════════════════════════╝\n' +
+            '```';
+    } else if (selectedMob.rarity === 'rare') {
+        huntArt = 
+            '```\n' +
+            '        ⚔️ CRITICAL HIT!\n' +
+            '    \n' +
+            '        🗡️ ───> ' + selectedMob.emoji + ' 💥\n' +
+            '    \n' +
+            '```';
+    } else {
+        huntArt = 
+            '```\n' +
+            '        🗡️\n' +
+            '       /|\\\n' +
+            '      / | \\  ' + selectedMob.emoji + ' 💀\n' +
+            '        |\n' +
+            '```';
+    }
+    
+    const huntEmbed = new EmbedBuilder()
+        .setColor(rarityColors[selectedMob.rarity])
+        .setTitle('⚔️ MINECRAFT HUNTING')
+        .setDescription(
+            huntArt +
+            rarityText[selectedMob.rarity] +
+            `\nYou killed a **${selectedMob.name}** ${selectedMob.emoji}!\n` +
+            `**Loot:** ${selectedMob.drop}`
+        )
+        .addFields(
+            { name: '💰 Bounty', value: `\`${selectedMob.value} coins\``, inline: true },
+            { name: '👛 Balance', value: `\`${getBalance(userId).toLocaleString()}\``, inline: true },
+            { name: '⚔️ Total Kills', value: `\`${userData.totalHunts}\``, inline: true }
+        )
+        .setFooter({ text: `⏰ Hunt again in 50 seconds • 👑 Boss Kills: ${userData.bossKills} • 💀 Withers: ${userData.witherKills}` })
+        .setTimestamp();
+    
+    message.channel.send({ embeds: [huntEmbed] });
+}
+// ==================================================
+// COMMAND: RPS (Rock Paper Scissors)
+// ==================================================
+else if (command === 'rps') {
+    const userId = message.author.id;
+    const choice = args[0]?.toLowerCase();
+    const betAmount = parseInt(args[1]);
+    
+    if (!choice || !['rock', 'paper', 'scissors', 'r', 'p', 's'].includes(choice)) {
+        const helpEmbed = new EmbedBuilder()
+            .setColor(0x3498DB)
+            .setTitle('🪨 ROCK PAPER SCISSORS')
+            .setDescription(
+                '```ansi\n' +
+                '\u001b[36m╔═══════════════════════════════════════════╗\n' +
+                '║     🪨  ✂️  📄  CHOOSE YOUR WEAPON!        ║\n' +
+                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+                '```\n' +
+                '**Usage:** `$rps <choice> <bet>`\n\n' +
+                '**Choices:**\n' +
+                '• `rock` or `r` - 🪨\n' +
+                '• `paper` or `p` - 📄\n' +
+                '• `scissors` or `s` - ✂️\n\n' +
+                '**Example:** `$rps rock 500`'
+            )
+            .setFooter({ text: '🎮 Win = 2x your bet!' })
+            .setTimestamp();
+        return message.channel.send({ embeds: [helpEmbed] });
+    }
+    
+    if (!betAmount || betAmount < 10) {
+        return message.reply('❌ Minimum bet is **10** Gold Coins!\nUsage: `$rps <choice> <bet>`');
+    }
+    
+    const balance = getBalance(userId);
+    if (betAmount > balance) {
+        return message.reply(`❌ You don't have enough coins! Your balance: **${balance.toLocaleString()}**`);
+    }
+    
+    // Normalize choice
+    const choiceMap = { 'r': 'rock', 'p': 'paper', 's': 'scissors' };
+    const playerChoice = choiceMap[choice] || choice;
+    
+    const choices = ['rock', 'paper', 'scissors'];
+    const botChoice = choices[Math.floor(Math.random() * choices.length)];
+    
+    const emojis = { 'rock': '🪨', 'paper': '📄', 'scissors': '✂️' };
+    
+    // Determine winner
+    let result = '';
+    let winAmount = 0;
+    let resultColor = 0x808080;
+    
+    if (playerChoice === botChoice) {
+        result = 'TIE';
+        winAmount = 0;
+        resultColor = 0xFFFF00;
+    } else if (
+        (playerChoice === 'rock' && botChoice === 'scissors') ||
+        (playerChoice === 'paper' && botChoice === 'rock') ||
+        (playerChoice === 'scissors' && botChoice === 'paper')
+    ) {
+        result = 'WIN';
+        winAmount = betAmount;
+        updateBalance(userId, betAmount);
+        resultColor = 0x00FF00;
+    } else {
+        result = 'LOSE';
+        winAmount = -betAmount;
+        updateBalance(userId, -betAmount);
+        resultColor = 0xFF0000;
+    }
+    
+    saveEconomyData();
+    
+    let resultArt = '';
+    if (result === 'WIN') {
+        resultArt = 
+            '```ansi\n' +
+            '\u001b[32m╔═══════════════════════════════════════════╗\n' +
+            '║                                           ║\n' +
+            '║            🎉 YOU WIN! 🎉                ║\n' +
+            '║                                           ║\n' +
+            '║      +' + String(winAmount).padStart(6, ' ') + ' GOLD COINS              ║\n' +
+            '║                                           ║\n' +
+            '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+            '```';
+    } else if (result === 'LOSE') {
+        resultArt = 
+            '```ansi\n' +
+            '\u001b[31m╔═══════════════════════════════════════════╗\n' +
+            '║                                           ║\n' +
+            '║            💀 YOU LOSE! 💀               ║\n' +
+            '║                                           ║\n' +
+            '║      -' + String(betAmount).padStart(6, ' ') + ' GOLD COINS              ║\n' +
+            '║                                           ║\n' +
+            '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+            '```';
+    } else {
+        resultArt = 
+            '```ansi\n' +
+            '\u001b[33m╔═══════════════════════════════════════════╗\n' +
+            '║                                           ║\n' +
+            '║            🤝 ITS A TIE! 🤝              ║\n' +
+            '║                                           ║\n' +
+            '║         Your bet was returned!            ║\n' +
+            '║                                           ║\n' +
+            '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+            '```';
+    }
+    
+    const gameArt = 
+        '```\n' +
+        '        YOU          VS          BOT\n' +
+        '         │                        │\n' +
+        '         │                        │\n' +
+        '        ' + emojis[playerChoice] + '          ⚔️          ' + emojis[botChoice] + '\n' +
+        '         │                        │\n' +
+        '      ' + playerChoice.toUpperCase().padEnd(8, ' ') + '              ' + botChoice.toUpperCase() + '\n' +
+        '```';
+    
+    const rpsEmbed = new EmbedBuilder()
+        .setColor(resultColor)
+        .setTitle('🪨 📄 ✂️ ROCK PAPER SCISSORS')
+        .setDescription(gameArt + resultArt)
+        .addFields(
+            { name: '🎯 Your Choice', value: `${emojis[playerChoice]} ${playerChoice}`, inline: true },
+            { name: '🤖 Bot Choice', value: `${emojis[botChoice]} ${botChoice}`, inline: true },
+            { name: '💰 Bet', value: `\`${betAmount.toLocaleString()}\``, inline: true },
+            { name: '👛 New Balance', value: `\`${getBalance(userId).toLocaleString()}\``, inline: true }
+        )
+        .setFooter({ text: '🎮 Play again: $rps <choice> <bet>' })
+        .setTimestamp();
+    
+    message.channel.send({ embeds: [rpsEmbed] });
+}
+
+// ==================================================
+// COMMAND: DICEDUEL (PvP Dice Game)
+// ==================================================
+else if (command === 'diceduel' || command === 'dd') {
+    const userId = message.author.id;
+    const target = message.mentions.users.first();
+    const betAmount = parseInt(args[1]);
+    
+    if (!target) {
+        const helpEmbed = new EmbedBuilder()
+            .setColor(0xFF6600)
+            .setTitle('🎲 DICE DUEL')
+            .setDescription(
+                '```ansi\n' +
+                '\u001b[33m╔═══════════════════════════════════════════╗\n' +
+                '║      🎲  CHALLENGE SOMEONE TO DUEL!  🎲   ║\n' +
+                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+                '```\n' +
+                '**Usage:** `$diceduel @user <bet>`\n\n' +
+                '**How it works:**\n' +
+                '• Both players bet the same amount\n' +
+                '• Each player rolls a dice (1-6)\n' +
+                '• Highest roll wins the entire pot!\n' +
+                '• Tie = both get money back\n\n' +
+                '**Example:** `$diceduel @friend 1000`'
+            )
+            .setFooter({ text: '🎲 Winner takes all!' })
+            .setTimestamp();
+        return message.channel.send({ embeds: [helpEmbed] });
+    }
+    
+    if (target.id === userId) {
+        return message.reply('❌ You cannot duel yourself!');
+    }
+    
+    if (target.bot) {
+        return message.reply('❌ You cannot duel a bot! Use `$rps` to play against me.');
+    }
+    
+    if (!betAmount || betAmount < 50) {
+        return message.reply('❌ Minimum bet is **50** Gold Coins!\nUsage: `$diceduel @user <bet>`');
+    }
+    
+    const challengerBalance = getBalance(userId);
+    const targetBalance = getBalance(target.id);
+    
+    if (betAmount > challengerBalance) {
+        return message.reply(`❌ You don't have enough coins! Your balance: **${challengerBalance.toLocaleString()}**`);
+    }
+    
+    if (betAmount > targetBalance) {
+        return message.reply(`❌ **${target.username}** doesn't have enough coins! Their balance: **${targetBalance.toLocaleString()}**`);
+    }
+    
+    const challengeEmbed = new EmbedBuilder()
+        .setColor(0xFF6600)
+        .setTitle('🎲 DICE DUEL CHALLENGE!')
+        .setDescription(
+            '```ansi\n' +
+            '\u001b[33m╔═══════════════════════════════════════════╗\n' +
+            '║        ⚔️  A CHALLENGER APPROACHES!  ⚔️    ║\n' +
+            '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+            '```\n' +
+            `**${message.author.username}** has challenged **${target.username}** to a dice duel!\n\n` +
+            `💰 **Bet Amount:** ${betAmount.toLocaleString()} Gold Coins each\n` +
+            `🏆 **Prize Pool:** ${(betAmount * 2).toLocaleString()} Gold Coins\n\n` +
+            `${target}, react with ✅ to accept or ❌ to decline!`
+        )
+        .setFooter({ text: '⏰ Challenge expires in 60 seconds' })
+        .setTimestamp();
+    
+    const challengeMsg = await message.channel.send({ embeds: [challengeEmbed] });
+    await challengeMsg.react('✅');
+    await challengeMsg.react('❌');
+    
+    const filter = (reaction, user) => {
+        return ['✅', '❌'].includes(reaction.emoji.name) && user.id === target.id;
+    };
+    
+    try {
+        const collected = await challengeMsg.awaitReactions({ filter, max: 1, time: 60000, errors: ['time'] });
+        const reaction = collected.first();
+        
+        if (reaction.emoji.name === '❌') {
+            const declineEmbed = new EmbedBuilder()
+                .setColor(0xFF0000)
+                .setTitle('🎲 DICE DUEL DECLINED')
+                .setDescription(`**${target.username}** has declined the duel.`)
+                .setTimestamp();
+            return challengeMsg.edit({ embeds: [declineEmbed] });
+        }
+        
+        // DUEL ACCEPTED - Roll the dice!
+        const challengerRoll = Math.floor(Math.random() * 6) + 1;
+        const targetRoll = Math.floor(Math.random() * 6) + 1;
+        
+        const diceEmojis = ['0️⃣', '1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣'];
+        
+        let winner = null;
+        let loser = null;
+        let resultText = '';
+        let resultColor = 0xFFFF00;
+        
+        if (challengerRoll > targetRoll) {
+            winner = message.author;
+            loser = target;
+            updateBalance(userId, betAmount);
+            updateBalance(target.id, -betAmount);
+            resultText = `🎉 **${message.author.username}** WINS!`;
+            resultColor = 0x00FF00;
+        } else if (targetRoll > challengerRoll) {
+            winner = target;
+            loser = message.author;
+            updateBalance(target.id, betAmount);
+            updateBalance(userId, -betAmount);
+            resultText = `🎉 **${target.username}** WINS!`;
+            resultColor = 0x00FF00;
+        } else {
+            resultText = `🤝 **IT'S A TIE!** Both get their coins back.`;
+            resultColor = 0xFFFF00;
+        }
+        
+        saveEconomyData();
+        
+        const resultEmbed = new EmbedBuilder()
+            .setColor(resultColor)
+            .setTitle('🎲 DICE DUEL RESULTS!')
+            .setDescription(
+                '```ansi\n' +
+                '\u001b[36m╔═══════════════════════════════════════════╗\n' +
+                '║            🎲 THE DICE HAVE SPOKEN 🎲      ║\n' +
+                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+                '```\n' +
+                '```\n' +
+                '    ' + message.author.username.padEnd(15, ' ') + ' VS ' + target.username + '\n' +
+                '           │                  │\n' +
+                '          ' + diceEmojis[challengerRoll] + '                ' + diceEmojis[targetRoll] + '\n' +
+                '           │                  │\n' +
+                '         ROLL: ' + challengerRoll + '            ROLL: ' + targetRoll + '\n' +
+                '```\n\n' +
+                resultText
+            )
+            .addFields(
+                { name: `🎲 ${message.author.username}`, value: `Rolled: **${challengerRoll}**`, inline: true },
+                { name: `🎲 ${target.username}`, value: `Rolled: **${targetRoll}**`, inline: true }
+            )
+            .setFooter({ text: winner ? `💰 ${winner.username} won ${betAmount.toLocaleString()} coins!` : 'Bet returned to both players' })
+            .setTimestamp();
+        
+        if (winner) {
+            resultEmbed.addFields(
+                { name: '🏆 Winner', value: `<@${winner.id}>`, inline: true },
+                { name: '💰 Won', value: `\`${betAmount.toLocaleString()}\``, inline: true }
+            );
+        }
+        
+        await challengeMsg.edit({ embeds: [resultEmbed] });
+        
+    } catch (err) {
+        const expiredEmbed = new EmbedBuilder()
+            .setColor(0x808080)
+            .setTitle('🎲 DICE DUEL EXPIRED')
+            .setDescription(`**${target.username}** did not respond in time.`)
+            .setTimestamp();
+        await challengeMsg.edit({ embeds: [expiredEmbed] });
+    }
+}
+
+// ==================================================
+// COMMAND: WAR (Card Game)
+// ==================================================
+else if (command === 'war') {
+    const userId = message.author.id;
+    const betAmount = parseInt(args[0]);
+    
+    if (!betAmount || betAmount < 10) {
+        const helpEmbed = new EmbedBuilder()
+            .setColor(0x9B59B6)
+            .setTitle('🃏 WAR - Card Game')
+            .setDescription(
+                '```ansi\n' +
+                '\u001b[35m╔═══════════════════════════════════════════╗\n' +
+                '║      🃏  CLASSIC CARD WAR GAME!  🃏       ║\n' +
+                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+                '```\n' +
+                '**Usage:** `$war <bet>`\n\n' +
+                '**How it works:**\n' +
+                '• You and the bot each draw a card\n' +
+                '• Highest card wins (A > K > Q > J > 10...)\n' +
+                '• Win = 2x your bet\n' +
+                '• Tie = Go to WAR! (Double or Nothing)\n\n' +
+                '**Example:** `$war 500`'
+            )
+            .setFooter({ text: '🃏 May the cards be in your favor!' })
+            .setTimestamp();
+        return message.channel.send({ embeds: [helpEmbed] });
+    }
+    
+    const balance = getBalance(userId);
+    if (betAmount > balance) {
+        return message.reply(`❌ You don't have enough coins! Your balance: **${balance.toLocaleString()}**`);
+    }
+    
+    const suits = ['♠️', '♥️', '♦️', '♣️'];
+    const ranks = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
+    const values = { '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, '10': 10, 'J': 11, 'Q': 12, 'K': 13, 'A': 14 };
+    
+    const drawCard = () => {
+        const rank = ranks[Math.floor(Math.random() * ranks.length)];
+        const suit = suits[Math.floor(Math.random() * suits.length)];
+        return { rank, suit, value: values[rank], display: `${rank}${suit}` };
+    };
+    
+    const playerCard = drawCard();
+    const botCard = drawCard();
+    
+    let result = '';
+    let winAmount = 0;
+    let resultColor = 0x808080;
+    let resultArt = '';
+    
+    if (playerCard.value > botCard.value) {
+        result = 'WIN';
+        winAmount = betAmount;
+        updateBalance(userId, betAmount);
+        resultColor = 0x00FF00;
+        resultArt = 
+            '```ansi\n' +
+            '\u001b[32m╔═══════════════════════════════════════════╗\n' +
+            '║                                           ║\n' +
+            '║          👑 VICTORY IS YOURS! 👑          ║\n' +
+            '║                                           ║\n' +
+            '║        +' + String(winAmount).padStart(6, ' ') + ' GOLD COINS              ║\n' +
+            '║                                           ║\n' +
+            '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+            '```';
+    } else if (botCard.value > playerCard.value) {
+        result = 'LOSE';
+        winAmount = -betAmount;
+        updateBalance(userId, -betAmount);
+        resultColor = 0xFF0000;
+        resultArt = 
+            '```ansi\n' +
+            '\u001b[31m╔═══════════════════════════════════════════╗\n' +
+            '║                                           ║\n' +
+            '║          💀 DEFEAT! 💀                    ║\n' +
+            '║                                           ║\n' +
+            '║        -' + String(betAmount).padStart(6, ' ') + ' GOLD COINS              ║\n' +
+            '║                                           ║\n' +
+            '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+            '```';
+    } else {
+        // TIE - GO TO WAR!
+        result = 'WAR';
+        resultColor = 0xFFFF00;
+        
+        // In war, we draw again and double stakes
+        const playerWarCard = drawCard();
+        const botWarCard = drawCard();
+        
+        if (playerWarCard.value >= botWarCard.value) {
+            winAmount = betAmount * 2;
+            updateBalance(userId, betAmount * 2);
+            resultArt = 
+                '```ansi\n' +
+                '\u001b[33m╔═══════════════════════════════════════════╗\n' +
+                '║          ⚔️ THIS MEANS WAR! ⚔️            ║\n' +
+                '╠═══════════════════════════════════════════╣\n' +
+                '║                                           ║\n' +
+                '║    Your War Card: ' + playerWarCard.display.padEnd(4, ' ') + '                   ║\n' +
+                '║    Bot War Card:  ' + botWarCard.display.padEnd(4, ' ') + '                   ║\n' +
+                '║                                           ║\n' +
+                '║        🎉 YOU WIN THE WAR! 🎉            ║\n' +
+                '║       +' + String(winAmount).padStart(6, ' ') + ' GOLD COINS              ║\n' +
+                '║                                           ║\n' +
+                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+                '```';
+            resultColor = 0x00FF00;
+        } else {
+            winAmount = -betAmount * 2;
+            updateBalance(userId, -betAmount * 2);
+            resultArt = 
+                '```ansi\n' +
+                '\u001b[33m╔═══════════════════════════════════════════╗\n' +
+                '║          ⚔️ THIS MEANS WAR! ⚔️            ║\n' +
+                '╠═══════════════════════════════════════════╣\n' +
+                '║                                           ║\n' +
+                '║    Your War Card: ' + playerWarCard.display.padEnd(4, ' ') + '                   ║\n' +
+                '║    Bot War Card:  ' + botWarCard.display.padEnd(4, ' ') + '                   ║\n' +
+                '║                                           ║\n' +
+                '║        💀 YOU LOST THE WAR! 💀           ║\n' +
+                '║       -' + String(betAmount * 2).padStart(6, ' ') + ' GOLD COINS              ║\n' +
+                '║                                           ║\n' +
+                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+                '```';
+            resultColor = 0xFF0000;
+        }
+    }
+    
+    saveEconomyData();
+    
+    const cardArt = 
+        '```\n' +
+        '       YOUR CARD          BOT CARD\n' +
+        '      ┌─────────┐        ┌─────────┐\n' +
+        '      │ ' + playerCard.display.padEnd(7, ' ') + ' │        │ ' + botCard.display.padEnd(7, ' ') + ' │\n' +
+        '      │         │   VS   │         │\n' +
+        '      │    ' + playerCard.suit + '    │        │    ' + botCard.suit + '    │\n' +
+        '      │         │        │         │\n' +
+        '      │ ' + playerCard.display.padStart(7, ' ') + ' │        │ ' + botCard.display.padStart(7, ' ') + ' │\n' +
+        '      └─────────┘        └─────────┘\n' +
+        '```';
+    
+    const warEmbed = new EmbedBuilder()
+        .setColor(resultColor)
+        .setTitle('🃏 WAR - Card Battle!')
+        .setDescription(cardArt + resultArt)
+        .addFields(
+            { name: '🃏 Your Card', value: `**${playerCard.display}** (Value: ${playerCard.value})`, inline: true },
+            { name: '🤖 Bot Card', value: `**${botCard.display}** (Value: ${botCard.value})`, inline: true },
+            { name: '💰 Bet', value: `\`${betAmount.toLocaleString()}\``, inline: true },
+            { name: '👛 New Balance', value: `\`${getBalance(userId).toLocaleString()}\``, inline: true }
+        )
+        .setFooter({ text: '🃏 Play again: $war <bet>' })
+        .setTimestamp();
+    
+    message.channel.send({ embeds: [warEmbed] });
+}
+// ==================================================
+// COMMAND: CRASH
+// ==================================================
+else if (command === 'crash') {
+    const userId = message.author.id;
+    const betAmount = parseInt(args[0]);
+    
+    // Check if user already has active crash game
+    if (activeCrashGames.has(userId)) {
+        return message.reply('❌ You already have an active crash game! Type `$cashout` to cash out!');
+    }
+    
+    if (!betAmount || betAmount < 10) {
+        const helpEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('📈 CRASH')
+            .setDescription(
+                '```ansi\n' +
+                '\u001b[31m╔═══════════════════════════════════════════╗\n' +
+                '║    📈 RIDE THE ROCKET... DONT CRASH! 📈   ║\n' +
+                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+                '```\n' +
+                '**Usage:** `$crash <bet>`\n\n' +
+                '**How it works:**\n' +
+                '• Place your bet and watch the multiplier rise\n' +
+                '• Type `$cashout` BEFORE it crashes!\n' +
+                '• The longer you wait, the higher the reward\n' +
+                '• But if it crashes before you cash out... 💥\n\n' +
+                '**Multipliers:** 1.0x → 2.0x → 5.0x → 10.0x+ 🚀\n\n' +
+                '**Example:** `$crash 500`'
+            )
+            .setFooter({ text: '⚠️ High risk, high reward!' })
+            .setTimestamp();
+        return message.channel.send({ embeds: [helpEmbed] });
+    }
+    
+    const balance = getBalance(userId);
+    if (betAmount > balance) {
+        return message.reply(`❌ You don't have enough coins! Your balance: **${balance.toLocaleString()}**`);
+    }
+    
+    // Take the bet
+    updateBalance(userId, -betAmount);
+    saveEconomyData();
+    
+    // Generate crash point (house edge built in)
+    // Lower crash points more common, high ones rare
+    const crashPoint = Math.max(1.0, (0.99 / Math.random())).toFixed(2);
+    
+    // Start the game
+    let currentMultiplier = 1.00;
+    const startTime = Date.now();
+    
+    const crashEmbed = new EmbedBuilder()
+        .setColor(0x00FF00)
+        .setTitle('📈 CRASH - GAME STARTED!')
+        .setDescription(
+            '```ansi\n' +
+            '\u001b[32m╔═══════════════════════════════════════════╗\n' +
+            '║                                           ║\n' +
+            '║              🚀 LAUNCHING! 🚀             ║\n' +
+            '║                                           ║\n' +
+            '║           MULTIPLIER: 1.00x              ║\n' +
+            '║                                           ║\n' +
+            '║      Type $cashout to secure your win!   ║\n' +
+            '║                                           ║\n' +
+            '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+            '```'
+        )
+        .addFields(
+            { name: '💰 Your Bet', value: `\`${betAmount.toLocaleString()}\``, inline: true },
+            { name: '📈 Current Value', value: `\`${betAmount.toLocaleString()}\``, inline: true },
+            { name: '⏱️ Status', value: '`🟢 LIVE`', inline: true }
+        )
+        .setFooter({ text: '⚠️ CASH OUT BEFORE IT CRASHES! Type $cashout' })
+        .setTimestamp();
+    
+    const gameMsg = await message.channel.send({ embeds: [crashEmbed] });
+    
+    // Store game data
+    activeCrashGames.set(userId, {
+        odId: message.author.id,
+        odUsername: message.author.username,
+        bet: betAmount,
+        crashPoint: parseFloat(crashPoint),
+        multiplier: 1.00,
+        messageId: gameMsg.id,
+        channelId: message.channel.id,
+        startTime: startTime,
+        crashed: false
+    });
+    
+    // Update multiplier every 1.5 seconds
+    const updateInterval = setInterval(async () => {
+        const game = activeCrashGames.get(userId);
+        if (!game || game.crashed) {
+            clearInterval(updateInterval);
+            return;
+        }
+        
+        // Increase multiplier
+        game.multiplier += 0.15 + (Math.random() * 0.20);
+        game.multiplier = parseFloat(game.multiplier.toFixed(2));
+        
+        const currentValue = Math.floor(betAmount * game.multiplier);
+        
+        // Check if crashed
+        if (game.multiplier >= game.crashPoint) {
+            game.crashed = true;
+            activeCrashGames.delete(userId);
+            clearInterval(updateInterval);
+            
+            const crashedEmbed = new EmbedBuilder()
+                .setColor(0xFF0000)
+                .setTitle('💥 CRASHED!')
+                .setDescription(
+                    '```ansi\n' +
+                    '\u001b[31m╔═══════════════════════════════════════════╗\n' +
+                    '║                                           ║\n' +
+                    '║         💥💥💥 CRASHED!!! 💥💥💥         ║\n' +
+                    '║                                           ║\n' +
+                    '║          CRASH POINT: ' + String(game.crashPoint).padEnd(5, ' ') + 'x            ║\n' +
+                    '║                                           ║\n' +
+                    '║      YOU DIDNT CASH OUT IN TIME! 💀      ║\n' +
+                    '║                                           ║\n' +
+                    '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+                    '```\n' +
+                    '```\n' +
+                    '    📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉\n' +
+                    '          THE ROCKET EXPLODED!\n' +
+                    '    📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉\n' +
+                    '```'
+                )
+                .addFields(
+                    { name: '💸 Lost', value: `\`${betAmount.toLocaleString()}\``, inline: true },
+                    { name: '💥 Crashed At', value: `\`${game.crashPoint}x\``, inline: true },
+                    { name: '👛 Balance', value: `\`${getBalance(userId).toLocaleString()}\``, inline: true }
+                )
+                .setFooter({ text: '💀 Better luck next time! Try again with $crash <bet>' })
+                .setTimestamp();
+            
+            try {
+                await gameMsg.edit({ embeds: [crashedEmbed] });
+            } catch (e) {}
+            return;
+        }
+        
+        // Update embed with new multiplier
+        let rocketArt = '';
+        if (game.multiplier < 2) {
+            rocketArt = '🚀';
+        } else if (game.multiplier < 3) {
+            rocketArt = '🚀🚀';
+        } else if (game.multiplier < 5) {
+            rocketArt = '🚀🚀🚀';
+        } else if (game.multiplier < 8) {
+            rocketArt = '🚀🔥🚀🔥🚀';
+        } else {
+            rocketArt = '🚀🔥💫🔥🚀🔥💫🔥🚀';
+        }
+        
+        const liveEmbed = new EmbedBuilder()
+            .setColor(game.multiplier >= 3 ? 0xFFD700 : 0x00FF00)
+            .setTitle('📈 CRASH - LIVE!')
+            .setDescription(
+                '```ansi\n' +
+                (game.multiplier >= 5 ? '\u001b[33m' : '\u001b[32m') +
+                '╔═══════════════════════════════════════════╗\n' +
+                '║                                           ║\n' +
+                '║            ' + rocketArt.padEnd(20, ' ') + '         ║\n' +
+                '║                                           ║\n' +
+                '║         MULTIPLIER: ' + String(game.multiplier.toFixed(2) + 'x').padEnd(7, ' ') + '            ║\n' +
+                '║                                           ║\n' +
+                '║     💰 VALUE: ' + String(currentValue.toLocaleString()).padEnd(15, ' ') + '       ║\n' +
+                '║                                           ║\n' +
+                '║       ⚠️ TYPE $cashout NOW! ⚠️           ║\n' +
+                '║                                           ║\n' +
+                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+                '```'
+            )
+            .addFields(
+                { name: '💰 Bet', value: `\`${betAmount.toLocaleString()}\``, inline: true },
+                { name: '📈 Multiplier', value: `\`${game.multiplier.toFixed(2)}x\``, inline: true },
+                { name: '💵 Current Value', value: `\`${currentValue.toLocaleString()}\``, inline: true }
+            )
+            .setFooter({ text: '⚠️ CASH OUT BEFORE IT CRASHES! Type $cashout' })
+            .setTimestamp();
+        
+        try {
+            await gameMsg.edit({ embeds: [liveEmbed] });
+        } catch (e) {}
+        
+    }, 1500);
+    
+    // Auto-timeout after 60 seconds (safety net)
+    setTimeout(() => {
+        const game = activeCrashGames.get(userId);
+        if (game && !game.crashed) {
+            game.crashed = true;
+            activeCrashGames.delete(userId);
+        }
+    }, 60000);
+}
+
+// ==================================================
+// COMMAND: CASHOUT (For Crash Game)
+// ==================================================
+else if (command === 'cashout' || command === 'co') {
+    const userId = message.author.id;
+    const game = activeCrashGames.get(userId);
+    
+    if (!game) {
+        return message.reply('❌ You don\'t have an active crash game! Start one with `$crash <bet>`');
+    }
+    
+    if (game.crashed) {
+        activeCrashGames.delete(userId);
+        return message.reply('💥 Too late! The rocket already crashed!');
+    }
+    
+    // Cash out successful!
+    game.crashed = true;
+    activeCrashGames.delete(userId);
+    
+    const winAmount = Math.floor(game.bet * game.multiplier);
+    const profit = winAmount - game.bet;
+    
+    updateBalance(userId, winAmount);
+    saveEconomyData();
+    
+    const cashoutEmbed = new EmbedBuilder()
+        .setColor(0x00FF00)
+        .setTitle('💰 CASHED OUT!')
+        .setDescription(
+            '```ansi\n' +
+            '\u001b[32m╔═══════════════════════════════════════════╗\n' +
+            '║                                           ║\n' +
+            '║       🎉🎉🎉 CASHED OUT! 🎉🎉🎉          ║\n' +
+            '║                                           ║\n' +
+            '║           MULTIPLIER: ' + String(game.multiplier.toFixed(2) + 'x').padEnd(6, ' ') + '            ║\n' +
+            '║                                           ║\n' +
+            '║      ██████████████████████████████       ║\n' +
+            '║      █                                █       ║\n' +
+            '║      █   +' + String(winAmount.toLocaleString()).padStart(10, ' ') + ' COINS    █       ║\n' +
+            '║      █                                █       ║\n' +
+            '║      ██████████████████████████████       ║\n' +
+            '║                                           ║\n' +
+            '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+            '```'
+        )
+        .addFields(
+            { name: '💰 Bet', value: `\`${game.bet.toLocaleString()}\``, inline: true },
+            { name: '📈 Multiplier', value: `\`${game.multiplier.toFixed(2)}x\``, inline: true },
+            { name: '💵 Won', value: `\`${winAmount.toLocaleString()}\``, inline: true },
+            { name: '📊 Profit', value: `\`+${profit.toLocaleString()}\``, inline: true },
+            { name: '💥 Crash Point', value: `\`${game.crashPoint}x\``, inline: true },
+            { name: '👛 New Balance', value: `\`${getBalance(userId).toLocaleString()}\``, inline: true }
+        )
+        .setFooter({ text: `🎰 The rocket would have crashed at ${game.crashPoint}x! Play again: $crash <bet>` })
+        .setTimestamp();
+    
+    message.channel.send({ embeds: [cashoutEmbed] });
+}
+
+// ==================================================
+// COMMAND: SPIN (Wheel Spin)
+// ==================================================
+else if (command === 'spin' || command === 'wheel') {
+    const userId = message.author.id;
+    const now = Date.now();
+    const SPIN_COOLDOWN = 3 * 60 * 60 * 1000; // 3 hours
+    
+    const lastSpin = spinCooldowns.get(userId) || 0;
+    const timeSinceSpin = now - lastSpin;
+    
+    if (timeSinceSpin < SPIN_COOLDOWN) {
+        const timeLeft = SPIN_COOLDOWN - timeSinceSpin;
+        const hours = Math.floor(timeLeft / (60 * 60 * 1000));
+        const minutes = Math.floor((timeLeft % (60 * 60 * 1000)) / (60 * 1000));
+        
+        const cooldownEmbed = new EmbedBuilder()
+            .setColor(0xFF6600)
+            .setTitle('🎡 WHEEL OF FORTUNE')
+            .setDescription(
+                '```ansi\n' +
+                '\u001b[33m╔═══════════════════════════════════════════╗\n' +
+                '║     ⏳  WHEEL IS RECHARGING  ⏳            ║\n' +
+                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+                '```\n' +
+                `Spin again in **${hours}h ${minutes}m**!`
+            )
+            .setFooter({ text: '🎡 Free spin every 3 hours!' })
+            .setTimestamp();
+        
+        return message.channel.send({ embeds: [cooldownEmbed] });
+    }
+    
+    spinCooldowns.set(userId, now);
+    
+    const wheelSlices = [
+        { prize: 50, emoji: '🟢', name: '50 Coins', chance: 25 },
+        { prize: 100, emoji: '🔵', name: '100 Coins', chance: 20 },
+        { prize: 200, emoji: '🟣', name: '200 Coins', chance: 15 },
+        { prize: 350, emoji: '🟡', name: '350 Coins', chance: 12 },
+        { prize: 500, emoji: '🟠', name: '500 Coins', chance: 10 },
+        { prize: 750, emoji: '🔴', name: '750 Coins', chance: 7 },
+        { prize: 1000, emoji: '💎', name: '1,000 Coins', chance: 5 },
+        { prize: 2000, emoji: '👑', name: '2,000 Coins', chance: 3 },
+        { prize: 5000, emoji: '🌟', name: 'JACKPOT!', chance: 2 },
+        { prize: -100, emoji: '💀', name: 'BANKRUPT (-100)', chance: 1 },
+    ];
+    
+    // Weighted random selection
+    const totalChance = wheelSlices.reduce((sum, s) => sum + s.chance, 0);
+    let random = Math.random() * totalChance;
+    let selectedSlice = wheelSlices[0];
+    
+    for (const slice of wheelSlices) {
+        random -= slice.chance;
+        if (random <= 0) {
+            selectedSlice = slice;
+            break;
+        }
+    }
+    
+    // Show spinning animation first
+    const spinningEmbed = new EmbedBuilder()
+        .setColor(0xFFD700)
+        .setTitle('🎡 WHEEL OF FORTUNE')
+        .setDescription(
+            '```ansi\n' +
+            '\u001b[33m╔═══════════════════════════════════════════╗\n' +
+            '║                                           ║\n' +
+            '║           🎡 SPINNING... 🎡              ║\n' +
+            '║                                           ║\n' +
+            '║      🟢 🔵 🟣 🟡 🟠 🔴 💎 👑 🌟 💀      ║\n' +
+            '║                  ⬆️                       ║\n' +
+            '║                                           ║\n' +
+            '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+            '```'
+        )
+        .setTimestamp();
+    
+    const spinMsg = await message.channel.send({ embeds: [spinningEmbed] });
+    
+    // Wait for suspense
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    
+    // Apply prize
+    updateBalance(userId, selectedSlice.prize);
+    saveEconomyData();
+    
+    let resultColor = 0x00FF00;
+    let resultArt = '';
+    
+    if (selectedSlice.prize >= 2000) {
+        resultColor = 0xFFD700;
+        resultArt = 
+            '```ansi\n' +
+            '\u001b[33m╔═══════════════════════════════════════════╗\n' +
+            '║                                           ║\n' +
+            '║   🎉🎉🎉 HUGE WIN!!! 🎉🎉🎉              ║\n' +
+            '║                                           ║\n' +
+            '║          ' + selectedSlice.emoji + ' ' + selectedSlice.name.padEnd(20, ' ') + '      ║\n' +
+            '║                                           ║\n' +
+            '║    +' + String(selectedSlice.prize.toLocaleString()).padStart(6, ' ') + ' GOLD COINS!!!             ║\n' +
+            '║                                           ║\n' +
+            '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+            '```';
+    } else if (selectedSlice.prize < 0) {
+        resultColor = 0xFF0000;
+        resultArt = 
+            '```ansi\n' +
+            '\u001b[31m╔═══════════════════════════════════════════╗\n' +
+            '║                                           ║\n' +
+            '║         💀 BANKRUPT! 💀                  ║\n' +
+            '║                                           ║\n' +
+            '║           You lost 100 coins!            ║\n' +
+            '║                                           ║\n' +
+            '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+            '```';
+    } else {
+        resultArt = 
+            '```ansi\n' +
+            '\u001b[32m╔═════════════��═════════════════════════════╗\n' +
+            '║                                           ║\n' +
+            '║              🎡 WINNER! 🎡               ║\n' +
+            '║                                           ║\n' +
+            '║          ' + selectedSlice.emoji + ' ' + selectedSlice.name.padEnd(20, ' ') + '      ║\n' +
+            '║                                           ║\n' +
+            '║       +' + String(selectedSlice.prize).padStart(5, ' ') + ' GOLD COINS               ║\n' +
+            '║                                           ║\n' +
+            '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+            '```';
+    }
+    
+    const wheelArt = 
+        '```\n' +
+        '           🎡 WHEEL OF FORTUNE 🎡\n' +
+        '        ╭────────────────────────╮\n' +
+        '       ╱  🟢   🔵   🟣   🟡   🟠  ╲\n' +
+        '      │                          │\n' +
+        '      │     ' + selectedSlice.emoji + ' ← LANDED HERE      │\n' +
+        '      │                          │\n' +
+        '       ╲  💀   🌟   👑   💎   🔴  ╱\n' +
+        '        ╰────────────────────────╯\n' +
+        '                  ⬆️\n' +
+        '```';
+    
+    const resultEmbed = new EmbedBuilder()
+        .setColor(resultColor)
+        .setTitle('🎡 WHEEL OF FORTUNE - RESULT!')
+        .setDescription(wheelArt + resultArt)
+        .addFields(
+            { name: '🎯 Landed On', value: `${selectedSlice.emoji} **${selectedSlice.name}**`, inline: true },
+            { name: '💰 Prize', value: `\`${selectedSlice.prize >= 0 ? '+' : ''}${selectedSlice.prize.toLocaleString()}\``, inline: true },
+            { name: '👛 New Balance', value: `\`${getBalance(userId).toLocaleString()}\``, inline: true }
+        )
+        .setFooter({ text: '🎡 Next free spin in 3 hours!' })
+        .setTimestamp();
+    
+    await spinMsg.edit({ embeds: [resultEmbed] });
+}
+
+// ==================================================
+// COMMAND: HEIST
+// ==================================================
+else if (command === 'heist') {
+    const userId = message.author.id;
+    const betAmount = parseInt(args[0]);
+    
+    if (activeHeistGames.has(userId)) {
+        return message.reply('❌ You already have an active heist! Complete it first.');
+    }
+    
+    if (!betAmount || betAmount < 100) {
+        const helpEmbed = new EmbedBuilder()
+            .setColor(0x8B0000)
+            .setTitle('🏦 HEIST')
+            .setDescription(
+                '```ansi\n' +
+                '\u001b[31m╔═══════════════════════════════════════════╗\n' +
+                '║      🏦 ROB THE BANK... IF YOU DARE! 🏦   ║\n' +
+                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+                '```\n' +
+                '**Usage:** `$heist <bet>`\n\n' +
+                '**How it works:**\n' +
+                '• Attempt to rob a bank in 3 stages\n' +
+                '• Each stage has a risk of getting caught\n' +
+                '• After each stage, choose: `continue` or `escape`\n' +
+                '• Escape = Keep your current winnings\n' +
+                '• Continue = Risk it for higher rewards\n' +
+                '• Get caught = Lose everything!\n\n' +
+                '**Multipliers:**\n' +
+                '• Stage 1: 1.5x\n' +
+                '• Stage 2: 2.5x\n' +
+                '• Stage 3: 5.0x\n\n' +
+                '**Minimum bet:** 100 coins\n' +
+                '**Example:** `$heist 1000`'
+            )
+            .setFooter({ text: '⚠️ High risk, high reward!' })
+            .setTimestamp();
+        return message.channel.send({ embeds: [helpEmbed] });
+    }
+    
+    const balance = getBalance(userId);
+    if (betAmount > balance) {
+        return message.reply(`❌ You don't have enough coins! Your balance: **${balance.toLocaleString()}**`);
+    }
+    
+    // Take the bet
+    updateBalance(userId, -betAmount);
+    saveEconomyData();
+    
+    // Start heist
+    const stages = [
+        { name: 'Bypass Security', successChance: 70, multiplier: 1.5, emoji: '🔓' },
+        { name: 'Crack the Vault', successChance: 55, multiplier: 2.5, emoji: '🔐' },
+        { name: 'Grab the Loot', successChance: 40, multiplier: 5.0, emoji: '💰' },
+    ];
+    
+    activeHeistGames.set(userId, {
+        odId: userId,
+        bet: betAmount,
+        currentStage: 0,
+        multiplier: 1.0,
+        channelId: message.channel.id
+    });
+    
+    const startEmbed = new EmbedBuilder()
+        .setColor(0x8B0000)
+        .setTitle('🏦 HEIST INITIATED!')
+        .setDescription(
+            '```ansi\n' +
+            '\u001b[31m╔═══════════════════════════════════════════╗\n' +
+            '║                                           ║\n' +
+            '║         🏦 HEIST IN PROGRESS 🏦          ║\n' +
+            '║                                           ║\n' +
+            '╠═══════════════════════════════════════════╣\n' +
+            '║                                           ║\n' +
+            '║  STAGE 1: 🔓 Bypass Security              ║\n' +
+            '║  Success Rate: 70%                        ║\n' +
+            '║  Reward: 1.5x                             ║\n' +
+            '║                                           ║\n' +
+            '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+            '```\n' +
+            '**Attempting to bypass security systems...**'
+        )
+        .addFields(
+            { name: '💰 Bet', value: `\`${betAmount.toLocaleString()}\``, inline: true },
+            { name: '🎯 Stage', value: '`1/3`', inline: true },
+            { name: '📈 Potential', value: `\`${Math.floor(betAmount * 1.5).toLocaleString()}\``, inline: true }
+        )
+        .setFooter({ text: '⏳ Executing stage 1...' })
+        .setTimestamp();
+    
+    const heistMsg = await message.channel.send({ embeds: [startEmbed] });
+    
+    // Wait for suspense
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    
+    // Stage 1 result
+    const stage1Success = Math.random() * 100 < stages[0].successChance;
+    
+    if (!stage1Success) {
+        activeHeistGames.delete(userId);
+        
+        const failEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('🚨 HEIST FAILED!')
+            .setDescription(
+                '```ansi\n' +
+                '\u001b[31m╔═══════════════════════════════════════════╗\n' +
+                '║                                           ║\n' +
+                '║     🚨🚨🚨 ALARM TRIGGERED! 🚨🚨🚨       ║\n' +
+                '║                                           ║\n' +
+                '║       STAGE 1: SECURITY BYPASS FAILED     ║\n' +
+                '║                                           ║\n' +
+                '║          👮 POLICE ARRIVED 👮            ║\n' +
+                '║                                           ║\n' +
+                '║         YOU LOST EVERYTHING! 💀          ║\n' +
+                '║                                           ║\n' +
+                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+                '```'
+            )
+            .addFields(
+                { name: '💸 Lost', value: `\`${betAmount.toLocaleString()}\``, inline: true },
+                { name: '🎯 Failed At', value: '`Stage 1`', inline: true },
+                { name: '👛 Balance', value: `\`${getBalance(userId).toLocaleString()}\``, inline: true }
+            )
+            .setFooter({ text: '💀 Better luck next time!' })
+            .setTimestamp();
+        
+        return heistMsg.edit({ embeds: [failEmbed] });
+    }
+    
+    // Stage 1 success - prompt for continue or escape
+    const game = activeHeistGames.get(userId);
+    game.currentStage = 1;
+    game.multiplier = 1.5;
+    
+    const stage1SuccessEmbed = new EmbedBuilder()
+        .setColor(0x00FF00)
+        .setTitle('🔓 STAGE 1 COMPLETE!')
+        .setDescription(
+            '```ansi\n' +
+            '\u001b[32m╔═══════════════════════════════════════════╗\n' +
+            '║                                           ║\n' +
+            '║     ✅ SECURITY BYPASSED SUCCESSFULLY! ✅ ║\n' +
+            '║                                           ║\n' +
+            '║         CURRENT MULTIPLIER: 1.5x          ║\n' +
+            '║                                           ║\n' +
+            '╚═══════════════════════════════════���═══════╝\u001b[0m\n' +
+            '```\n' +
+            '**NEXT STAGE:** 🔐 Crack the Vault (55% success)\n' +
+            '**NEXT REWARD:** 2.5x\n\n' +
+            '⚠️ **CHOOSE YOUR ACTION:**\n' +
+            '• Type `$continue` to proceed (risky!)\n' +
+            '• Type `$escape` to take your winnings'
+        )
+        .addFields(
+            { name: '💰 Current Value', value: `\`${Math.floor(betAmount * 1.5).toLocaleString()}\``, inline: true },
+            { name: '📈 If You Escape', value: `\`+${Math.floor(betAmount * 0.5).toLocaleString()} profit\``, inline: true },
+            { name: '🎯 Next Stage Risk', value: '`45% fail chance`', inline: true }
+        )
+        .setFooter({ text: '⏰ You have 30 seconds to decide! Type $continue or $escape' })
+        .setTimestamp();
+    
+    await heistMsg.edit({ embeds: [stage1SuccessEmbed] });
+    
+    // Set timeout to auto-escape after 30 seconds
+    setTimeout(async () => {
+        const currentGame = activeHeistGames.get(userId);
+        if (currentGame && currentGame.currentStage === 1) {
+            // Auto escape
+            activeHeistGames.delete(userId);
+            const winAmount = Math.floor(betAmount * 1.5);
+            updateBalance(userId, winAmount);
+            saveEconomyData();
+            
+            const autoEscapeEmbed = new EmbedBuilder()
+                .setColor(0xFFFF00)
+                .setTitle('🏃 AUTO-ESCAPED!')
+                .setDescription('You took too long to decide, so you automatically escaped with your winnings!')
+                .addFields(
+                    { name: '💰 Won', value: `\`${winAmount.toLocaleString()}\``, inline: true },
+                    { name: '📊 Profit', value: `\`+${Math.floor(betAmount * 0.5).toLocaleString()}\``, inline: true },
+                    { name: '👛 Balance', value: `\`${getBalance(userId).toLocaleString()}\``, inline: true }
+                )
+                .setTimestamp();
+            
+            try {
+                await message.channel.send({ embeds: [autoEscapeEmbed] });
+            } catch (e) {}
+        }
+    }, 30000);
+}
+
+// ==================================================
+// COMMAND: CONTINUE (For Heist)
+// ==================================================
+else if (command === 'continue') {
+    const userId = message.author.id;
+    const game = activeHeistGames.get(userId);
+    
+    if (!game) {
+        return message.reply('❌ You don\'t have an active heist! Start one with `$heist <bet>`');
+    }
+    
+    const stages = [
+        { name: 'Bypass Security', successChance: 70, multiplier: 1.5, emoji: '🔓' },
+        { name: 'Crack the Vault', successChance: 55, multiplier: 2.5, emoji: '🔐' },
+        { name: 'Grab the Loot', successChance: 40, multiplier: 5.0, emoji: '💰' },
+    ];
+    
+    const nextStageIndex = game.currentStage;
+    
+    if (nextStageIndex >= stages.length) {
+        return message.reply('❌ You\'ve completed all stages! Type `$escape` to collect your winnings.');
+    }
+    
+    const nextStage = stages[nextStageIndex];
+    
+    const attemptEmbed = new EmbedBuilder()
+        .setColor(0xFFFF00)
+        .setTitle(`${nextStage.emoji} STAGE ${nextStageIndex + 1}: ${nextStage.name.toUpperCase()}`)
+        .setDescription(`**Attempting to ${nextStage.name.toLowerCase()}...**\nSuccess chance: ${nextStage.successChance}%`)
+        .setTimestamp();
+    
+    const attemptMsg = await message.channel.send({ embeds: [attemptEmbed] });
+    
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    
+    const success = Math.random() * 100 < nextStage.successChance;
+    
+    if (!success) {
+        activeHeistGames.delete(userId);
+        
+        const failEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('🚨 HEIST FAILED!')
+            .setDescription(
+                '```ansi\n' +
+                '\u001b[31m╔═══════════════════════════════════════════╗\n' +
+                '║                                           ║\n' +
+                '║     🚨🚨🚨 ALARM TRIGGERED! 🚨🚨🚨       ║\n' +
+                '║                                           ║\n' +
+                '║       STAGE ' + (nextStageIndex + 1) + ': ' + nextStage.name.toUpperCase().padEnd(20, ' ') + '   ║\n' +
+                '║                  FAILED!                  ║\n' +
+                '║                                           ║\n' +
+                '║          👮 POLICE ARRIVED 👮            ║\n' +
+                '║                                           ║\n' +
+                '║         YOU LOST EVERYTHING! 💀          ║\n' +
+                '║                                           ║\n' +
+                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+                '```'
+            )
+            .addFields(
+                { name: '💸 Lost', value: `\`${game.bet.toLocaleString()}\``, inline: true },
+                { name: '🎯 Failed At', value: `\`Stage ${nextStageIndex + 1}\``, inline: true },
+                { name: '👛 Balance', value: `\`${getBalance(userId).toLocaleString()}\``, inline: true }
+            )
+            .setFooter({ text: '💀 You got greedy!' })
+            .setTimestamp();
+        
+        return attemptMsg.edit({ embeds: [failEmbed] });
+    }
+    
+    // Stage success!
+    game.currentStage = nextStageIndex + 1;
+    game.multiplier = nextStage.multiplier;
+    
+    if (game.currentStage >= stages.length) {
+        // COMPLETED ALL STAGES!
+        activeHeistGames.delete(userId);
+        const winAmount = Math.floor(game.bet * game.multiplier);
+        const profit = winAmount - game.bet;
+        updateBalance(userId, winAmount);
+        saveEconomyData();
+        
+        const winEmbed = new EmbedBuilder()
+            .setColor(0xFFD700)
+            .setTitle('🏆 HEIST COMPLETE! LEGENDARY!')
+            .setDescription(
+                '```ansi\n' +
+                '\u001b[33m╔═══════════════════════════════════════════╗\n' +
+                '║                                           ║\n' +
+                '║  🎉🎉🎉 HEIST COMPLETE!!! 🎉🎉🎉         ║\n' +
+                '║                                           ║\n' +
+                '║      YOU ROBBED THE ENTIRE VAULT!         ║\n' +
+                '║                                           ║\n' +
+                '║         MULTIPLIER: 5.0x 💰💰💰          ║\n' +
+                '║                                           ║\n' +
+                '║    +' + String(winAmount.toLocaleString()).padStart(10, ' ') + ' GOLD COINS          ║\n' +
+                '║                                           ║\n' +
+                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+                '```'
+            )
+            .addFields(
+                { name: '💰 Won', value: `\`${winAmount.toLocaleString()}\``, inline: true },
+                { name: '📊 Profit', value: `\`+${profit.toLocaleString()}\``, inline: true },
+                { name: '👛 Balance', value: `\`${getBalance(userId).toLocaleString()}\``, inline: true }
+            )
+            .setFooter({ text: '👑 LEGENDARY HEISTER!' })
+            .setTimestamp();
+        
+        return attemptMsg.edit({ embeds: [winEmbed] });
+    }
+    
+    // More stages to go
+    const nextNextStage = stages[game.currentStage];
+    
+    const successEmbed = new EmbedBuilder()
+        .setColor(0x00FF00)
+        .setTitle(`✅ STAGE ${nextStageIndex + 1} COMPLETE!`)
+        .setDescription(
+            '```ansi\n' +
+            '\u001b[32m╔═══════════════════════════════════════════╗\n' +
+            '║                                           ║\n' +
+            '║     ✅ ' + nextStage.name.toUpperCase().padEnd(30, ' ') + ' ✅ ║\n' +
+            '║                 SUCCESS!                  ║\n' +
+            '║                                           ║\n' +
+            '║         CURRENT MULTIPLIER: ' + String(game.multiplier + 'x').padEnd(5, ' ') + '        ║\n' +
+            '║                                           ║\n' +
+            '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+            '```\n' +
+            `**NEXT STAGE:** ${nextNextStage.emoji} ${nextNextStage.name} (${nextNextStage.successChance}% success)\n` +
+            `**NEXT REWARD:** ${nextNextStage.multiplier}x\n\n` +
+            '⚠️ **CHOOSE YOUR ACTION:**\n' +
+            '• Type `$continue` to proceed (risky!)\n' +
+            '• Type `$escape` to take your winnings'
+        )
+        .addFields(
+            { name: '💰 Current Value', value: `\`${Math.floor(game.bet * game.multiplier).toLocaleString()}\``, inline: true },
+            { name: '📈 Profit So Far', value: `\`+${Math.floor(game.bet * (game.multiplier - 1)).toLocaleString()}\``, inline: true },
+            { name: '🎯 Next Risk', value: `\`${100 - nextNextStage.successChance}% fail\``, inline: true }
+        )
+        .setFooter({ text: '⏰ 30 seconds to decide! $continue or $escape' })
+        .setTimestamp();
+    
+    await attemptMsg.edit({ embeds: [successEmbed] });
+    
+    // Auto-escape timeout
+    setTimeout(async () => {
+        const currentGame = activeHeistGames.get(userId);
+        if (currentGame && currentGame.currentStage === game.currentStage) {
+            activeHeistGames.delete(userId);
+            const winAmount = Math.floor(game.bet * game.multiplier);
+            updateBalance(userId, winAmount);
+            saveEconomyData();
+            
+            const autoEscapeEmbed = new EmbedBuilder()
+                .setColor(0xFFFF00)
+                .setTitle('🏃 AUTO-ESCAPED!')
+                .setDescription('You took too long, so you automatically escaped!')
+                .addFields(
+                    { name: '💰 Won', value: `\`${winAmount.toLocaleString()}\``, inline: true },
+                    { name: '👛 Balance', value: `\`${getBalance(userId).toLocaleString()}\``, inline: true }
+                )
+                .setTimestamp();
+            
+            try {
+                await message.channel.send({ embeds: [autoEscapeEmbed] });
+            } catch (e) {}
+        }
+    }, 30000);
+}
+
+// ==================================================
+// COMMAND: ESCAPE (For Heist)
+// ==================================================
+else if (command === 'escape') {
+    const userId = message.author.id;
+    const game = activeHeistGames.get(userId);
+    
+    if (!game) {
+        return message.reply('❌ You don\'t have an active heist! Start one with `$heist <bet>`');
+    }
+    
+    activeHeistGames.delete(userId);
+    
+    const winAmount = Math.floor(game.bet * game.multiplier);
+    const profit = winAmount - game.bet;
+    
+    updateBalance(userId, winAmount);
+    saveEconomyData();
+    
+    const escapeEmbed = new EmbedBuilder()
+        .setColor(0x00FF00)
+        .setTitle('🏃 ESCAPED SUCCESSFULLY!')
+        .setDescription(
+            '```ansi\n' +
+            '\u001b[32m╔═══════════════════════════════════════════╗\n' +
+            '║                                           ║\n' +
+            '║       🏃 YOU ESCAPED THE BANK! 🏃         ║\n' +
+            '║                                           ║\n' +
+            '║      SMART CHOICE... OR WAS IT? 🤔       ║\n' +
+            '║                                           ║\n' +
+            '║    +' + String(winAmount.toLocaleString()).padStart(10, ' ') + ' GOLD COINS          ║\n' +
+            '║                                           ║\n' +
+            '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+            '```'
+        )
+        .addFields(
+            { name: '💰 Won', value: `\`${winAmount.toLocaleString()}\``, inline: true },
+            { name: '📊 Profit', value: `\`+${profit.toLocaleString()}\``, inline: true },
+            { name: '📈 Multiplier', value: `\`${game.multiplier}x\``, inline: true },
+            { name: '🎯 Escaped At', value: `\`Stage ${game.currentStage}\``, inline: true },
+            { name: '👛 New Balance', value: `\`${getBalance(userId).toLocaleString()}\``, inline: true }
+        )
+        .setFooter({ text: '💰 Safe and sound! Play again: $heist <bet>' })
+        .setTimestamp();
+    
+    message.channel.send({ embeds: [escapeEmbed] });
+}
+
+// ==================================================
+// COMMAND: BOMB (Number Bomb Game)
+// ==================================================
+else if (command === 'bomb' || command === 'numberbomb') {
+    const userId = message.author.id;
+    
+    if (activeBombGames.has(message.channel.id)) {
+        return message.reply('❌ There\'s already a bomb game in this channel! Wait for it to finish.');
+    }
+    
+    // Generate bomb position (1-10)
+    const bombPosition = Math.floor(Math.random() * 10) + 1;
+    const numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    const revealed = new Set();
+    
+    activeBombGames.set(message.channel.id, {
+        odId: userId,
+        bomb: bombPosition,
+        numbers: numbers,
+        revealed: revealed,
+        players: new Set([userId]),
+        currentTurn: userId,
+        prize: 75
+    });
+    
+    const numberDisplay = numbers.map(n => revealed.has(n) ? '❌' : `${n}️⃣`).join(' ');
+    
+    const startEmbed = new EmbedBuilder()
+        .setColor(0xFF6600)
+        .setTitle('💣 NUMBER BOMB!')
+        .setDescription(
+            '```ansi\n' +
+            '\u001b[33m╔═══════════════════════════════════════════╗\n' +
+            '║                                           ║\n' +
+            '║      💣 DONT PICK THE BOMB! 💣           ║\n' +
+            '║                                           ║\n' +
+            '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+            '```\n' +
+            `${numberDisplay}\n\n` +
+            '**How to play:**\n' +
+            '• Type a number (1-10) to reveal it\n' +
+            '• ONE number is the bomb 💣\n' +
+            '• Pick the bomb = You LOSE!\n' +
+            '• Last player standing or bomb finder loses!\n\n' +
+            `**Prize:** 75 Gold Coins 🏆`
+        )
+        .addFields(
+            { name: '🎮 Started By', value: `<@${userId}>`, inline: true },
+            { name: '💣 Bomb Hidden', value: '`???`', inline: true },
+            { name: '🎯 Numbers Left', value: `\`${10 - revealed.size}\``, inline: true }
+        )
+        .setFooter({ text: '💣 Type a number 1-10 to play! Game auto-ends in 60 seconds.' })
+        .setTimestamp();
+    
+    const bombMsg = await message.channel.send({ embeds: [startEmbed] });
+    
+    // Create message collector for number picks
+    const filter = m => {
+        const num = parseInt(m.content);
+        return !m.author.bot && num >= 1 && num <= 10 && !revealed.has(num);
+    };
+    
+    const collector = message.channel.createMessageCollector({ filter, time: 60000 });
+    
+    collector.on('collect', async (m) => {
+        const game = activeBombGames.get(message.channel.id);
+        if (!game) {
+            collector.stop();
+            return;
+        }
+        
+        const pickedNumber = parseInt(m.content);
+        const pickerId = m.author.id;
+        
+        game.revealed.add(pickedNumber);
+        game.players.add(pickerId);
+        
+        if (pickedNumber === game.bomb) {
+            // BOOM! Player loses
+            collector.stop();
+            activeBombGames.delete(message.channel.id);
+            
+            const boomEmbed = new EmbedBuilder()
+                .setColor(0xFF0000)
+                .setTitle('💥 BOOM! BOMB EXPLODED!')
+                .setDescription(
+                    '```ansi\n' +
+                    '\u001b[31m╔═══════════════════════════════════════════╗\n' +
+                    '║                                           ║\n' +
+                    '║    💥💥💥 KABOOM!!! 💥💥💥              ║\n' +
+                    '║                                           ║\n' +
+                    '║      THE BOMB WAS NUMBER ' + String(game.bomb).padEnd(2, ' ') + '!             ║\n' +
+                    '║                                           ║\n' +
+                    '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+                    '```\n' +
+                    `💀 **${m.author.username}** picked the bomb and LOST!`
+                )
+                .addFields(
+                    { name: '💣 Bomb Was', value: `\`${game.bomb}\``, inline: true },
+                    { name: '💀 Loser', value: `<@${pickerId}>`, inline: true }
+                )
+                .setFooter({ text: '💣 Better luck next time! Start a new game: $bomb' })
+                .setTimestamp();
+            
+            await message.channel.send({ embeds: [boomEmbed] });
+            
+            // Give prize to the game starter if they're not the loser
+            if (pickerId !== game.odId) {
+                updateBalance(game.odId, game.prize);
+                saveEconomyData();
+                await message.channel.send(`🎉 <@${game.odId}> wins **${game.prize}** Gold Coins for surviving!`);
+            }
+            
+            return;
+        }
+        
+        // Safe pick
+        const numberDisplay = game.numbers.map(n => game.revealed.has(n) ? (n === pickedNumber ? '✅' : '❌') : `${n}️⃣`).join(' ');
+        
+        const safeEmbed = new EmbedBuilder()
+            .setColor(0x00FF00)
+            .setTitle('✅ SAFE!')
+            .setDescription(
+                `**${m.author.username}** picked **${pickedNumber}** - SAFE!\n\n` +
+                `${numberDisplay}\n\n` +
+                `🎯 **Numbers left:** ${10 - game.revealed.size}`
+            )
+            .setFooter({ text: '💣 Keep picking! Type a number 1-10.' })
+            .setTimestamp();
+        
+        await message.channel.send({ embeds: [safeEmbed] });
+        
+        // Check if only 1 number left (auto-win for last picker)
+        if (game.revealed.size === 9) {
+            collector.stop();
+            activeBombGames.delete(message.channel.id);
+            
+            updateBalance(pickerId, game.prize);
+            saveEconomyData();
+            
+            const winEmbed = new EmbedBuilder()
+                .setColor(0xFFD700)
+                .setTitle('🏆 WINNER!')
+                .setDescription(
+                    '```ansi\n' +
+                    '\u001b[33m╔═══════════════════════════════════════════╗\n' +
+                    '║                                           ║\n' +
+                    '║        🎉 ALL SAFE NUMBERS FOUND! 🎉      ║\n' +
+                    '║                                           ║\n' +
+                    '║      THE BOMB WAS NUMBER ' + String(game.bomb).padEnd(2, ' ') + '!             ║\n' +
+                    '║                                           ║\n' +
+                    '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+                    '```\n' +
+                    `🎉 **${m.author.username}** wins **${game.prize}** Gold Coins!`
+                )
+                .addFields(
+                    { name: '🏆 Winner', value: `<@${pickerId}>`, inline: true },
+                    { name: '💰 Prize', value: `\`${game.prize}\``, inline: true },
+                    { name: '💣 Bomb Was', value: `\`${game.bomb}\``, inline: true }
+                )
+                .setTimestamp();
+            
+            await message.channel.send({ embeds: [winEmbed] });
+        }
+    });
+    
+    collector.on('end', (collected, reason) => {
+        if (reason === 'time') {
+            const game = activeBombGames.get(message.channel.id);
+            if (game) {
+                activeBombGames.delete(message.channel.id);
+                message.channel.send('⏰ Bomb game timed out! No winner.');
+            }
+        }
+    });
+        }
 // ==================================================
 // COMMAND: HIGHER LOWER (HL)
 // ==================================================
@@ -4806,6 +8057,1150 @@ else if (command === 'antiraid') {
       } else {
           message.reply('❌ Usage: `$antiraid on` or `$antiraid off`.');
       }
+}
+// ==================================================
+// COMMAND: RESTORE (Manual Anti-Raid Restore)
+// ==================================================
+else if (command === 'restore') {
+    if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
+        const deniedEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('🚫 ACCESS DENIED')
+            .setDescription(
+                '```ansi\n' +
+                '\u001b[31m╔═══════════════════════════════════════════╗\n' +
+                '║   ⛔ UNAUTHORIZED ACCESS ATTEMPT ⛔        ║\n' +
+                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+                '```\n' +
+                'You do not have clearance for this command.\n' +
+                'This incident has been logged.'
+            )
+            .setFooter({ text: '🔒 Security Command • Owner/Immune Only' })
+            .setTimestamp();
+        await sendLog(message.guild.id, `\`[SECURITY]\` **${message.author.tag}** attempted unauthorized use of \`$restore\`.`);
+        return message.channel.send({ embeds: [deniedEmbed] });
+    }
+    
+    await disengageAntiRaid(message.guild, message.channel);
+}
+
+// ==================================================
+// COMMAND: RAIDMODE STATUS
+// ==================================================
+else if (command === 'raidmode') {
+    if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
+        const deniedEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('🚫 ACCESS DENIED')
+            .setDescription(
+                '```ansi\n' +
+                '\u001b[31m╔═══════════════════════════════════════════╗\n' +
+                '║   ⛔ UNAUTHORIZED ACCESS ATTEMPT ⛔        ║\n' +
+                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+                '```\n' +
+                'You do not have clearance for this command.'
+            )
+            .setFooter({ text: '🔒 Security Command • Owner/Immune Only' })
+            .setTimestamp();
+        return message.channel.send({ embeds: [deniedEmbed] });
+    }
+    
+    const isActive = antiRaidActive.has(message.guild.id);
+    const savedPerms = originalChannelPermissions.get(message.guild.id);
+    const savedLevel = originalVerificationLevels.get(message.guild.id);
+    
+    const statusEmbed = new EmbedBuilder()
+        .setColor(isActive ? 0xFF0000 : 0x00FF00)
+        .setTitle('🛡️ RAID MODE STATUS')
+        .setDescription(
+            '```ansi\n' +
+            (isActive ? '\u001b[31m' : '\u001b[32m') +
+            '╔═══════════════════════════════════════════╗\n' +
+            '║         SECURITY STATUS REPORT            ║\n' +
+            '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+            '```'
+        )
+        .addFields(
+            { name: '🚨 Lockdown Status', value: isActive ? '```diff\n- ACTIVE\n```' : '```diff\n+ INACTIVE\n```', inline: true },
+            { name: '🔐 Verification Level', value: `\`${message.guild.verificationLevel}\``, inline: true },
+            { name: '📊 Saved Permissions', value: savedPerms ? `\`${savedPerms.length} channels\`` : '`None`', inline: true },
+            { name: '🔒 Original Ver. Level', value: savedLevel !== undefined ? `\`${savedLevel}\`` : '`N/A`', inline: true }
+        )
+        .setFooter({ text: '⚔️ Use $antiraid on/off to toggle • $restore to restore' })
+        .setTimestamp();
+    
+    message.channel.send({ embeds: [statusEmbed] });
+}
+
+// ==================================================
+// COMMAND: LOCKDOWN (Lock ALL Channels)
+// ==================================================
+else if (command === 'lockdown') {
+    if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
+        const deniedEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('🚫 ACCESS DENIED')
+            .setDescription(
+                '```ansi\n' +
+                '\u001b[31m╔═══════════════════════════════════════════╗\n' +
+                '║   ⛔ UNAUTHORIZED ACCESS ATTEMPT ⛔        ║\n' +
+                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+                '```\n' +
+                'You do not have clearance for this command.'
+            )
+            .setFooter({ text: '🔒 Security Command • Owner/Immune Only' })
+            .setTimestamp();
+        return message.channel.send({ embeds: [deniedEmbed] });
+    }
+    
+    const loadingEmbed = new EmbedBuilder()
+        .setColor(0xFFFF00)
+        .setTitle('🔒 INITIATING LOCKDOWN...')
+        .setDescription('```Locking all channels...```')
+        .setTimestamp();
+    
+    const loadingMsg = await message.channel.send({ embeds: [loadingEmbed] });
+    
+    let lockedCount = 0;
+    let failedCount = 0;
+    
+    for (const channel of message.guild.channels.cache.values()) {
+        if (channel.isTextBased()) {
+            try {
+                await channel.permissionOverwrites.edit(message.guild.roles.everyone, {
+                    SendMessages: false
+                });
+                lockedCount++;
+            } catch (err) {
+                failedCount++;
+            }
+        }
+    }
+    
+    const completeEmbed = new EmbedBuilder()
+        .setColor(0xFF0000)
+        .setTitle('🔒 SERVER LOCKDOWN ENGAGED')
+        .setDescription(
+            '```ansi\n' +
+            '\u001b[31m╔═══════════════════════════════════════════╗\n' +
+            '║      🔒  FULL LOCKDOWN ACTIVE  🔒         ║\n' +
+            '╠═══════════════════════════════════════════╣\n' +
+            '║  ALL TEXT CHANNELS HAVE BEEN LOCKED       ║\n' +
+            '║  ONLY STAFF CAN SEND MESSAGES             ║\n' +
+            '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+            '```'
+        )
+        .addFields(
+            { name: '✅ Channels Locked', value: `\`${lockedCount}\``, inline: true },
+            { name: '❌ Failed', value: `\`${failedCount}\``, inline: true },
+            { name: '👤 Locked By', value: `<@${message.author.id}>`, inline: true }
+        )
+        .setFooter({ text: '🔓 Use $unlockall to unlock all channels' })
+        .setTimestamp();
+    
+    await loadingMsg.edit({ embeds: [completeEmbed] });
+    await sendLog(message.guild.id, `\`[LOCKDOWN]\` **${message.author.tag}** locked all channels. (${lockedCount} locked, ${failedCount} failed)`);
+}
+
+// ==================================================
+// COMMAND: UNLOCKALL (Unlock ALL Channels)
+// ==================================================
+else if (command === 'unlockall') {
+    if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
+        const deniedEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('🚫 ACCESS DENIED')
+            .setDescription(
+                '```ansi\n' +
+                '\u001b[31m╔═══════════════════════════════════════════╗\n' +
+                '║   ⛔ UNAUTHORIZED ACCESS ATTEMPT ⛔        ║\n' +
+                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+                '```\n' +
+                'You do not have clearance for this command.'
+            )
+            .setFooter({ text: '🔒 Security Command • Owner/Immune Only' })
+            .setTimestamp();
+        return message.channel.send({ embeds: [deniedEmbed] });
+    }
+    
+    const loadingEmbed = new EmbedBuilder()
+        .setColor(0xFFFF00)
+        .setTitle('🔓 LIFTING LOCKDOWN...')
+        .setDescription('```Unlocking all channels...```')
+        .setTimestamp();
+    
+    const loadingMsg = await message.channel.send({ embeds: [loadingEmbed] });
+    
+    let unlockedCount = 0;
+    let failedCount = 0;
+    
+    for (const channel of message.guild.channels.cache.values()) {
+        if (channel.isTextBased()) {
+            try {
+                await channel.permissionOverwrites.edit(message.guild.roles.everyone, {
+                    SendMessages: null
+                });
+                unlockedCount++;
+            } catch (err) {
+                failedCount++;
+            }
+        }
+    }
+    
+    const completeEmbed = new EmbedBuilder()
+        .setColor(0x00FF00)
+        .setTitle('🔓 SERVER LOCKDOWN LIFTED')
+        .setDescription(
+            '```ansi\n' +
+            '\u001b[32m╔═══════════════════════════════════════════╗\n' +
+            '║     🔓  ALL CHANNELS UNLOCKED  🔓         ║\n' +
+            '╠═══════════════════════════════════════════╣\n' +
+            '║  SERVER RETURNED TO NORMAL OPERATIONS     ║\n' +
+            '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+            '```'
+        )
+        .addFields(
+            { name: '✅ Channels Unlocked', value: `\`${unlockedCount}\``, inline: true },
+            { name: '❌ Failed', value: `\`${failedCount}\``, inline: true },
+            { name: '👤 Unlocked By', value: `<@${message.author.id}>`, inline: true }
+        )
+        .setFooter({ text: '🔒 Use $lockdown to lock all channels' })
+        .setTimestamp();
+    
+    await loadingMsg.edit({ embeds: [completeEmbed] });
+    await sendLog(message.guild.id, `\`[UNLOCKALL]\` **${message.author.tag}** unlocked all channels. (${unlockedCount} unlocked, ${failedCount} failed)`);
+}
+
+// ==================================================
+// COMMAND: UNBAN
+// ==================================================
+else if (command === 'unban') {
+    if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
+        const deniedEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('🚫 ACCESS DENIED')
+            .setDescription(
+                '```ansi\n' +
+                '\u001b[31m╔═══════════════════════════════════════════╗\n' +
+                '║   ⛔ UNAUTHORIZED ACCESS ATTEMPT ⛔        ║\n' +
+                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+                '```\n' +
+                'You do not have clearance for this command.'
+            )
+            .setFooter({ text: '🔒 Moderation Command • Owner/Immune Only' })
+            .setTimestamp();
+        return message.channel.send({ embeds: [deniedEmbed] });
+    }
+    
+    const userId = args[0]?.replace(/[<@!>]/g, '');
+    
+    if (!userId || !/^\d{17,19}$/.test(userId)) {
+        return message.reply('❌ Please provide a valid user ID.\nUsage: `$unban <userId>`');
+    }
+    
+    try {
+        await message.guild.members.unban(userId);
+        
+        const unbanEmbed = new EmbedBuilder()
+            .setColor(0x00FF00)
+            .setTitle('🔓 USER UNBANNED')
+            .setDescription(
+                '```ansi\n' +
+                '\u001b[32m╔═══════════════════════════════════════════╗\n' +
+                '║        ✅  BAN REVOKED  ✅                ║\n' +
+                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+                '```'
+            )
+            .addFields(
+                { name: '👤 User ID', value: `\`${userId}\``, inline: true },
+                { name: '👮 Unbanned By', value: `<@${message.author.id}>`, inline: true }
+            )
+            .setFooter({ text: '⚖️ Justice served' })
+            .setTimestamp();
+        
+        message.channel.send({ embeds: [unbanEmbed] });
+        await sendLog(message.guild.id, `\`[UNBAN]\` **${message.author.tag}** unbanned user ID \`${userId}\`.`);
+        
+    } catch (err) {
+        message.reply('❌ Failed to unban. User may not be banned or ID is invalid.');
+    }
+}
+
+// ==================================================
+// COMMAND: BANLIST
+// ==================================================
+else if (command === 'banlist') {
+    if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
+        const deniedEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('🚫 ACCESS DENIED')
+            .setDescription(
+                '```ansi\n' +
+                '\u001b[31m╔═══════════════════════════════════════════╗\n' +
+                '║   ⛔ UNAUTHORIZED ACCESS ATTEMPT ⛔        ║\n' +
+                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+                '```\n' +
+                'You do not have clearance for this command.'
+            )
+            .setFooter({ text: '🔒 Moderation Command • Owner/Immune Only' })
+            .setTimestamp();
+        return message.channel.send({ embeds: [deniedEmbed] });
+    }
+    
+    try {
+        const bans = await message.guild.bans.fetch();
+        
+        if (bans.size === 0) {
+            const noBansEmbed = new EmbedBuilder()
+                .setColor(0x00FF00)
+                .setTitle('📋 BAN LIST')
+                .setDescription(
+                    '```ansi\n' +
+                    '\u001b[32m╔═══════════════════════════════════════════╗\n' +
+                    '║         ✅  NO BANNED USERS  ✅           ║\n' +
+                    '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+                    '```\n' +
+                    'This server has no banned users.'
+                )
+                .setTimestamp();
+            return message.channel.send({ embeds: [noBansEmbed] });
+        }
+        
+        const banArray = [...bans.values()].slice(0, 25);
+        let banList = banArray.map((ban, index) => 
+            `\`${index + 1}.\` **${ban.user.tag}**\n┗ ID: \`${ban.user.id}\`\n┗ Reason: ${ban.reason || 'No reason provided'}`
+        ).join('\n\n');
+        
+        const banListEmbed = new EmbedBuilder()
+            .setColor(0xFF6600)
+            .setTitle('📋 SERVER BAN LIST')
+            .setDescription(
+                '```ansi\n' +
+                '\u001b[33m╔═══════════════════════════════════════════╗\n' +
+                '║           🔨  BANNED USERS  🔨            ║\n' +
+                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+                '```\n' +
+                banList
+            )
+            .setFooter({ text: `Total Bans: ${bans.size} • Use $unban <userId> to unban` })
+            .setTimestamp();
+        
+        message.channel.send({ embeds: [banListEmbed] });
+        
+    } catch (err) {
+        message.reply('❌ Failed to fetch ban list. I may be missing permissions.');
+    }
+}
+
+// ==================================================
+// COMMAND: CLEARWARNS
+// ==================================================
+else if (command === 'clearwarns' || command === 'clearwarnings') {
+    if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
+        const deniedEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('🚫 ACCESS DENIED')
+            .setDescription(
+                '```ansi\n' +
+                '\u001b[31m╔═══════════════════════════════════════════╗\n' +
+                '║   ⛔ UNAUTHORIZED ACCESS ATTEMPT ⛔        ║\n' +
+                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+                '```\n' +
+                'You do not have clearance for this command.'
+            )
+            .setFooter({ text: '🔒 Moderation Command • Owner/Immune Only' })
+            .setTimestamp();
+        return message.channel.send({ embeds: [deniedEmbed] });
+    }
+    
+    const target = message.mentions.users.first();
+    
+    if (!target) {
+        return message.reply('❌ Please mention a user.\nUsage: `$clearwarns @user`');
+    }
+    
+    const userWarnings = botData.warnings[message.guild.id]?.[target.id];
+    const warnCount = userWarnings?.length || 0;
+    
+    if (!userWarnings || warnCount === 0) {
+        return message.reply(`✅ **${target.tag}** has no warnings to clear.`);
+    }
+    
+    delete botData.warnings[message.guild.id][target.id];
+    saveWarnings();
+    
+    const clearEmbed = new EmbedBuilder()
+        .setColor(0x00FF00)
+        .setTitle('🧹 WARNINGS CLEARED')
+        .setDescription(
+            '```ansi\n' +
+            '\u001b[32m╔═══════════════════════════════════════════╗\n' +
+            '║       ✅  RECORD EXPUNGED  ✅             ║\n' +
+            '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+            '```'
+        )
+        .addFields(
+            { name: '👤 User', value: `<@${target.id}>`, inline: true },
+            { name: '🗑️ Warnings Removed', value: `\`${warnCount}\``, inline: true },
+            { name: '👮 Cleared By', value: `<@${message.author.id}>`, inline: true }
+        )
+        .setFooter({ text: '⚖️ Clean slate granted' })
+        .setTimestamp();
+    
+    message.channel.send({ embeds: [clearEmbed] });
+    await sendLog(message.guild.id, `\`[CLEARWARNS]\` **${message.author.tag}** cleared ${warnCount} warning(s) for **${target.tag}**.`);
+}
+
+// ==================================================
+// COMMAND: MASSBAN
+// ==================================================
+else if (command === 'massban') {
+    if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
+        const deniedEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('🚫 ACCESS DENIED')
+            .setDescription(
+                '```ansi\n' +
+                '\u001b[31m╔═══════════════════════════════════════════╗\n' +
+                '║   ⛔ UNAUTHORIZED ACCESS ATTEMPT ⛔        ║\n' +
+                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+                '```\n' +
+                'You do not have clearance for this command.'
+            )
+            .setFooter({ text: '🔒 Security Command • Owner/Immune Only' })
+            .setTimestamp();
+        return message.channel.send({ embeds: [deniedEmbed] });
+    }
+    
+    const targets = message.mentions.users;
+    
+    if (targets.size === 0) {
+        return message.reply('❌ Please mention users to ban.\nUsage: `$massban @user1 @user2 @user3...`');
+    }
+    
+    const loadingEmbed = new EmbedBuilder()
+        .setColor(0xFFFF00)
+        .setTitle('🔨 EXECUTING MASS BAN...')
+        .setDescription(`\`\`\`Banning ${targets.size} user(s)...\`\`\``)
+        .setTimestamp();
+    
+    const loadingMsg = await message.channel.send({ embeds: [loadingEmbed] });
+    
+    let bannedCount = 0;
+    let failedCount = 0;
+    const bannedUsers = [];
+    const failedUsers = [];
+    
+    for (const [userId, user] of targets) {
+        if (userId === OWNER_ID || isImmune(user)) {
+            failedUsers.push(`${user.tag} (Protected)`);
+            failedCount++;
+            continue;
+        }
+        
+        try {
+            await message.guild.members.ban(userId, { reason: `Mass ban by ${message.author.tag}` });
+            bannedUsers.push(user.tag);
+            bannedCount++;
+        } catch (err) {
+            failedUsers.push(user.tag);
+            failedCount++;
+        }
+    }
+    
+    const resultEmbed = new EmbedBuilder()
+        .setColor(bannedCount > 0 ? 0xFF0000 : 0xFFFF00)
+        .setTitle('🔨 MASS BAN EXECUTED')
+        .setDescription(
+            '```ansi\n' +
+            '\u001b[31m╔═══════════════════════════════════════════╗\n' +
+            '║      ⚔️  MASS ELIMINATION COMPLETE  ⚔️    ║\n' +
+            '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+            '```'
+        )
+        .addFields(
+            { name: '✅ Banned', value: `\`${bannedCount}\``, inline: true },
+            { name: '❌ Failed', value: `\`${failedCount}\``, inline: true },
+            { name: '👮 Executed By', value: `<@${message.author.id}>`, inline: true }
+        )
+        .setFooter({ text: '🔨 The hammer has fallen' })
+        .setTimestamp();
+    
+    if (bannedUsers.length > 0) {
+        resultEmbed.addFields({ name: '🔨 Banned Users', value: `\`\`\`${bannedUsers.join(', ')}\`\`\``, inline: false });
+    }
+    if (failedUsers.length > 0) {
+        resultEmbed.addFields({ name: '⚠️ Failed/Protected', value: `\`\`\`${failedUsers.join(', ')}\`\`\``, inline: false });
+    }
+    
+    await loadingMsg.edit({ embeds: [resultEmbed] });
+    await sendLog(message.guild.id, `\`[MASSBAN]\` **${message.author.tag}** mass banned ${bannedCount} user(s). Failed: ${failedCount}`);
+}
+
+// ==================================================
+// COMMAND: MASSKICK
+// ==================================================
+else if (command === 'masskick') {
+    if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
+        const deniedEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('🚫 ACCESS DENIED')
+            .setDescription(
+                '```ansi\n' +
+                '\u001b[31m╔═════════���═════════════════════════════════╗\n' +
+                '║   ⛔ UNAUTHORIZED ACCESS ATTEMPT ⛔        ║\n' +
+                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+                '```\n' +
+                'You do not have clearance for this command.'
+            )
+            .setFooter({ text: '🔒 Security Command • Owner/Immune Only' })
+            .setTimestamp();
+        return message.channel.send({ embeds: [deniedEmbed] });
+    }
+    
+    const targets = message.mentions.members;
+    
+    if (targets.size === 0) {
+        return message.reply('❌ Please mention users to kick.\nUsage: `$masskick @user1 @user2 @user3...`');
+    }
+    
+    const loadingEmbed = new EmbedBuilder()
+        .setColor(0xFFFF00)
+        .setTitle('👢 EXECUTING MASS KICK...')
+        .setDescription(`\`\`\`Kicking ${targets.size} user(s)...\`\`\``)
+        .setTimestamp();
+    
+    const loadingMsg = await message.channel.send({ embeds: [loadingEmbed] });
+    
+    let kickedCount = 0;
+    let failedCount = 0;
+    const kickedUsers = [];
+    const failedUsers = [];
+    
+    for (const [userId, member] of targets) {
+        if (userId === OWNER_ID || isImmune(member.user)) {
+            failedUsers.push(`${member.user.tag} (Protected)`);
+            failedCount++;
+            continue;
+        }
+        
+        try {
+            await member.kick(`Mass kick by ${message.author.tag}`);
+            kickedUsers.push(member.user.tag);
+            kickedCount++;
+        } catch (err) {
+            failedUsers.push(member.user.tag);
+            failedCount++;
+        }
+    }
+    
+    const resultEmbed = new EmbedBuilder()
+        .setColor(kickedCount > 0 ? 0xFF6600 : 0xFFFF00)
+        .setTitle('👢 MASS KICK EXECUTED')
+        .setDescription(
+            '```ansi\n' +
+            '\u001b[33m╔═══════════════════════════════════════════╗\n' +
+            '║      👢  MASS REMOVAL COMPLETE  👢        ║\n' +
+            '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+            '```'
+        )
+        .addFields(
+            { name: '✅ Kicked', value: `\`${kickedCount}\``, inline: true },
+            { name: '❌ Failed', value: `\`${failedCount}\``, inline: true },
+            { name: '👮 Executed By', value: `<@${message.author.id}>`, inline: true }
+        )
+        .setFooter({ text: '👢 Shown the door' })
+        .setTimestamp();
+    
+    if (kickedUsers.length > 0) {
+        resultEmbed.addFields({ name: '👢 Kicked Users', value: `\`\`\`${kickedUsers.join(', ')}\`\`\``, inline: false });
+    }
+    if (failedUsers.length > 0) {
+        resultEmbed.addFields({ name: '⚠️ Failed/Protected', value: `\`\`\`${failedUsers.join(', ')}\`\`\``, inline: false });
+    }
+    
+    await loadingMsg.edit({ embeds: [resultEmbed] });
+    await sendLog(message.guild.id, `\`[MASSKICK]\` **${message.author.tag}** mass kicked ${kickedCount} user(s). Failed: ${failedCount}`);
+}
+
+// ==================================================
+// COMMAND: PURGEUSER
+// ==================================================
+else if (command === 'purgeuser' || command === 'purge') {
+    if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
+        const deniedEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('🚫 ACCESS DENIED')
+            .setDescription(
+                '```ansi\n' +
+                '\u001b[31m╔═══════════════════════════════════════════╗\n' +
+                '║   ⛔ UNAUTHORIZED ACCESS ATTEMPT ⛔        ║\n' +
+                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+                '```\n' +
+                'You do not have clearance for this command.'
+            )
+            .setFooter({ text: '🔒 Moderation Command • Owner/Immune Only' })
+            .setTimestamp();
+        return message.channel.send({ embeds: [deniedEmbed] });
+    }
+    
+    const target = message.mentions.users.first();
+    const amount = parseInt(args[1]) || 100;
+    
+    if (!target) {
+        return message.reply('❌ Please mention a user.\nUsage: `$purgeuser @user [amount]`');
+    }
+    
+    if (amount < 1 || amount > 100) {
+        return message.reply('❌ Amount must be between 1 and 100.');
+    }
+    
+    try {
+        const messages = await message.channel.messages.fetch({ limit: 100 });
+        const userMessages = messages.filter(m => m.author.id === target.id).first(amount);
+        
+        let deletedCount = 0;
+        for (const msg of userMessages) {
+            try {
+                await msg.delete();
+                deletedCount++;
+            } catch (err) {}
+        }
+        
+        const purgeEmbed = new EmbedBuilder()
+            .setColor(0x9B59B6)
+            .setTitle('🧹 USER MESSAGES PURGED')
+            .setDescription(
+                '```ansi\n' +
+                '\u001b[35m╔═══════════════════════════════════════════╗\n' +
+                '║       🗑️  MESSAGES ELIMINATED  🗑️         ║\n' +
+                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+                '```'
+            )
+            .addFields(
+                { name: '👤 Target', value: `<@${target.id}>`, inline: true },
+                { name: '🗑️ Deleted', value: `\`${deletedCount}\``, inline: true },
+                { name: '👮 Purged By', value: `<@${message.author.id}>`, inline: true }
+            )
+            .setFooter({ text: '🧹 Channel cleaned' })
+            .setTimestamp();
+        
+        const replyMsg = await message.channel.send({ embeds: [purgeEmbed] });
+        setTimeout(() => replyMsg.delete().catch(() => {}), 5000);
+        
+        await sendLog(message.guild.id, `\`[PURGEUSER]\` **${message.author.tag}** purged ${deletedCount} messages from **${target.tag}** in <#${message.channel.id}>.`);
+        
+    } catch (err) {
+        message.reply('❌ Failed to purge messages. They may be older than 14 days.');
+    }
+}
+
+// ==================================================
+// COMMAND: SNIPE
+// ==================================================
+else if (command === 'snipe') {
+    if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
+        const deniedEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('🚫 ACCESS DENIED')
+            .setDescription(
+                '```ansi\n' +
+                '\u001b[31m╔═══════════════════════════════════════════╗\n' +
+                '║   ⛔ UNAUTHORIZED ACCESS ATTEMPT ⛔        ║\n' +
+                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+                '```\n' +
+                'You do not have clearance for this command.'
+            )
+            .setFooter({ text: '🔒 Moderation Command • Owner/Immune Only' })
+            .setTimestamp();
+        return message.channel.send({ embeds: [deniedEmbed] });
+    }
+    
+    const sniped = lastDeletedMessages.get(message.channel.id);
+    
+    if (!sniped) {
+        const noSnipeEmbed = new EmbedBuilder()
+            .setColor(0xFFFF00)
+            .setTitle('🎯 SNIPE')
+            .setDescription(
+                '```ansi\n' +
+                '\u001b[33m╔═══════════════════════════════════════════╗\n' +
+                '║      ❌  NOTHING TO SNIPE  ❌             ║\n' +
+                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+                '```\n' +
+                'No recently deleted messages in this channel.'
+            )
+            .setTimestamp();
+        return message.channel.send({ embeds: [noSnipeEmbed] });
+    }
+    
+    const snipeEmbed = new EmbedBuilder()
+        .setColor(0xFF6600)
+        .setTitle('🎯 SNIPED MESSAGE')
+        .setDescription(
+            '```ansi\n' +
+            '\u001b[33m╔═══════════════════════════════════════════╗\n' +
+            '║       🔍  DELETED MESSAGE FOUND  🔍       ║\n' +
+            '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+            '```'
+        )
+        .addFields(
+            { name: '👤 Author', value: `<@${sniped.author.id}> (${sniped.author.tag})`, inline: true },
+            { name: '🕐 Deleted', value: `<t:${Math.floor(sniped.timestamp / 1000)}:R>`, inline: true },
+            { name: '💬 Content', value: `\`\`\`${sniped.content.slice(0, 1000) || 'No text content'}\`\`\``, inline: false }
+        )
+        .setThumbnail(sniped.author.displayAvatarURL({ dynamic: true }))
+        .setFooter({ text: '🎯 Sniped by ' + message.author.tag })
+        .setTimestamp();
+    
+    if (sniped.attachments) {
+        snipeEmbed.setImage(sniped.attachments);
+    }
+    
+    message.channel.send({ embeds: [snipeEmbed] });
+}
+
+// ==================================================
+// COMMAND: EDITSNIPE
+// ==================================================
+else if (command === 'editsnipe' || command === 'esnipe') {
+    if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
+        const deniedEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('🚫 ACCESS DENIED')
+            .setDescription(
+                '```ansi\n' +
+                '\u001b[31m╔═══════════════════════════════════════════╗\n' +
+                '║   ⛔ UNAUTHORIZED ACCESS ATTEMPT ⛔        ║\n' +
+                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+                '```\n' +
+                'You do not have clearance for this command.'
+            )
+            .setFooter({ text: '🔒 Moderation Command • Owner/Immune Only' })
+            .setTimestamp();
+        return message.channel.send({ embeds: [deniedEmbed] });
+    }
+    
+    const sniped = lastEditedMessages.get(message.channel.id);
+    
+    if (!sniped) {
+        const noSnipeEmbed = new EmbedBuilder()
+            .setColor(0xFFFF00)
+            .setTitle('✏️ EDIT SNIPE')
+            .setDescription(
+                '```ansi\n' +
+                '\u001b[33m╔═══════════════════════════════════════════╗\n' +
+                '║      ❌  NOTHING TO SNIPE  ❌             ║\n' +
+                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+                '```\n' +
+                'No recently edited messages in this channel.'
+            )
+            .setTimestamp();
+        return message.channel.send({ embeds: [noSnipeEmbed] });
+    }
+    
+    const snipeEmbed = new EmbedBuilder()
+        .setColor(0x3498DB)
+        .setTitle('✏️ SNIPED EDIT')
+        .setDescription(
+            '```ansi\n' +
+            '\u001b[34m╔═══════════════════════════════════════════╗\n' +
+            '║       🔍  EDITED MESSAGE FOUND  🔍        ║\n' +
+            '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+            '```'
+        )
+        .addFields(
+            { name: '👤 Author', value: `<@${sniped.author.id}> (${sniped.author.tag})`, inline: true },
+            { name: '🕐 Edited', value: `<t:${Math.floor(sniped.timestamp / 1000)}:R>`, inline: true },
+            { name: '📝 Before', value: `\`\`\`${sniped.oldContent.slice(0, 500) || 'No content'}\`\`\``, inline: false },
+            { name: '📝 After', value: `\`\`\`${sniped.newContent.slice(0, 500) || 'No content'}\`\`\``, inline: false }
+        )
+        .setThumbnail(sniped.author.displayAvatarURL({ dynamic: true }))
+        .setFooter({ text: '✏️ Edit sniped by ' + message.author.tag })
+        .setTimestamp();
+    
+    message.channel.send({ embeds: [snipeEmbed] });
+}
+
+// ==================================================
+// COMMAND: NICK
+// ==================================================
+else if (command === 'nick' || command === 'nickname') {
+    if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
+        const deniedEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('🚫 ACCESS DENIED')
+            .setDescription(
+                '```ansi\n' +
+                '\u001b[31m╔═══════════════════════════════════════════╗\n' +
+                '║   ⛔ UNAUTHORIZED ACCESS ATTEMPT ⛔        ║\n' +
+                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+                '```\n' +
+                'You do not have clearance for this command.'
+            )
+            .setFooter({ text: '🔒 Moderation Command • Owner/Immune Only' })
+            .setTimestamp();
+        return message.channel.send({ embeds: [deniedEmbed] });
+    }
+    
+    const target = message.mentions.members.first();
+    const newNick = args.slice(1).join(' ');
+    
+    if (!target) {
+        return message.reply('❌ Please mention a user.\nUsage: `$nick @user <new nickname>`');
+    }
+    
+    if (!newNick) {
+        return message.reply('❌ Please provide a new nickname.\nUsage: `$nick @user <new nickname>`');
+    }
+    
+    const oldNick = target.nickname || target.user.username;
+    
+    try {
+        await target.setNickname(newNick);
+        
+        const nickEmbed = new EmbedBuilder()
+            .setColor(0x9B59B6)
+            .setTitle('📝 NICKNAME CHANGED')
+            .setDescription(
+                '```ansi\n' +
+                '\u001b[35m╔═══════════════════════════════════════════╗\n' +
+                '║       ✏️  IDENTITY MODIFIED  ✏️           ║\n' +
+                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+                '```'
+            )
+            .addFields(
+                { name: '👤 User', value: `<@${target.id}>`, inline: true },
+                { name: '📝 Old Nick', value: `\`${oldNick}\``, inline: true },
+                { name: '📝 New Nick', value: `\`${newNick}\``, inline: true }
+            )
+            .setFooter({ text: '✏️ Changed by ' + message.author.tag })
+            .setTimestamp();
+        
+        message.channel.send({ embeds: [nickEmbed] });
+        await sendLog(message.guild.id, `\`[NICK]\` **${message.author.tag}** changed **${target.user.tag}**'s nickname from \`${oldNick}\` to \`${newNick}\`.`);
+        
+    } catch (err) {
+        message.reply('❌ Failed to change nickname. I may not have permission or user has higher role.');
+    }
+}
+
+// ==================================================
+// COMMAND: RESETNICK
+// ==================================================
+else if (command === 'resetnick' || command === 'clearnick') {
+    if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
+        const deniedEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('🚫 ACCESS DENIED')
+            .setDescription(
+                '```ansi\n' +
+                '\u001b[31m╔═══════════════════════════════════════════╗\n' +
+                '║   ⛔ UNAUTHORIZED ACCESS ATTEMPT ⛔        ║\n' +
+                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+                '```\n' +
+                'You do not have clearance for this command.'
+            )
+            .setFooter({ text: '🔒 Moderation Command • Owner/Immune Only' })
+            .setTimestamp();
+        return message.channel.send({ embeds: [deniedEmbed] });
+    }
+    
+    const target = message.mentions.members.first();
+    
+    if (!target) {
+        return message.reply('❌ Please mention a user.\nUsage: `$resetnick @user`');
+    }
+    
+    const oldNick = target.nickname;
+    
+    if (!oldNick) {
+        return message.reply(`✅ **${target.user.tag}** doesn't have a nickname set.`);
+    }
+    
+    try {
+        await target.setNickname(null);
+        
+        const resetEmbed = new EmbedBuilder()
+            .setColor(0x00FF00)
+            .setTitle('🔄 NICKNAME RESET')
+            .setDescription(
+                '```ansi\n' +
+                '\u001b[32m╔═══════════════════════════════════════════╗\n' +
+                '║       ✅  IDENTITY RESTORED  ✅           ║\n' +
+                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+                '```'
+            )
+            .addFields(
+                { name: '👤 User', value: `<@${target.id}>`, inline: true },
+                { name: '📝 Removed Nick', value: `\`${oldNick}\``, inline: true },
+                { name: '📝 Now Shows', value: `\`${target.user.username}\``, inline: true }
+            )
+            .setFooter({ text: '🔄 Reset by ' + message.author.tag })
+            .setTimestamp();
+        
+        message.channel.send({ embeds: [resetEmbed] });
+        await sendLog(message.guild.id, `\`[RESETNICK]\` **${message.author.tag}** reset **${target.user.tag}**'s nickname from \`${oldNick}\`.`);
+        
+    } catch (err) {
+        message.reply('❌ Failed to reset nickname.');
+    }
+}
+
+// ==================================================
+// COMMAND: VCMUTE (Voice Mute)
+// ==================================================
+else if (command === 'vcmute') {
+    if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
+        const deniedEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('🚫 ACCESS DENIED')
+            .setDescription(
+                '```ansi\n' +
+                '\u001b[31m╔═══════════════════════════════════════════╗\n' +
+                '║   ⛔ UNAUTHORIZED ACCESS ATTEMPT ⛔        ║\n' +
+                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+                '```\n' +
+                'You do not have clearance for this command.'
+            )
+            .setFooter({ text: '🔒 Voice Command • Owner/Immune Only' })
+            .setTimestamp();
+        return message.channel.send({ embeds: [deniedEmbed] });
+    }
+    
+    const target = message.mentions.members.first();
+    
+    if (!target) {
+        return message.reply('❌ Please mention a user.\nUsage: `$vcmute @user`');
+    }
+    
+    if (!target.voice.channel) {
+        return message.reply('❌ That user is not in a voice channel.');
+    }
+    
+    try {
+        await target.voice.setMute(true);
+        
+        const muteEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('🔇 VOICE MUTED')
+            .setDescription(
+                '```ansi\n' +
+                '\u001b[31m╔═══════════════════════════════════════════╗\n' +
+                '║       🔇  USER SILENCED  🔇               ║\n' +
+                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+                '```'
+            )
+            .addFields(
+                { name: '👤 User', value: `<@${target.id}>`, inline: true },
+                { name: '🔊 Channel', value: `\`${target.voice.channel.name}\``, inline: true },
+                { name: '👮 Muted By', value: `<@${message.author.id}>`, inline: true }
+            )
+            .setFooter({ text: '🔇 Server muted in voice' })
+            .setTimestamp();
+        
+        message.channel.send({ embeds: [muteEmbed] });
+        await sendLog(message.guild.id, `\`[VCMUTE]\` **${message.author.tag}** server muted **${target.user.tag}** in voice.`);
+        
+    } catch (err) {
+        message.reply('❌ Failed to mute user in voice.');
+    }
+}
+
+// ==================================================
+// COMMAND: VCUNMUTE (Voice Unmute)
+// ==================================================
+else if (command === 'vcunmute') {
+    if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
+        const deniedEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('🚫 ACCESS DENIED')
+            .setDescription(
+                '```ansi\n' +
+                '\u001b[31m╔═══════════════════════════════════════════╗\n' +
+                '║   ⛔ UNAUTHORIZED ACCESS ATTEMPT ⛔        ║\n' +
+                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+                '```\n' +
+                'You do not have clearance for this command.'
+            )
+            .setFooter({ text: '🔒 Voice Command • Owner/Immune Only' })
+            .setTimestamp();
+        return message.channel.send({ embeds: [deniedEmbed] });
+    }
+    
+    const target = message.mentions.members.first();
+    
+    if (!target) {
+        return message.reply('❌ Please mention a user.\nUsage: `$vcunmute @user`');
+    }
+    
+    if (!target.voice.channel) {
+        return message.reply('❌ That user is not in a voice channel.');
+    }
+    
+    try {
+        await target.voice.setMute(false);
+        
+        const unmuteEmbed = new EmbedBuilder()
+            .setColor(0x00FF00)
+            .setTitle('🔊 VOICE UNMUTED')
+            .setDescription(
+                '```ansi\n' +
+                '\u001b[32m╔═══════════════════════════════════════════╗\n' +
+                '║       🔊  USER CAN SPEAK  🔊              ║\n' +
+                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+                '```'
+            )
+            .addFields(
+                { name: '👤 User', value: `<@${target.id}>`, inline: true },
+                { name: '🔊 Channel', value: `\`${target.voice.channel.name}\``, inline: true },
+                { name: '👮 Unmuted By', value: `<@${message.author.id}>`, inline: true }
+            )
+            .setFooter({ text: '🔊 Server unmuted in voice' })
+            .setTimestamp();
+        
+        message.channel.send({ embeds: [unmuteEmbed] });
+        await sendLog(message.guild.id, `\`[VCUNMUTE]\` **${message.author.tag}** server unmuted **${target.user.tag}** in voice.`);
+        
+    } catch (err) {
+        message.reply('❌ Failed to unmute user in voice.');
+    }
+}
+
+// ==================================================
+// COMMAND: VCKICK (Voice Kick)
+// ==================================================
+else if (command === 'vckick' || command === 'vcdisconnect') {
+    if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
+        const deniedEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('🚫 ACCESS DENIED')
+            .setDescription(
+                '```ansi\n' +
+                '\u001b[31m╔═══════════════════════════════════════════╗\n' +
+                '║   ⛔ UNAUTHORIZED ACCESS ATTEMPT ⛔        ║\n' +
+                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+                '```\n' +
+                'You do not have clearance for this command.'
+            )
+            .setFooter({ text: '🔒 Voice Command • Owner/Immune Only' })
+            .setTimestamp();
+        return message.channel.send({ embeds: [deniedEmbed] });
+    }
+    
+    const target = message.mentions.members.first();
+    
+    if (!target) {
+        return message.reply('❌ Please mention a user.\nUsage: `$vckick @user`');
+    }
+    
+    if (!target.voice.channel) {
+        return message.reply('❌ That user is not in a voice channel.');
+    }
+    
+    const vcName = target.voice.channel.name;
+    
+    try {
+        await target.voice.disconnect();
+        
+        const kickEmbed = new EmbedBuilder()
+            .setColor(0xFF6600)
+            .setTitle('📤 VOICE KICKED')
+            .setDescription(
+                '```ansi\n' +
+                '\u001b[33m╔═══════════════════════════════════════════╗\n' +
+                '║      📤  USER DISCONNECTED  📤           ║\n' +
+                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+                '```'
+            )
+            .addFields(
+                { name: '👤 User', value: `<@${target.id}>`, inline: true },
+                { name: '🔊 From Channel', value: `\`${vcName}\``, inline: true },
+                { name: '👮 Kicked By', value: `<@${message.author.id}>`, inline: true }
+            )
+            .setFooter({ text: '📤 Disconnected from voice' })
+            .setTimestamp();
+        
+        message.channel.send({ embeds: [kickEmbed] });
+        await sendLog(message.guild.id, `\`[VCKICK]\` **${message.author.tag}** disconnected **${target.user.tag}** from voice channel \`${vcName}\`.`);
+        
+    } catch (err) {
+        message.reply('❌ Failed to disconnect user from voice.');
+    }
+}
+
+// ==================================================
+// COMMAND: MOVEALL (Move All VC Members)
+// ==================================================
+else if (command === 'moveall') {
+    if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
+        const deniedEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('🚫 ACCESS DENIED')
+            .setDescription(
+                '```ansi\n' +
+                '\u001b[31m╔═══════════════════════════════════════════╗\n' +
+                '║   ⛔ UNAUTHORIZED ACCESS ATTEMPT ⛔        ║\n' +
+                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+                '```\n' +
+                'You do not have clearance for this command.'
+            )
+            .setFooter({ text: '🔒 Voice Command • Owner/Immune Only' })
+            .setTimestamp();
+        return message.channel.send({ embeds: [deniedEmbed] });
+    }
+    
+    const targetChannel = message.mentions.channels.first();
+    
+    if (!targetChannel || !targetChannel.isVoiceBased()) {
+        return message.reply('❌ Please mention a voice channel.\nUsage: `$moveall #voice-channel`');
+    }
+    
+    if (!message.member.voice.channel) {
+        return message.reply('❌ You must be in a voice channel to use this command.');
+    }
+    
+    const sourceChannel = message.member.voice.channel;
+    const members = sourceChannel.members;
+    
+    if (members.size === 0) {
+        return message.reply('❌ No members in your voice channel to move.');
+    }
+    
+    let movedCount = 0;
+    let failedCount = 0;
+    
+    for (const [memberId, member] of members) {
+        try {
+            await member.voice.setChannel(targetChannel);
+            movedCount++;
+        } catch (err) {
+            failedCount++;
+        }
+    }
+    
+    const moveEmbed = new EmbedBuilder()
+        .setColor(0x3498DB)
+        .setTitle('📦 MASS VOICE MOVE')
+        .setDescription(
+            '```ansi\n' +
+            '\u001b[34m╔═══════════════════════════════════════════╗\n' +
+            '║       📦  USERS RELOCATED  📦             ║\n' +
+            '╚═══════════════════════════════════════════╝\u001b[0m\n' +
+            '```'
+        )
+        .addFields(
+            { name: '📤 From', value: `\`${sourceChannel.name}\``, inline: true },
+            { name: '📥 To', value: `\`${targetChannel.name}\``, inline: true },
+            { name: '👮 Moved By', value: `<@${message.author.id}>`, inline: true },
+            { name: '✅ Moved', value: `\`${movedCount}\``, inline: true },
+            { name: '❌ Failed', value: `\`${failedCount}\``, inline: true }
+        )
+        .setFooter({ text: '📦 Mass voice move complete' })
+        .setTimestamp();
+    
+    message.channel.send({ embeds: [moveEmbed] });
+    await sendLog(message.guild.id, `\`[MOVEALL]\` **${message.author.tag}** moved ${movedCount} user(s) from \`${sourceChannel.name}\` to \`${targetChannel.name}\`.`);
 }
 
 // ==================================================
