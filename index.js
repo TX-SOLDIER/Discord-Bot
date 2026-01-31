@@ -3,9 +3,18 @@
 // ============================================================================
 // All 'fs' file system calls have been replaced with JSONBin.io API calls.
 // Data is now persistent and will not be erased on new commits or deployments.
-// ===========================================================================
+// ============================================================================
 
+'use strict';
+
+// ==================================================
+// ENVIRONMENT SETUP
+// ==================================================
 require('dotenv').config();
+
+// ==================================================
+// DISCORD.JS IMPORTS
+// ==================================================
 const { 
   Client,
   GatewayIntentBits,
@@ -15,11 +24,17 @@ const {
   Routes,
   SlashCommandBuilder
 } = require('discord.js');
+
+// ==================================================
+// THIRD-PARTY DEPENDENCIES
+// ==================================================
 const fetch = require('node-fetch');
 const express = require('express');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
-// ---- Slash Commands Definition ----
+// ==================================================
+// SLASH COMMAND DEFINITIONS
+// ==================================================
 const commands = [
   new SlashCommandBuilder()
     .setName('hi')
@@ -27,11 +42,17 @@ const commands = [
     .toJSON(),
 ];
 
+// ==================================================
+// EXPRESS KEEP-ALIVE SERVER
+// ==================================================
 const app = express();
 app.get('/', (req, res) => res.send('✅ Bot is running!'));
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`✅ Keep-alive server running on port ${PORT}`));
 
+// ==================================================
+// DISCORD CLIENT INITIALIZATION
+// ==================================================
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -42,26 +63,41 @@ const client = new Client({
   ],
 });
 
-// ✅ Error logging to catch startup/login issues
+// ==================================================
+// GLOBAL ERROR HANDLERS
+// ==================================================
 client.on('error', console.error);
 client.on('shardError', console.error);
 process.on('unhandledRejection', console.error);
 
-const TAGSPAM_DELETE_TIME = 10_000; // 10 seconds
+// ==================================================
+// GLOBAL CONSTANTS
+// ==================================================
+const TAGSPAM_DELETE_TIME = 10_000;
 const MAX_TAGSPAM = 50;
+const PREFIX = '$';
+const OWNER_ID = '782155864134909952';
+const IMMUNITY_RANKS = ['2LT', '1LT', 'CPT', 'MAJ', 'LTC', 'COL', 'BG', 'MG', 'LTG', 'GEN'];
+const MESSAGE_COOLDOWN = 60 * 1000;
+const COMMAND_COOLDOWN = 30 * 1000;
+const RR_COOLDOWN_TIME = 30000;
+const PERMANENT_LOG_CHANNEL_ID = '1411247548240232540';
 
-// ---- Google Gemini AI Setup ----
+// ==================================================
+// GOOGLE GENERATIVE AI SETUP
+// ==================================================
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
 
-// ---- JSONBin.io Setup ----
-// Secrets must be set on your hosting platform (e.g., Render)
+// ==================================================
+// JSONBIN.IO CONFIGURATION
+// ==================================================
 const JSONBIN_API_KEY = process.env.JSONBIN_API_KEY;
 const JSONBIN_BIN_ID = process.env.JSONBIN_BIN_ID;
 const JSONBIN_URL = `https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`;
 
-// ---- Central Bot Data Store ----
-// This single object holds all data that needs to persist.
-// It's loaded from JSONBin on startup and saved on changes.
+// ==================================================
+// CENTRAL BOT DATA STORE
+// ==================================================
 let botData = {
     immuneUsers: {},
     autoDeleteUsers: {},
@@ -86,8 +122,6 @@ let botData = {
     leaveMessages: {},
     logChannels: {},
     masterLog: { channelId: null, enabled: false },
-
-    // ---- XP + Prestige System Data ----
     xpData: {},
     xpSettings: {
       baseXp: 15,
@@ -99,34 +133,31 @@ let botData = {
       maxLevel: 100,
       maxPrestige: 10,
     },
-
-    // ---- Channel Settings ----
-    levelUpChannel: null, // Channel ID for level-up announcements
+    levelUpChannel: null,
 };
 
-// In-memory Set for efficient QOTD channel lookups.
-// This is populated from botData.activeQotdChannels after loading.
+// ==================================================
+// IN-MEMORY QOTD CHANNEL SET
+// ==================================================
 let activeQotdChannels = new Set();
 
-// ---- JSONBin.io Data Functions ----
-// Instead of saving every few seconds, we save only once per hour.
+// ==================================================
+// JSONBIN DATA PERSISTENCE - DIRTY FLAG & SAVE TRACKING
+// ==================================================
 let dirty = false;
 let saveCount = 0;
 let lastSaveTime = null;
 
-/**
- * Marks botData as changed so it will be saved at the next scheduled save.
- */
 function markDirty() {
   dirty = true;
 }
 
-/**
- * Saves the current state of botData to JSONBin.io once per hour if dirty.
- */
+// ==================================================
+// JSONBIN DATA PERSISTENCE - SAVE FUNCTION
+// ==================================================
 async function saveData() {
   if (!JSONBIN_API_KEY || !JSONBIN_BIN_ID) return;
-  if (!dirty) return; // No changes since last save
+  if (!dirty) return;
 
   try {
     const dataToSave = {
@@ -155,20 +186,23 @@ async function saveData() {
   }
 }
 
-// Save once per hour if data has changed
+// ==================================================
+// JSONBIN DATA PERSISTENCE - AUTO-SAVE INTERVAL
+// ==================================================
 setInterval(saveData, 60 * 60 * 1000);
 
-// Save on shutdown
+// ==================================================
+// JSONBIN DATA PERSISTENCE - SHUTDOWN HOOK
+// ==================================================
 process.on("SIGINT", async () => {
   console.log("💾 Saving data before shutdown...");
   await saveData();
   process.exit();
 });
 
-/**
- * Loads the bot's data from JSONBin.io on startup.
- * Called once inside the client.once('ready') event.
- */
+// ==================================================
+// JSONBIN DATA PERSISTENCE - LOAD FUNCTION
+// ==================================================
 async function loadData() {
   if (!JSONBIN_API_KEY || !JSONBIN_BIN_ID) {
     console.error("❌ JSONBin credentials not provided. Bot will run with default, non-persistent data.");
@@ -183,7 +217,7 @@ async function loadData() {
 
     if (response.status === 404) {
         console.warn("⚠️ Bin not found or empty. Initializing with default data and performing first save.");
-        saveData(); // Save the initial default structure to the new bin
+        saveData();
         return;
     }
 
@@ -194,13 +228,10 @@ async function loadData() {
 
     const loaded = await response.json();
     
-    // Merge loaded data with defaults. This prevents errors if new properties are
-    // added to the bot's code but don't exist in the saved bin yet.
     if (loaded.record) {
         botData = { ...botData, ...loaded.record };
     }
 
-    // Convert the loaded array of QOTD channels back into a Set for fast lookups.
     activeQotdChannels = new Set(botData.activeQotdChannels || []);
 
     console.log("[DATA] ✅ Data successfully loaded from JSONBin.");
@@ -209,8 +240,9 @@ async function loadData() {
   }
 }
 
-// ---- Consolidated Save Functions ----
-// Now they just mark data dirty instead of saving immediately.
+// ==================================================
+// CONSOLIDATED SAVE FUNCTION ALIASES
+// ==================================================
 const saveImmunity = markDirty;
 const saveCountingData = markDirty;
 const saveEconomyData = markDirty;
@@ -229,16 +261,17 @@ const saveMasterLog = markDirty;
 const saveXPData = markDirty;
 const saveXPSettings = markDirty;
 
-// ---- Immunity System ----
-const OWNER_ID = '782155864134909952';
-const IMMUNITY_RANKS = ['2LT', '1LT', 'CPT', 'MAJ', 'LTC', 'COL', 'BG', 'MG', 'LTG', 'GEN'];
-
+// ==================================================
+// IMMUNITY SYSTEM - CHECK FUNCTION
+// ==================================================
 function isImmune(user) {
   if (user.id === OWNER_ID) return true;
   return !!botData.immuneUsers[user.id];
 }
 
-// ---- GIVEAWAY CODE: Time Parser ----
+// ==================================================
+// UTILITY - DURATION PARSER (FOR GIVEAWAYS)
+// ==================================================
 function parseDuration(str) {
   const match = str.match(/^(\d+)(s|m|h|d)$/i);
   if (!match) return null;
@@ -253,7 +286,9 @@ function parseDuration(str) {
   }
 }
 
-// ---- In-Memory Data (Not Persistent) ----
+// ==================================================
+// IN-MEMORY DATA STORES (NON-PERSISTENT)
+// ==================================================
 const hauntedChannels = new Set();
 const hauntIntervals = new Map();
 const antiRaidActive = new Set();
@@ -266,16 +301,16 @@ const guessNumberGames = new Map();
 const activeRouletteGames = new Map();
 const activeRRGames = new Map();
 const rrCooldowns = new Map();
-const RR_COOLDOWN_TIME = 30000;
 const messageCooldowns = new Map();
 const commandCooldowns = new Map();
-const MESSAGE_COOLDOWN = 60 * 1000;
-const COMMAND_COOLDOWN = 30 * 1000;
 const blackjackGames = new Map();
 const userConversations = new Map();
 const cityCamCooldown = new Map();
+const qotdIntervals = new Map();
 
-// ---- Lottery System ----
+// ==================================================
+// LOTTERY SYSTEM - GENERATE WINNING NUMBERS
+// ==================================================
 function generateWinningNumbers() {
     const numbers = new Set();
     while (numbers.size < 7) {
@@ -284,6 +319,9 @@ function generateWinningNumbers() {
     return Array.from(numbers).sort((a, b) => a - b);
 }
 
+// ==================================================
+// LOTTERY SYSTEM - RUN DRAW
+// ==================================================
 async function runLotteryDraw() {
     if (!botData.lotteryData.isActive || (botData.lotteryData.drawDate && new Date(botData.lotteryData.drawDate) > new Date())) {
         return;
@@ -344,17 +382,25 @@ async function runLotteryDraw() {
     saveLotteryData();
 }
 
-// ---- Economy & Player Data Functions ----
+// ==================================================
+// ECONOMY SYSTEM - GET BALANCE
+// ==================================================
 function getBalance(userId) {
     return botData.economyData[userId] || 0;
 }
 
+// ==================================================
+// ECONOMY SYSTEM - UPDATE BALANCE
+// ==================================================
 function updateBalance(userId, amount) {
     const currentBalance = getBalance(userId);
     botData.economyData[userId] = Math.max(0, currentBalance + amount);
     return botData.economyData[userId];
 }
 
+// ==================================================
+// PLAYER DATA SYSTEM - GET PLAYER DATA
+// ==================================================
 function getPlayerData(userId) {
     if (!botData.playerData[userId]) {
         botData.playerData[userId] = {
@@ -371,6 +417,9 @@ function getPlayerData(userId) {
     return JSON.parse(JSON.stringify(botData.playerData[userId]));
 }
 
+// ==================================================
+// PLAYER DATA SYSTEM - FIND ITEM
+// ==================================================
 function findItem(itemId) {
     for (const category in botData.storeData) {
         if (botData.storeData[category][itemId]) {
@@ -390,10 +439,9 @@ function findItem(itemId) {
     return null;
 }
 
-// ===============================
-// XP + Prestige System Core
-// ===============================
-
+// ==================================================
+// XP SYSTEM - GET XP DATA
+// ==================================================
 function getXPData(userId) {
   if (!botData.xpData[userId]) {
     botData.xpData[userId] = {
@@ -402,12 +450,15 @@ function getXPData(userId) {
       prestige: 0,
       totalXp: 0,
       lastMessageTime: 0,
-      background: 'https://i.imgur.com/Qm9X9jN.png', // default card background
+      background: 'https://i.imgur.com/Qm9X9jN.png',
     };
   }
   return botData.xpData[userId];
 }
 
+// ==================================================
+// XP SYSTEM - ADD XP
+// ==================================================
 function addXP(userId, amount) {
   const data = getXPData(userId);
   data.xp += amount;
@@ -424,7 +475,9 @@ function addXP(userId, amount) {
   saveXPData();
 }
 
-// ---- Level Up Handler (Embed + Channel + DM) ----
+// ==================================================
+// XP SYSTEM - HANDLE LEVEL UP
+// ==================================================
 function handleLevelUp(userId, data) {
   const coins = botData.xpSettings.coinRewardPerLevel;
   updateBalance(userId, coins);
@@ -432,7 +485,6 @@ function handleLevelUp(userId, data) {
 
   const user = client.users.cache.get(userId);
 
-  // 🎉 Level Up Embed
   const embed = new EmbedBuilder()
     .setColor(0xFFD700)
     .setTitle('🎉 Level Up!')
@@ -445,14 +497,12 @@ function handleLevelUp(userId, data) {
     .setFooter({ text: 'XP & Prestige System — Keep Chatting!' })
     .setTimestamp();
 
-  // 📨 Send to set channel or fallback to DM
   const chId = botData.levelUpChannel;
   const ch = chId ? client.channels.cache.get(chId) : null;
 
   if (ch) ch.send({ embeds: [embed] }).catch(() => {});
   if (user) user.send({ embeds: [embed] }).catch(() => {});
 
-  // 🌟 Auto-prestige at max level
   if (data.level >= botData.xpSettings.maxLevel) {
     handlePrestige(userId, data);
   }
@@ -460,7 +510,9 @@ function handleLevelUp(userId, data) {
   saveXPData();
 }
 
-// ---- Prestige Handler (Public + DM Embed) ----
+// ==================================================
+// XP SYSTEM - HANDLE PRESTIGE
+// ==================================================
 function handlePrestige(userId, data) {
   if (data.prestige >= botData.xpSettings.maxPrestige) return;
 
@@ -474,7 +526,6 @@ function handlePrestige(userId, data) {
 
   const user = client.users.cache.get(userId);
 
-  // 🌟 Prestige Embed
   const embed = new EmbedBuilder()
     .setColor(0xFFD700)
     .setTitle('🌟 Prestige Unlocked!')
@@ -486,7 +537,6 @@ function handlePrestige(userId, data) {
     .setFooter({ text: 'XP & Prestige System — Keep grinding!' })
     .setTimestamp();
 
-  // 📨 Send to set channel or DM fallback
   const chId = botData.levelUpChannel;
   const ch = chId ? client.channels.cache.get(chId) : null;
 
@@ -496,6 +546,9 @@ function handlePrestige(userId, data) {
   saveXPData();
 }
 
+// ==================================================
+// STORE SYSTEM - INITIALIZE DEFAULT STORE
+// ==================================================
 function initializeStore() {
     botData.storeData = {
         modern_weapons: {
@@ -578,23 +631,25 @@ function initializeStore() {
     saveStoreData();
 }
 
+// ==================================================
+// STATIC DATA ARRAYS - SPOOKY MESSAGES
+// ==================================================
 const spookyMessages = [
   '👻 Boo...', '💀 I see you...', '🩸 The shadows are watching...',
   '🔪 Behind you...', '🕷️ Something crawled across your screen...',
 ];
-
-// ============================================================================
-// DATA ARRAYS - ALL CONTENT IN ONE PLACE
-// ============================================================================
+// ==================================================
+// STATIC DATA ARRAYS - SPICY TRUTHS
+// ==================================================
 const spicyTruths = [
-  "What’s your most embarrassing moment?",
+  "What's your most embarrassing moment?",
   "Who was your first crush?",
   "Have you ever lied to get out of trouble?",
-  "What’s the most childish thing you still do?",
-  "What’s a secret you’ve never told anyone here?",
+  "What's the most childish thing you still do?",
+  "What's a secret you've never told anyone here?",
   "If you could switch lives with someone for a day, who would it be?",
-  "What’s your biggest fear?",
-  "What’s the worst thing you’ve ever eaten?",
+  "What's your biggest fear?",
+  "What's the worst thing you've ever eaten?",
   "Have you ever stolen something?",
   "What's the most awkward date you've been on?",
   "Have you ever pretended to like a gift you hated?",
@@ -639,12 +694,12 @@ const spicyTruths = [
   "What's a fear you think is irrational?",
   "Have you ever laughed at a serious situation?",
   "What's a food you secretly love but are embarrassed to admit?",
-  "Have you ever pretended to understand something you didn’t?",
+  "Have you ever pretended to understand something you didn't?",
   "What's the weirdest habit you have?",
   "Have you ever cried in public for no reason?",
   "What's the most embarrassing ringtone or alarm you've had?",
   "Have you ever pretended to know a celebrity?",
-  "What's a guilty pleasure you’re ashamed to admit?",
+  "What's a guilty pleasure you're ashamed to admit?",
   "Have you ever re-gifted a present?",
   "What's the most awkward family moment you've experienced?",
   "Have you ever been caught talking to yourself?",
@@ -658,11 +713,14 @@ const spicyTruths = [
   "Have you ever lied about knowing something you didn't?",
   "What's your most cringe-worthy memory from school?",
   "Have you ever been scared of a harmless animal?",
-  "What's the weirdest nickname you’ve given someone?",
+  "What's the weirdest nickname you've given someone?",
   "Have you ever been embarrassed by your own voice?",
   "What's a secret you've never told anyone?"
 ];
 
+// ==================================================
+// STATIC DATA ARRAYS - SPICY DARES
+// ==================================================
 const spicyDares = [
   "Change your nickname to something silly for 10 minutes.",
   "Type your next 3 messages in ALL CAPS.",
@@ -701,7 +759,7 @@ const spicyDares = [
   "Act like an animal for the next 5 messages.",
   "Send a random emoji every 10 seconds for 1 minute.",
   "Type your next message in a different language.",
-  "Pretend you’re a news reporter and report on the chat.",
+  "Pretend you're a news reporter and report on the chat.",
   "Do 5 pushups and post how it went.",
   "Change your status to something ridiculous for 1 hour.",
   "Send a selfie making a silly face.",
@@ -727,7 +785,7 @@ const spicyDares = [
   "Pretend your keyboard is a piano for the next 2 messages.",
   "Write a haiku about your favorite snack.",
   "Describe your current mood using only emojis.",
-  "Send a message like you’re a robot in distress.",
+  "Send a message like you're a robot in distress.",
   "Do a dramatic reading of your last message.",
   "Pretend to be a cat for the next 3 messages.",
   "Send a random screenshot from your camera roll.",
@@ -737,13 +795,16 @@ const spicyDares = [
   "Send a message complimenting someone in the chat."
 ];
 
+// ==================================================
+// STATIC DATA ARRAYS - COMPLIMENTS
+// ==================================================
 const compliments = [
   "You have great taste in music.",
   "Your energy makes the chat better.",
   "You are so damn fine.",
   "If you were a snack id eat u up.",
   "You have an amazing vibe.",
-  "You’re one of the kindest people I’ve seen here.",
+  "You're one of the kindest people I've seen here.",
   "I admire how confident you are.",
   "You always make people feel welcome.",
   "Your smile is contagious.",
@@ -764,57 +825,60 @@ const compliments = [
   "You have an amazing sense of humor.",
   "Your creativity is off the charts.",
   "You make everyone feel comfortable.",
-  "You’re a great problem solver.",
+  "You're a great problem solver.",
   "Your kindness is impressive.",
   "You have a fantastic smile.",
   "You are incredibly thoughtful.",
   "Your energy is uplifting.",
-  "You’re a natural leader.",
-  "You’re always so reliable.",
+  "You're a natural leader.",
+  "You're always so reliable.",
   "Your confidence is admirable.",
   "You make people feel valued.",
   "You have excellent taste in fashion.",
   "Your advice is always solid.",
-  "You’re very charming.",
+  "You're very charming.",
   "You have a brilliant mind.",
   "You make everything more fun.",
   "Your empathy is remarkable.",
-  "You’re an amazing friend.",
-  "You’re so patient with others.",
+  "You're an amazing friend.",
+  "You're so patient with others.",
   "You have a great perspective on life.",
   "Your jokes always hit the mark.",
-  "You’re very encouraging.",
+  "You're very encouraging.",
   "You have a beautiful soul.",
-  "You’re incredibly witty.",
-  "You’re always full of surprises.",
+  "You're incredibly witty.",
+  "You're always full of surprises.",
   "You handle challenges gracefully.",
   "Your enthusiasm is contagious.",
-  "You’re genuinely kind.",
+  "You're genuinely kind.",
   "You inspire others effortlessly.",
   "Your loyalty is admirable.",
-  "You’re incredibly talented.",
+  "You're incredibly talented.",
   "You make me crave u. can u be my snack?.",
   "You bring out the best in people.",
-  "You’re extremely thoughtful.",
+  "You're extremely thoughtful.",
   "You are hawt.",
   "You always make people feel included.",
   "You are so yummy.",
-  "You’re a fantastic listener.",
+  "You're a fantastic listener.",
   "You turn me on.",
   "You have an amazing vibe.",
-  "You’re sexy af.",
+  "You're sexy af.",
   "You make the world a better place.",
   "You have a warm heart.",
-  "You’re very considerate.",
+  "You're very considerate.",
   "Your presence brightens the room.",
-  "You’re unforgettable.",
+  "You're unforgettable.",
   "You have a dangerously attractive smile.",
-  "There’s something about your voice that makes it impossible to ignore.",
+  "There's something about your voice that makes it impossible to ignore.",
   "You look absolutely irresistible tonight.",
   "Your confidence is incredibly sexy.",
   "You have a presence that makes everyone want to get closer."
 ];
 
+// ==================================================
+// STATIC DATA ARRAYS - QOTD QUESTIONS
+// ==================================================
 const qotdQuestions = [
   // --- FUNNY & RANDOM ---
   "If animals could talk, which species would be the rudest?",
@@ -830,7 +894,7 @@ const qotdQuestions = [
   "If you could unsubscribe from one social obligation forever (weddings, birthdays, etc.), what would it be?",
   "What is the weirdest wrong number text or call you've ever received?",
   "If you were a ghost, how would you mess with the people living in your house?",
-  "What’s a food that everyone loves but you think tastes like garbage?",
+  "What's a food that everyone loves but you think tastes like garbage?",
   "If you could replace the sound of your fart with any sound effect, what would it be?",
   "What is the cringiest thing you posted on social media 5+ years ago?",
   "If you had to fight a horde of 5-year-olds, how many do you think you could take before going down?",
@@ -922,11 +986,14 @@ const qotdQuestions = [
   "If you could have a 'hall pass' with one celebrity, who would it be?",
   "Have you ever faked it? Be honest.",
   "Do you prefer morning fun or late-night fun?",
-  "What’s the weirdest thing someone has said to you in bed?",
+  "What's the weirdest thing someone has said to you in bed?",
   "Size matters: True or False?",
   "Have you ever joined the Mile High Club (or wanted to)?"
 ];
 
+// ==================================================
+// STATIC DATA ARRAYS - ROASTS
+// ==================================================
 const roasts = [
   'You bring people joy… by leaving.',
   'You make onions cry out of pity.',
@@ -950,118 +1017,116 @@ const roasts = [
   'Fuck you.',
   'Game over. Insert skill to continue.',
   'Your secrets are safe with me. I never listen anyway.',
-  'You have something on your face… oh wait, that’s just your face.',
+  'You have something on your face… oh wait, that's just your face.',
   'You bring everyone down to your IQ level, and then still lose.',
-  'You’re proof that even evolution makes mistakes.',
-  'You have something most people don’t: a personality no one asked for.',
-  'You’re like a software bug—annoying, pointless, and impossible to remove.',
-  'You’re as useless as a white crayon.',
+  'You're proof that even evolution makes mistakes.',
+  'You have something most people don't: a personality no one asked for.',
+  'You're like a software bug—annoying, pointless, and impossible to remove.',
+  'You're as useless as a white crayon.',
   'You bring people closer… to the exit.',
-  'You’re like a phone with no signal—nothing but dead weight.',
-  'You’re proof that not everyone deserves participation trophies.',
-  'You have something in common with a cloud: when you disappear, it’s finally nice outside.',
-  'You’re the human version of a headache.',
-  'You’re like Wi-Fi with one bar—barely functioning and always frustrating.',
-  'You’re proof that birth certificates can be returned.',
-  'You bring disappointment like it’s a full-time job.',
-  'You’re like expired milk—bad smell, worse taste, and no use.',
+  'You're like a phone with no signal—nothing but dead weight.',
+  'You're proof that not everyone deserves participation trophies.',
+  'You have something in common with a cloud: when you disappear, it's finally nice outside.',
+  'You're the human version of a headache.',
+  'You're like Wi-Fi with one bar—barely functioning and always frustrating.',
+  'You're proof that birth certificates can be returned.',
+  'You bring disappointment like it's a full-time job.',
+  'You're like expired milk—bad smell, worse taste, and no use.',
   'You bring the kind of energy that makes batteries give up.',
-  'You’re like a broken pencil—pointless, messy, and not worth the effort.',
-  'You’re proof that intelligence skips generations.',
-  'You’re like an alarm clock that doesn’t go off—completely unreliable.',
+  'You're like a broken pencil—pointless, messy, and not worth the effort.',
+  'You're proof that intelligence skips generations.',
+  'You're like an alarm clock that doesn't go off—completely unreliable.',
   'You bring people together… to laugh at you.',
-  'You’re like dial-up internet—annoying noises and zero speed.',
-  'You’re proof that natural selection sometimes gets lazy.',
-  'You’re like the flu—nobody wants you, and you make everyone feel worse.',
-  'You’re like a video game tutorial—unskippable and hated.',
+  'You're like dial-up internet—annoying noises and zero speed.',
+  'You're proof that natural selection sometimes gets lazy.',
+  'You're like the flu—nobody wants you, and you make everyone feel worse.',
+  'You're like a video game tutorial—unskippable and hated.',
   'You bring the vibe of a Monday morning.',
-  'You’re like a printer—always jammed, loud, and nobody misses you when you’re gone.',
-  'You’re proof that not all babies are blessings.',
-  'You’re like an expired coupon—useless and embarrassing to use.',
-  'You’re like a popup ad—loud, desperate, and ignored instantly.',
-  'You’re proof that common sense isn’t common.',
-  'You’re like a math problem with no answer—pointless and irritating.',
+  'You're like a printer—always jammed, loud, and nobody misses you when you're gone.',
+  'You're proof that not all babies are blessings.',
+  'You're like an expired coupon—useless and embarrassing to use.',
+  'You're like a popup ad—loud, desperate, and ignored instantly.',
+  'You're proof that common sense isn't common.',
+  'You're like a math problem with no answer—pointless and irritating.',
   'You bring nothing to the table but crumbs.',
-  'You’re like a mosquito—small, annoying, and everyone wants to slap you.',
-  'You’re proof that mistakes can walk and talk.',
-  'You’re like a virus—unwanted, contagious, and hard to get rid of.',
-  'You’re like a broken light bulb—dim, fragile, and useless in the dark.',
-  'You’re like the bottom of the barrel—literally what’s left over.',
-  'You’re proof that the gene pool has a shallow end.',
-  'You’re like a bad haircut—embarrassing and hard to ignore.',
-  'You’re like an alarm set for PM instead of AM—completely useless when needed.',
-  'You’re proof that practice doesn’t always make perfect.',
-  'You’re like diet water—fake and pointless.',
-  'You’re the reason warning labels exist.',
-  'You’re like a cloud full of hot air—loud and empty.',
-  'You’re proof that not every story has a happy ending.',
-  'You’re living proof that even trash gets recycled sometimes.',
-  'You’re like a software glitch—nobody asked for you, and everyone hates dealing with you.',
-  'You have two brain cells, and they’re both fighting for third place.',
-  'You’re like a cloud of smoke—bad for everyone around you and gone with a breeze.',
+  'You're like a mosquito—small, annoying, and everyone wants to slap you.',
+  'You're proof that mistakes can walk and talk.',
+  'You're like a virus—unwanted, contagious, and hard to get rid of.',
+  'You're like a broken light bulb—dim, fragile, and useless in the dark.',
+  'You're like the bottom of the barrel—literally what's left over.',
+  'You're proof that the gene pool has a shallow end.',
+  'You're like a bad haircut—embarrassing and hard to ignore.',
+  'You're like an alarm set for PM instead of AM—completely useless when needed.',
+  'You're proof that practice doesn't always make perfect.',
+  'You're like diet water—fake and pointless.',
+  'You're the reason warning labels exist.',
+  'You're like a cloud full of hot air—loud and empty.',
+  'You're proof that not every story has a happy ending.',
+  'You're living proof that even trash gets recycled sometimes.',
+  'You're like a software glitch—nobody asked for you, and everyone hates dealing with you.',
+  'You have two brain cells, and they're both fighting for third place.',
+  'You're like a cloud of smoke—bad for everyone around you and gone with a breeze.',
   'You bring the IQ of the server down just by typing.',
   'You look like a failed character creation screen.',
-  'You’re like an unpaid bill—everyone avoids you.',
-  'You’re like expired medicine—worthless and possibly dangerous.',
-  'You’re like a parking ticket—unwanted and makes everyone angry.',
-  'You’re living proof that birth control should be free.',
-  'You’re like a broken condom—an accident that nobody wanted.',
-  'You’re like a test nobody studied for—confusing, unwanted, and stressful.',
-  'You’re like a clown without makeup—still a clown.',
-  'You’re the human equivalent of a speed bump—pointless and irritating.',
-  'You’re like a smoke detector with low battery—annoying, loud, and useless.',
-  'You’re like a sequel nobody asked for—worse than the original.',
-  'You’re like a knockoff brand—cheap, fake, and disappointing.',
-  'You’re like a puzzle with missing pieces—frustrating and incomplete.',
-  'You’re proof that not every cry for attention deserves a reply.',
-  'You’re like malware—slow, annoying, and nobody wants you installed.',
-  'You’re like the Titanic—loud, overhyped, and destined to sink.',
-  'You’re like fast food—cheap, greasy, and makes everyone feel sick afterwards.',
-  'You’re like an error message nobody can fix.',
-  'You’re like roadkill—unpleasant to look at and better ignored.',
-  'I’m like a screen crack—ugly, distracting, and makes everything worse.',
-  'You’re like wet socks—disgusting and uncomfortable to be around.',
-  'You’re like a bad tattoo—permanent regret.',
-  'You’re like spoiled meat—bad smell, bad taste, and dangerous to consume.',
-  'You’re like a GPS with no signal—lost and completely useless.',
-  'You’re like homework—nobody wants you, and you ruin free time.',
-  'You’re like mold—grows where it’s not wanted and stinks up the place.',
-  'You’re like an unpaid intern—doing nothing, but somehow still in the way.',
-  'You’re like a prison sentence—nobody wants to deal with you and time feels longer when they do.',
-  'You’re like chewing tinfoil—unpleasant and painful.',
-  'You’re like a scratch on a CD—annoying, repetitive, and ruins everything.',
-  'You’re like a splinter—small but makes everyone hate you.',
-  'You’re like spam calls—relentless, irritating, and better blocked.',
-  'You’re like bad Wi-Fi—every interaction with you is frustrating.',
-  'You’re like a nightmare—nobody wants you, and everyone is relieved when you’re gone.',
-  'You’re like a side quest nobody cares about.',
-  'You’re like a pothole—unexpected, annoying, and ruins the ride.',
-  'You’re like burnt toast—useless and leaves a bad taste.',
-  'You’re like background noise—distracting and unwanted.',
-  'You’re like a rumor—worthless and spreads too easily.',
-  'You’re like a scam call—persistent, fake, and nobody falls for you.',
-  'You’re like rotten fruit—ugly on the outside and worse on the inside.',
-  'You’re like a bad driver—dangerous, clueless, and always in the way.',
-  'You’re like a horror movie sequel—predictable, cheap, and nobody asked for it.',
-  'You’re like sand in shoes—irritating and impossible to get rid of.',
-  'You’re like a bad memory—always there and never wanted.',
-  'You’re proof that dumb fucks can still learn to type.',
+  'You're like an unpaid bill—everyone avoids you.',
+  'You're like expired medicine—worthless and possibly dangerous.',
+  'You're like a parking ticket—unwanted and makes everyone angry.',
+  'You're living proof that birth control should be free.',
+  'You're like a broken condom—an accident that nobody wanted.',
+  'You're like a test nobody studied for—confusing, unwanted, and stressful.',
+  'You're like a clown without makeup—still a clown.',
+  'You're the human equivalent of a speed bump—pointless and irritating.',
+  'You're like a smoke detector with low battery—annoying, loud, and useless.',
+  'You're like a sequel nobody asked for—worse than the original.',
+  'You're like a knockoff brand—cheap, fake, and disappointing.',
+  'You're like a puzzle with missing pieces—frustrating and incomplete.',
+  'You're proof that not every cry for attention deserves a reply.',
+  'You're like malware—slow, annoying, and nobody wants you installed.',
+  'You're like the Titanic—loud, overhyped, and destined to sink.',
+  'You're like fast food—cheap, greasy, and makes everyone feel sick afterwards.',
+  'You're like an error message nobody can fix.',
+  'You're like roadkill—unpleasant to look at and better ignored.',
+  'I'm like a screen crack—ugly, distracting, and makes everything worse.',
+  'You're like wet socks—disgusting and uncomfortable to be around.',
+  'You're like a bad tattoo—permanent regret.',
+  'You're like spoiled meat—bad smell, bad taste, and dangerous to consume.',
+  'You're like a GPS with no signal—lost and completely useless.',
+  'You're like homework—nobody wants you, and you ruin free time.',
+  'You're like mold—grows where it's not wanted and stinks up the place.',
+  'You're like an unpaid intern—doing nothing, but somehow still in the way.',
+  'You're like a prison sentence—nobody wants to deal with you and time feels longer when they do.',
+  'You're like chewing tinfoil—unpleasant and painful.',
+  'You're like a scratch on a CD—annoying, repetitive, and ruins everything.',
+  'You're like a splinter—small but makes everyone hate you.',
+  'You're like spam calls—relentless, irritating, and better blocked.',
+  'You're like bad Wi-Fi—every interaction with you is frustrating.',
+  'You're like a nightmare—nobody wants you, and everyone is relieved when you're gone.',
+  'You're like a side quest nobody cares about.',
+  'You're like a pothole—unexpected, annoying, and ruins the ride.',
+  'You're like burnt toast—useless and leaves a bad taste.',
+  'You're like background noise—distracting and unwanted.',
+  'You're like a rumor—worthless and spreads too easily.',
+  'You're like a scam call—persistent, fake, and nobody falls for you.',
+  'You're like rotten fruit—ugly on the outside and worse on the inside.',
+  'You're like a bad driver—dangerous, clueless, and always in the way.',
+  'You're like a horror movie sequel—predictable, cheap, and nobody asked for it.',
+  'You're like sand in shoes—irritating and impossible to get rid of.',
+  'You're like a bad memory—always there and never wanted.',
+  'You're proof that dumb fucks can still learn to type.',
   'You bring the same energy as a broken condom, useless shit.',
-  'You’re like Wi-Fi in hell—slow as fuck and painful to deal with.',
-  'You’re the human version of dog shit—everyone avoids you.',
-  'You’ve got two brain cells left, and one of them is on fucking break.',
-  'You’re like a clown, but somehow less funny and more pathetic as fuck.',
-  'You’re a walking “fuck this” moment.',
-  'You’re like spam mail—annoying as fuck and instantly deleted.',
-  'You’re the kind of idiot who could fuck up a free lunch.',
-  'You’re proof that evolution sometimes takes a giant fucking step backward.'
+  'You're like Wi-Fi in hell—slow as fuck and painful to deal with.',
+  'You're the human version of dog shit—everyone avoids you.',
+  'You've got two brain cells left, and one of them is on fucking break.',
+  'You're like a clown, but somehow less funny and more pathetic as fuck.',
+  'You're a walking "fuck this" moment.',
+  'You're like spam mail—annoying as fuck and instantly deleted.',
+  'You're the kind of idiot who could fuck up a free lunch.',
+  'You're proof that evolution sometimes takes a giant fucking step backward.'
 ];
 
-// ============================================================================
-// GAME LOGIC & FUNCTIONALITY
-// ============================================================================
-
-// ---- Blackjack Game ----
+// ==================================================
+// BLACKJACK GAME - CARD FUNCTIONS
+// ==================================================
 function drawCard() {
   const suits = ['♠️', '♥️', '♦️', '♣️'];
   const values = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
@@ -1091,24 +1156,20 @@ function formatHand(hand) {
   return hand.map(c => `${c.value}${c.suit}`).join(' ');
 }
 
-// ---- Question of the Day ----
-const qotdIntervals = new Map();
-// DELETE THE LINE: let sentQuestions = {};  <-- We don't need this anymore!
-
+// ==================================================
+// QOTD SYSTEM - SEND QUESTION
+// ==================================================
 function sendQuestion(channelId) {
   const channel = client.channels.cache.get(channelId);
   if (!channel) return;
 
-  // Initialize the persistent storage if it doesn't exist
   if (!botData.sentQuestions) botData.sentQuestions = {};
   if (!botData.sentQuestions[channelId]) botData.sentQuestions[channelId] = [];
 
-  // Use botData.sentQuestions instead of the temporary variable
   const unusedIndices = qotdQuestions
     .map((_, i) => i)
     .filter(i => !botData.sentQuestions[channelId].includes(i));
 
-  // If we ran out of questions, reset the list for this channel
   if (unusedIndices.length === 0) {
     botData.sentQuestions[channelId] = [];
     unusedIndices.push(...qotdQuestions.map((_, i) => i));
@@ -1116,9 +1177,8 @@ function sendQuestion(channelId) {
 
   const randomIndex = unusedIndices[Math.floor(Math.random() * unusedIndices.length)];
   
-  // Save the new index to persistent storage
   botData.sentQuestions[channelId].push(randomIndex);
-  saveQotdState(); // <--- THIS SAVES IT TO THE DATABASE!
+  saveQotdState();
 
   const prefix = botData.qotdSettings[channelId]?.everyone ? '@everyone ' : '';
   const question = qotdQuestions[randomIndex];
@@ -1127,6 +1187,9 @@ function sendQuestion(channelId) {
   logToGlobal(question, channel.guild.name, channel.name);
 }
 
+// ==================================================
+// QOTD SYSTEM - START ALL QOTD
+// ==================================================
 function startAllQotd() {
   if (activeQotdChannels.size === 0) {
     console.log("No QOTD channels to start.");
@@ -1141,6 +1204,9 @@ function startAllQotd() {
   });
 }
 
+// ==================================================
+// QOTD SYSTEM - STOP QOTD
+// ==================================================
 function stopQotd(channelId) {
   if (!activeQotdChannels.has(channelId)) return;
 
@@ -1156,16 +1222,15 @@ function stopQotd(channelId) {
     saveQotdSettings();
   }
 
-  // Clean up the persistent data if you want (optional)
   if (botData.sentQuestions && botData.sentQuestions[channelId]) {
       delete botData.sentQuestions[channelId];
       saveQotdState();
   }
 }
 
-// ---- Permanent Global Log Channel ----
-const PERMANENT_LOG_CHANNEL_ID = '1411247548240232540';
-
+// ==================================================
+// LOGGING SYSTEM - LOG TO GLOBAL CHANNEL
+// ==================================================
 async function logToGlobal(qotd, serverName, channelName) {
   try {
     const logChannel = client.channels.cache.get(PERMANENT_LOG_CHANNEL_ID);
@@ -1184,7 +1249,32 @@ async function logToGlobal(qotd, serverName, channelName) {
   }
 }
 
-// --- ANTI-RAID HELPER FUNCTIONS ---
+// ==================================================
+// LOGGING SYSTEM - SEND LOG TO CHANNELS
+// ==================================================
+async function sendLog(guildId, messageContent) {
+  if (botData.logChannels[guildId]?.enabled && botData.logChannels[guildId]?.channelId) {
+    const channel = client.channels.cache.get(botData.logChannels[guildId].channelId);
+    if (channel) await channel.send(messageContent).catch(console.error);
+  }
+
+  if (botData.masterLog.enabled && botData.masterLog.channelId) {
+    const channel = client.channels.cache.get(botData.masterLog.channelId);
+    if (channel) {
+      const serverName = client.guilds.cache.get(guildId)?.name || 'Unknown Server';
+      await channel.send(`[${serverName}] ${messageContent}`).catch(console.error);
+    }
+  }
+
+  const permanentChannel = client.channels.cache.get(PERMANENT_LOG_CHANNEL_ID);
+  if (permanentChannel) {
+    const serverName = client.guilds.cache.get(guildId)?.name || 'Unknown Server';
+    await permanentChannel.send(`**[GLOBAL LOG] [${serverName}]** ${messageContent}`).catch(console.error);
+  }
+  }
+// ==================================================
+// ANTI-RAID SYSTEM - ENGAGE
+// ==================================================
 async function engageAntiRaid(guild, alertChannel, author = null) {
     if (antiRaidActive.has(guild.id)) return false;
 
@@ -1218,12 +1308,12 @@ async function engageAntiRaid(guild, alertChannel, author = null) {
         if (author) {
             await sendLog(guild.id, `\`[SECURITY]\` **${author.tag}** has engaged ANTI-RAID mode.`);
             if (alertChannel) {
-                await alertChannel.send("🚨ANTI-RAID PROTOCOL  ENGAGED🚨THIS IS NOT A DRILL. All security measures are live. Unauthorized accounts will be IDENTIFIED, TRACKED and ELIMINATED. Channels are locked, posting is restricted, and verification is mandatory. Attempts to bypass will result in immediate bans and permanent removal from the server. Moderators: Engage intruders.");
+                await alertChannel.send("🚨ANTI-RAID PROTOCOL ENGAGED🚨THIS IS NOT A DRILL. All security measures are live. Unauthorized accounts will be IDENTIFIED, TRACKED and ELIMINATED.");
             }
         } else {
              await sendLog(guild.id, `\`[SECURITY]\` **AUTOMATIC ANTI-RAID** has been engaged due to rapid joins.`);
             if (alertChannel) {
-                await alertChannel.send("🚨**AUTO-TRIGGER**🚨ANTI-RAID PROTOCOL  ENGAGED🚨THIS IS NOT A DRILL. All security measures are live. Unauthorized accounts will be IDENTIFIED, TRACKED and ELIMINATED. Channels are locked, posting is restricted, and verification is mandatory. Attempts to bypass will result in immediate bans and permanent removal from the server. Moderators: Engage intruders.");
+                await alertChannel.send("🚨**AUTO-TRIGGER**🚨ANTI-RAID PROTOCOL ENGAGED🚨THIS IS NOT A DRILL. All security measures are live. Unauthorized accounts will be IDENTIFIED, TRACKED and ELIMINATED.");
             }
         }
         return true;
@@ -1235,6 +1325,9 @@ async function engageAntiRaid(guild, alertChannel, author = null) {
     }
 }
 
+// ==================================================
+// ANTI-RAID SYSTEM - DISENGAGE
+// ==================================================
 async function disengageAntiRaid(guild, replyChannel) {
     if (!antiRaidActive.has(guild.id)) {
         if (replyChannel) await replyChannel.send("Anti-raid has been disengaged.")
@@ -1284,10 +1377,10 @@ async function disengageAntiRaid(guild, replyChannel) {
     }
 }
 
-// --- Welcome & Leave Event Handlers ---
+// ==================================================
+// EVENT HANDLER - GUILD MEMBER ADD (WELCOME)
+// ==================================================
 client.on('guildMemberAdd', async member => {
-    // ... (your anti-raid logic remains the same here) ...
-
     const welcomeData = botData.welcomeMessages[member.guild.id];
     if (welcomeData) {
         const channel = member.guild.channels.cache.get(welcomeData.channelId);
@@ -1298,14 +1391,12 @@ client.on('guildMemberAdd', async member => {
                 .replace(/{membercount}/g, member.guild.memberCount);
 
             if (welcomeData.gifUrl) {
-                // If a GIF URL exists, send it in an embed
                 const welcomeEmbed = new EmbedBuilder()
-                    .setColor(0x00FF00) // Green color for welcome
+                    .setColor(0x00FF00)
                     .setImage(welcomeData.gifUrl);
                 
                 channel.send({ content: message, embeds: [welcomeEmbed] });
             } else {
-                // Otherwise, send the plain message
                 channel.send(message);
             }
         }
@@ -1313,7 +1404,9 @@ client.on('guildMemberAdd', async member => {
     await sendLog(member.guild.id, `\`[JOIN]\` **${member.user.tag}** (${member.user.id}) joined the server.`);
 });
 
-
+// ==================================================
+// EVENT HANDLER - GUILD MEMBER REMOVE (LEAVE)
+// ==================================================
 client.on('guildMemberRemove', async member => {
   const leaveData = botData.leaveMessages[member.guild.id];
   if (leaveData) {
@@ -1325,14 +1418,12 @@ client.on('guildMemberRemove', async member => {
         .replace(/{membercount}/g, member.guild.memberCount);
 
       if (leaveData.gifUrl) {
-          // If a GIF URL exists, send it in an embed
           const leaveEmbed = new EmbedBuilder()
-              .setColor(0xFF0000) // Red color for leave
+              .setColor(0xFF0000)
               .setImage(leaveData.gifUrl);
 
           channel.send({ content: message, embeds: [leaveEmbed] });
       } else {
-          // Otherwise, send the plain message
           channel.send(message);
       }
     }
@@ -1340,32 +1431,10 @@ client.on('guildMemberRemove', async member => {
   await sendLog(member.guild.id, `\`[LEAVE]\` **${member.user.tag}** (${member.user.id}) left the server.`);
 });
 
-
-// ---- Log Message Helper Function ----
-async function sendLog(guildId, messageContent) {
-  if (botData.logChannels[guildId]?.enabled && botData.logChannels[guildId]?.channelId) {
-    const channel = client.channels.cache.get(botData.logChannels[guildId].channelId);
-    if (channel) await channel.send(messageContent).catch(console.error);
-  }
-
-  if (botData.masterLog.enabled && botData.masterLog.channelId) {
-    const channel = client.channels.cache.get(botData.masterLog.channelId);
-    if (channel) {
-      const serverName = client.guilds.cache.get(guildId)?.name || 'Unknown Server';
-      await channel.send(`[${serverName}] ${messageContent}`).catch(console.error);
-    }
-  }
-
-  const permanentChannel = client.channels.cache.get(PERMANENT_LOG_CHANNEL_ID);
-  if (permanentChannel) {
-    const serverName = client.guilds.cache.get(guildId)?.name || 'Unknown Server';
-    await permanentChannel.send(`**[GLOBAL LOG] [${serverName}]** ${messageContent}`).catch(console.error);
-  }
-}
-
-// ---- Slash Command Handler ----
+// ==================================================
+// EVENT HANDLER - SLASH COMMAND INTERACTION
+// ==================================================
 client.on('interactionCreate', async interaction => {
-    // ---- Slash Commands ----
     if (interaction.isChatInputCommand()) {
         if (interaction.commandName === 'hi') {
             await interaction.reply('Hello world 👋');
@@ -1374,7 +1443,9 @@ client.on('interactionCreate', async interaction => {
     }
 });
 
-// ---- Bot Startup Event (`ready`) ----
+// ==================================================
+// EVENT HANDLER - BOT READY
+// ==================================================
 client.once('ready', async () => {
   console.log("🚀 Bot starting up... Loading persistent data from JSONBin...");
   await loadData();
@@ -1386,7 +1457,6 @@ client.once('ready', async () => {
 
   console.log(`✅ Logged in as ${client.user.tag}`);
 
-  // ---- Register Slash Commands ----
   const rest = new REST({ version: '10' }).setToken(process.env.BOT_TOKEN);
 
   try {
@@ -1400,7 +1470,6 @@ client.once('ready', async () => {
     console.error('❌ Failed to register slash commands:', error);
   }
   
-  // Start systems that depend on loaded data.
   startAllQotd();
   
   setInterval(runLotteryDraw, 600000);
@@ -1417,7 +1486,9 @@ client.once('ready', async () => {
   }
 });
 
-// ---- Log message updates and deletions ----
+// ==================================================
+// EVENT HANDLER - MESSAGE UPDATE (EDIT DETECTION)
+// ==================================================
 client.on('messageUpdate', async (oldMessage, newMessage) => {
   if (oldMessage.author.bot) return;
   if (oldMessage.content === newMessage.content) return;
@@ -1433,6 +1504,9 @@ client.on('messageUpdate', async (oldMessage, newMessage) => {
   await sendLog(oldMessage.guild.id, logMessage);
 });
 
+// ==================================================
+// EVENT HANDLER - MESSAGE DELETE
+// ==================================================
 client.on('messageDelete', async message => {
   if (message.author?.bot) return;
 
@@ -1440,7 +1514,7 @@ client.on('messageDelete', async message => {
     const guildCountingData = botData.countingData[message.guild.id];
     if (guildCountingData && message.channel.id === guildCountingData.channelId) {
         const nextNumber = guildCountingData.currentCount + 1;
-        const alertMessage = `⚠️ **DELETE DETECTED!**\n**User:** ${message.author || 'An unknown user'}\n**Deleted Message:** \`${message.content || '(Message content not available)'}\`\n\nTo avoid confusion, the next number is **${nextNumber}**.`;
+        const alertMessage = `⚠️ **DELETE DETECTED!**\n**User:** ${message.author || 'An unknown user'}\n**Deleted Message:** \`${message.content || '(Message content not available)'}\`\n\nThe next number is still **${nextNumber}**.`;
         await message.channel.send(alertMessage);
     }
   }
@@ -1449,7 +1523,22 @@ client.on('messageDelete', async message => {
   await sendLog(message.guild.id, logMessage);
 });
 
-// ---- BATTLE SYSTEMS: Reaction Handler ----
+// ==================================================
+// EVENT HANDLER - CHANNEL UPDATE
+// ==================================================
+client.on('channelUpdate', async (oldChannel, newChannel) => {
+  let changes = [];
+  if (oldChannel.name !== newChannel.name) changes.push(`Name: \`\`${oldChannel.name}\`\` -> \`\`${newChannel.name}\`\``);
+  if (oldChannel.topic !== newChannel.topic) changes.push(`Topic: \`\`${oldChannel.topic || 'N/A'}\`\` -> \`\`${newChannel.topic || 'N/A'}\`\``);
+  if (changes.length > 0) {
+    const logMessage = `\`[CHANNEL UPDATE]\` Channel **#${newChannel.name}** was updated.\n${changes.join('\n')}`;
+    await sendLog(newChannel.guild.id, logMessage);
+  }
+});
+
+// ==================================================
+// EVENT HANDLER - REACTION ADD (BATTLE SYSTEMS)
+// ==================================================
 client.on('messageReactionAdd', async (reaction, user) => {
     if (user.bot) return;
 
@@ -1459,6 +1548,7 @@ client.on('messageReactionAdd', async (reaction, user) => {
     }
     const battleKey = reaction.message.id;
 
+    // --- AUTOMATED BATTLE ACCEPTANCE ---
     if (botData.activeBattles[battleKey] && botData.activeBattles[battleKey].status === 'pending') {
         const battle = botData.activeBattles[battleKey];
         if (user.id === battle.defender && reaction.emoji.name === '⚔️') {
@@ -1470,6 +1560,7 @@ client.on('messageReactionAdd', async (reaction, user) => {
         return;
     }
 
+    // --- DEADLIEST WARRIOR GAME ---
     const dwGame = botData.activeDWGames[battleKey];
     if (!dwGame) return;
 
@@ -1497,8 +1588,9 @@ client.on('messageReactionAdd', async (reaction, user) => {
     }
 });
 
-
-// ---- BATTLE SYSTEM: Combat Functions ----
+// ==================================================
+// BATTLE SYSTEM - START AUTOMATED BATTLE
+// ==================================================
 async function startBattle(channel, challengerId, defenderId, battleKey) {
   const p1Data = getPlayerData(challengerId);
   const p2Data = getPlayerData(defenderId);
@@ -1616,6 +1708,9 @@ async function startBattle(channel, challengerId, defenderId, battleKey) {
   saveBattles();
 }
 
+// ==================================================
+// BATTLE SYSTEM - EXECUTE ATTACK
+// ==================================================
 async function executeAttack(attacker, target) {
   let log = '';
   const weapon = attacker.weapon;
@@ -1647,6 +1742,9 @@ async function executeAttack(attacker, target) {
   return log;
 }
 
+// ==================================================
+// BATTLE SYSTEM - EXECUTE THROWABLE
+// ==================================================
 async function executeThrowable(attacker, target, currentLog) {
   const throwable = attacker.throwable;
   let log = `💣 **${attacker.user.username}** throws ${throwable.name}!\n`;
@@ -1678,8 +1776,9 @@ async function executeThrowable(attacker, target, currentLog) {
   return { log, instantDeath };
 }
 
-
-// ---- DEADLIEST WARRIOR FUNCTIONS ----
+// ==================================================
+// DEADLIEST WARRIOR - START BATTLE
+// ==================================================
 async function startDWBattle(message, game) {
     game.status = 'active';
     game.p1.health = 100;
@@ -1698,6 +1797,9 @@ async function startDWBattle(message, game) {
     await updateDWEmbed(message.channel, message.id);
 }
 
+// ==================================================
+// DEADLIEST WARRIOR - UPDATE EMBED
+// ==================================================
 async function updateDWEmbed(channel, messageId) {
     const game = botData.activeDWGames[messageId];
     if (!game) return;
@@ -1729,6 +1831,9 @@ async function updateDWEmbed(channel, messageId) {
     if (currentPlayer.throwable) await message.react('💣');
 }
 
+// ==================================================
+// DEADLIEST WARRIOR - PROCESS TURN
+// ==================================================
 async function processDWTurn(messageId, action) {
     const game = botData.activeDWGames[messageId];
     if (!game) return;
@@ -1815,7 +1920,7 @@ async function processDWTurn(messageId, action) {
         }
         case 'cover': {
             attacker.inCover = true;
-            actionLog = `🛡️ **${attacker.name}** takes cover, preparing for the next attack!`;
+            actionLog = `��️ **${attacker.name}** takes cover, preparing for the next attack!`;
             break;
         }
         case 'heal': {
@@ -1872,6 +1977,9 @@ async function processDWTurn(messageId, action) {
     }
 }
 
+// ==================================================
+// DEADLIEST WARRIOR - END BATTLE
+// ==================================================
 async function endDWBattle(channel, messageId, winner, loser, isDraw = false) {
     const game = botData.activeDWGames[messageId];
     if (!game) return;
@@ -1909,25 +2017,16 @@ async function endDWBattle(channel, messageId, winner, loser, isDraw = false) {
 
     delete botData.activeDWGames[messageId];
     saveDWBattles();
-}
-
-client.on('channelUpdate', async (oldChannel, newChannel) => {
-  let changes = [];
-  if (oldChannel.name !== newChannel.name) changes.push(`Name: \`\`${oldChannel.name}\`\` -> \`\`${newChannel.name}\`\``);
-  if (oldChannel.topic !== newChannel.topic) changes.push(`Topic: \`\`${oldChannel.topic || 'N/A'}\`\` -> \`\`${newChannel.topic || 'N/A'}\`\``);
-  if (changes.length > 0) {
-    const logMessage = `\`[CHANNEL UPDATE]\` Channel **#${newChannel.name}** was updated.\n${changes.join('\n')}`;
-    await sendLog(newChannel.guild.id, logMessage);
-  }
-});
-
-const PREFIX = '$';
-
-// ---- Main Message Handler (`messageCreate`) ----
+                                                                         }
+// ==================================================
+// MAIN MESSAGE HANDLER - START
+// ==================================================
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
-// ---- XP Gain System ----
+// ==================================================
+// XP GAIN SYSTEM
+// ==================================================
 if (!message.author.bot && message.guild) {
   const now = Date.now();
   const data = getXPData(message.author.id);
@@ -1937,8 +2036,10 @@ if (!message.author.bot && message.guild) {
     addXP(message.author.id, gained);
   }
 }
-  
-// ---- AUTO-DELETE MESSAGE HANDLER ----
+
+// ==================================================
+// AUTO-DELETE MESSAGE HANDLER
+// ==================================================
 if (botData.autoDeleteUsers && botData.autoDeleteUsers[message.author?.id]) {
   try {
     const contentPreview = message.content?.slice(0, 100) || '[No Content]';
@@ -1955,7 +2056,10 @@ if (botData.autoDeleteUsers && botData.autoDeleteUsers[message.author?.id]) {
   }
   return;
 }
-  
+
+// ==================================================
+// PASSIVE COIN EARNING (NON-COMMAND MESSAGES)
+// ==================================================
     if (!message.content.startsWith(PREFIX)) {
         const now = Date.now();
         const lastMessage = messageCooldowns.get(message.author.id);
@@ -1966,27 +2070,26 @@ if (botData.autoDeleteUsers && botData.autoDeleteUsers[message.author?.id]) {
         }
     }
 
+// ==================================================
+// COUNTING GAME HANDLER
+// ==================================================
     const guildCountingData = botData.countingData[message.guild?.id];
 if (guildCountingData && message.channel.id === guildCountingData.channelId) {
-    // Ignore bot messages
     if (message.author.bot) return;
 
     const isPrivileged = isImmune(message.author) || message.author.id === OWNER_ID;
 
-    // ✅ 1) If message doesn't start with prefix AND user is NOT immune/owner
     if (!message.content.startsWith(PREFIX) && !isPrivileged) {
-        // Auto-delete any non-number
         if (!/^\d+$/.test(message.content.trim())) {
             return message.delete().catch(() => {});
         }
     }
 
-// ✅ 2) Continue with your existing counting logic (number parsing)
 if (!message.content.startsWith(PREFIX)) {
     const number = parseInt(message.content);
     if (isNaN(number)) return;
 
-    const isOwner = message.author.id === OWNER_ID; // 👑 BOT OWNER CHECK
+    const isOwner = message.author.id === OWNER_ID;
     let failed = false;
 
     if (
@@ -2029,7 +2132,9 @@ if (!message.content.startsWith(PREFIX)) {
 }
 }
 
-// ⛔ Command filter — MUST be AFTER counting logic
+// ==================================================
+// COMMAND FILTER - EXIT IF NOT COMMAND OR MENTION
+// ==================================================
 if (!message.content.startsWith(PREFIX) && !message.mentions.users.has(client.user.id)) return;
 
 const args = message.content.slice(PREFIX.length).trim().split(/ +/);
@@ -2037,6 +2142,9 @@ const command = message.content.startsWith(PREFIX)
     ? args.shift().toLowerCase()
     : null;
 
+// ==================================================
+// COMMAND COIN EARNING
+// ==================================================
 if (command) {
     const now = Date.now();
     const lastCommand = commandCooldowns.get(message.author.id);
@@ -2052,6 +2160,9 @@ if (command) {
     );
 }
 
+// ==================================================
+// PERMISSION CHECK HELPER
+// ==================================================
 function checkPermission(permission) {
     if (!message.member.permissions.has(permission)) {
         message.reply('❌ You do not have permission to do that!');
@@ -2059,10 +2170,16 @@ function checkPermission(permission) {
     }
     return true;
 }
-  // ==== AI-POWERED DEBATE SYSTEM ====
-const debateCooldowns = new Map();   // userId → last use
-const debateThreads  = new Map();    // channelId → [{role,text}, …]
 
+// ==================================================
+// AI DEBATE SYSTEM - IN-MEMORY STORES
+// ==================================================
+const debateCooldowns = new Map();
+const debateThreads  = new Map();
+
+// ==================================================
+// COMMAND: DEBATE
+// ==================================================
 if (message.content.startsWith('$debate')) {
   const args  = message.content.split(' ').slice(1);
   const topic = args.join(' ') || 'a random issue';
@@ -2098,7 +2215,6 @@ Stay polite and suitable for a general Discord audience.
     await debateMsg.react('👎');
     debateThreads.set(message.channel.id, []);
 
-    // update countdown every minute
     const interval = setInterval(async () => {
       minutesLeft--;
       if (minutesLeft <= 0) return;
@@ -2110,7 +2226,6 @@ Stay polite and suitable for a general Discord audience.
       try { await debateMsg.edit({ embeds: [upd] }); } catch {}
     }, 60000);
 
-    // conclude after 5 minutes
     setTimeout(async () => {
       clearInterval(interval);
       try {
@@ -2121,7 +2236,7 @@ Stay polite and suitable for a general Discord audience.
         let resultText =
           ups > dns ? `✅ Majority **agreed** (${ups} 👍 vs ${dns} 👎)` :
           dns > ups ? `❌ Majority **disagreed** (${dns} 👎 vs ${ups} 👍)` :
-          `🤝 It’s a **tie** (${ups} 👍 vs ${dns} 👎)`;
+          `🤝 It's a **tie** (${ups} 👍 vs ${dns} 👎)`;
         const final = EmbedBuilder.from(embed)
           .addFields({ name: 'Final Results', value: resultText })
           .setFooter({ text: '🏁 Debate concluded after 5 minutes.' });
@@ -2136,7 +2251,9 @@ Stay polite and suitable for a general Discord audience.
   }
 }
 
-// ---- Debate Reply Handler (AI memory + cooldown + live reactions) ----
+// ==================================================
+// DEBATE REPLY HANDLER (AI MEMORY + COOLDOWN)
+// ==================================================
 if (message.reference && !message.author.bot) {
   try {
     const replied = await message.channel.messages.fetch(message.reference.messageId);
@@ -2150,7 +2267,6 @@ if (message.reference && !message.author.bot) {
     const uid  = message.author.id;
     const cid  = message.channel.id;
 
-    // cooldown 1 min
     const now = Date.now(), last = debateCooldowns.get(uid) || 0;
     if (now - last < 60000) {
       const wait = Math.ceil((60000 - (now - last)) / 1000);
@@ -2158,7 +2274,6 @@ if (message.reference && !message.author.bot) {
     }
     debateCooldowns.set(uid, now);
 
-    // memory
     if (!debateThreads.has(cid)) debateThreads.set(cid, []);
     const thread = debateThreads.get(cid);
     thread.push({ role: 'user', text: userArg });
@@ -2189,7 +2304,6 @@ Stay polite and logical.
       reply: { messageReference: message.id },
     });
 
-    // add reactions + live counter
     try { await botMsg.react('👍'); await botMsg.react('👎'); } catch {}
     const collector = botMsg.createReactionCollector({ time: 5*60*1000, dispose: true });
 
@@ -2209,8 +2323,9 @@ Stay polite and logical.
   }
 }
 
-// ---- COMMANDS START HERE ----
-
+// ==================================================
+// COMMAND: HELP
+// ==================================================
 if (command === 'help') {
   const embed1 = new EmbedBuilder()
     .setColor(0x39FF14)
@@ -2279,7 +2394,7 @@ if (command === 'help') {
       `• \`${PREFIX}removexp @user <amount>\` – Remove XP from a user (Immune only)\n` +
       `• \`${PREFIX}setlevel @user <level>\` – Set user level (Immune only)\n` +
       `• \`${PREFIX}setprestige @user <tier>\` – Set prestige level (Immune only)\n` +
-      `• \`${PREFIX}resetxp @user\` – Reset a user’s XP data (Immune only)`
+      `• \`${PREFIX}resetxp @user\` – Reset a user's XP data (Immune only)`
     );
 
   const embed3 = new EmbedBuilder()
@@ -2337,6 +2452,9 @@ if (command === 'help') {
   await message.channel.send({ embeds: [embed3] });
 }
 
+// ==================================================
+// COMMAND: COUNTING
+// ==================================================
 else if (command === 'counting' || command === 'c') {
     const subcommand = args[0]?.toLowerCase();
 
@@ -2355,7 +2473,6 @@ else if (command === 'counting' || command === 'c') {
         return message.reply(`✅ Counting channel has been set to ${channel}. The next number is **1**.`);
     }
 
-    // ✅ NEW: setnext command (owner/immunes only)
     if (subcommand === 'setnext') {
         if (!isImmune(message.author) && message.author.id !== OWNER_ID) {
             return message.reply("❌ Only bot owner or immune users can set the next number!");
@@ -2372,7 +2489,7 @@ else if (command === 'counting' || command === 'c') {
         }
 
         data.currentCount = newNumber - 1;
-        data.lastUserId = null; // reset last user so ANYONE can type the next number
+        data.lastUserId = null;
         saveCountingData();
 
         return message.reply(`✅ Next number has been set to **${newNumber}**.`);
@@ -2417,15 +2534,15 @@ else if (command === 'counting' || command === 'c') {
     return message.reply('❌ Invalid subcommand. Use `$counting set`, `$counting setnext`, `$counting off`, or `$counting leaderboard`.');
 }
 
+// ==================================================
+// COMMAND: HIGHER LOWER (HL)
+// ==================================================
 else if (command === 'hl') {
   const channelId = message.channel.id;
   const game = higherLowerGames.get(channelId);
   const reward = 100;
-  const COOLDOWN = 3000; // 3s per user
+  const COOLDOWN = 3000;
 
-  // =========================
-  // END GAME
-  // =========================
   if (args[0] === 'end') {
     if (!game) return message.reply('❌ No Higher / Lower game is running.');
 
@@ -2446,9 +2563,6 @@ else if (command === 'hl') {
     );
   }
 
-  // =========================
-  // START GAME
-  // =========================
   if (!game) {
     const secret = Math.floor(Math.random() * 100) + 1;
 
@@ -2471,7 +2585,6 @@ else if (command === 'hl') {
       startedAt: Date.now(),
     });
 
-    // Auto-expire after 10 minutes
     setTimeout(() => {
       if (higherLowerGames.has(channelId)) {
         higherLowerGames.delete(channelId);
@@ -2482,9 +2595,6 @@ else if (command === 'hl') {
     return;
   }
 
-  // =========================
-  // GUESS HANDLING
-  // =========================
   const guess = parseInt(args[0], 10);
   if (isNaN(guess)) return;
 
@@ -2493,7 +2603,7 @@ else if (command === 'hl') {
   const now = Date.now();
   const last = game.lastGuess.get(message.author.id) || 0;
 
-  if (now - last < COOLDOWN) return; // silent anti-spam
+  if (now - last < COOLDOWN) return;
 
   game.lastGuess.set(message.author.id, now);
 
@@ -2505,9 +2615,6 @@ else if (command === 'hl') {
     return message.react('⬇️');
   }
 
-  // =========================
-  // WIN
-  // =========================
   higherLowerGames.delete(channelId);
 
   const newBalance = updateBalance(message.author.id, reward);
@@ -2527,14 +2634,14 @@ else if (command === 'hl') {
   message.channel.send({ embeds: [winEmbed] });
 }
 
+// ==================================================
+// COMMAND: GUESS THE NUMBER (GTN)
+// ==================================================
   else if (command === 'gtn') {
   const channelId = message.channel.id;
   const game = guessNumberGames.get(channelId);
-  const reward = 100; // Reward for winning
+  const reward = 100;
 
-  // =========================
-  // END GAME LOGIC
-  // =========================
   if (args[0] === 'end') {
     if (!game) return message.reply('❌ No GTN game is running in this channel.');
 
@@ -2550,9 +2657,6 @@ else if (command === 'hl') {
     return message.channel.send(`🛑 **GTN ended.** The number was **${game.number}**.`);
   }
 
-  // =========================
-  // START GAME LOGIC
-  // =========================
   if (!game) {
     const secret = Math.floor(Math.random() * 100) + 1;
     
@@ -2570,12 +2674,8 @@ else if (command === 'hl') {
     return message.channel.send({ embeds: [startEmbed] });
   }
 
-  // =========================
-  // GUESS HANDLING
-  // =========================
   const guess = parseInt(args[0], 10);
   
-  // If they just typed $gtn without a number (and game is already running)
   if (isNaN(guess)) {
     return message.reply('❓ Please provide a number! Example: `$gtn 50`');
   }
@@ -2594,9 +2694,6 @@ else if (command === 'hl') {
     return message.reply('⬇️ **Lower!**');
   }
 
-  // =========================
-  // WIN LOGIC
-  // =========================
   guessNumberGames.delete(channelId);
 
   const newBalance = updateBalance(message.author.id, reward);
@@ -2614,9 +2711,9 @@ else if (command === 'hl') {
 
   return message.channel.send({ embeds: [winEmbed] });
 
-// =========================
-  // SLOTS COMMAND ($slots)
-  // =========================
+// ==================================================
+// COMMAND: SLOTS
+// ==================================================
   } else if (command === 'slots') {
     const bet = parseInt(args[0]);
     const balance = getBalance(message.author.id);
@@ -2667,9 +2764,9 @@ else if (command === 'hl') {
 
     return message.channel.send({ embeds: [slotsEmbed] });
 
-  // =========================
-  // LOTTERY COMMAND ($lottery)
-  // =========================
+// ==================================================
+// COMMAND: LOTTERY
+// ==================================================
   } else if (command === 'lottery') {
     const nextDraw = new Date(botData.lotteryData.drawDate);
     const timeUntilDraw = Math.floor(nextDraw.getTime() / 1000);
@@ -2695,6 +2792,9 @@ else if (command === 'hl') {
     return message.channel.send({ embeds: [infoEmbed] });
 }
 
+// ==================================================
+// COMMAND: BUY TICKET
+// ==================================================
 else if (command === 'buyticket') {
     const ticketCost = 1000;
     const balance = getBalance(message.author.id);
@@ -2718,16 +2818,22 @@ else if (command === 'buyticket') {
     }
     botData.lotteryData.entries[message.guild.id][message.author.id].push(userNumbers.sort((a, b) => a - b));
     saveLotteryData();
-    const embed = new EmbedBuilder().setTitle('✅ Lottery Ticket Purchased!').setDescription(`Your ticket numbers: \`${userNumbers.join(', ')}\`\nGood luck!`).addFields({ name: '💵 Cost', value: `-${ticketCost} Gold Coins`, inline: true }, { name: '💸 New Balance', value: `\`${newBalance}\` Gold Coins`, inline: true }).setColor(0x27AE60);
+    const embed = new EmbedBuilder().setTitle('✅ Lottery Ticket Purchased!').setDescription(`Your ticket numbers: \`${userNumbers.join(', ')}\`\nGood luck!`).addFields({ name: '💵 Cost', value: `${ticketCost} Gold Coins`, inline: true }, { name: '💰 New Balance', value: `${newBalance} Gold Coins`, inline: true }).setColor(0x9B59B6);
     message.channel.send({ embeds: [embed] });
 }
-  
+
+// ==================================================
+// COMMAND: BALANCE
+// ==================================================
 else if (command === 'balance' || command === 'bal') {
     const target = message.mentions.users.first() || message.author;
     const balance = getBalance(target.id);
     message.reply(`💰 **${target.username}** has **${balance}** Gold Coins.`);
 }
 
+// ==================================================
+// COMMAND: GIVE / ADD
+// ==================================================
 else if (command === 'give' || command === 'add') {
     const target = message.mentions.users.first();
     const amount = parseInt(args[1]);
@@ -2749,6 +2855,9 @@ else if (command === 'give' || command === 'add') {
     return message.reply('❌ You do not have permission to use this command.');
 }
 
+// ==================================================
+// COMMAND: TAKE / REMOVE / SUBTRACT
+// ==================================================
 else if (['take', 'remove', 'subtract'].includes(command)) {
     const target = message.mentions.users.first();
     const amount = parseInt(args[1]);
@@ -2770,6 +2879,9 @@ else if (['take', 'remove', 'subtract'].includes(command)) {
     return message.reply('❌ You do not have permission to use this command.');
 }
 
+// ==================================================
+// COMMAND: PAY
+// ==================================================
 else if (command === 'pay') {
     const target = message.mentions.users.first();
     const amount = parseInt(args[1]);
@@ -2787,6 +2899,9 @@ else if (command === 'pay') {
     message.reply(`✅ You paid **${amount}** Gold Coins to **${target.username}**.`);
 }
 
+// ==================================================
+// COMMAND: IMMUNE LIST
+// ==================================================
 else if (command === 'immunelist') {
   if (message.author.id !== OWNER_ID) {
     return message.reply('❌ Only the bot owner can view immune users.');
@@ -2805,8 +2920,10 @@ else if (command === 'immunelist') {
   message.channel.send({
     content: `🛡️ **Immune Users List:**\n${list}`
   });
-}
-  
+                      }
+  // ==================================================
+// COMMAND: STORE
+// ==================================================
 else if (command === 'store') {
     const subcommand = args[0]?.toLowerCase();
     if (subcommand === 'add') {
@@ -2869,6 +2986,9 @@ else if (command === 'store') {
     return message.channel.send({ embeds: [storeEmbed] });
 }
 
+// ==================================================
+// COMMAND: INVENTORY
+// ==================================================
 else if (command === 'inventory' || command === 'inv') {
     const target = message.mentions.users.first() || message.author;
     const userPData = getPlayerData(target.id);
@@ -2895,6 +3015,9 @@ else if (command === 'inventory' || command === 'inv') {
     return message.channel.send({ embeds: [invEmbed] });
 }
 
+// ==================================================
+// COMMAND: LOADOUT
+// ==================================================
 else if (command === 'loadout') {
     const subcommand = args[0]?.toLowerCase();
     const itemId = args[1];
@@ -2930,10 +3053,13 @@ else if (command === 'loadout') {
     const weapon = loadout.weapon ? findItem(loadout.weapon) : null;
     const armor = loadout.armor ? findItem(loadout.armor) : null;
     const throwable = loadout.throwable ? findItem(loadout.throwable) : null;
-    const loadoutEmbed = { color: 0xf5b042, title: `⚔️ ${target.username}'s Loadout`, fields: [ { name: '❤️ Health', value: `${userPData.health}/${userPData.maxHealth}`, inline: false }, { name: '🔫 Weapon', value: weapon ? `**${weapon.name}** (\`${weapon.id}\`)` : 'None', inline: true }, { name: '🛡️ Armor', value: armor ? `**${armor.name}** (\`${armor.id}\`)` : 'None', inline: true }, { name: '💣 Throwable', value: throwable ? `**${throwable.name}** (\`${throwable.id}\`)` : 'None', inline: true }, ], footer: { text: "Use `$loadout equip <id>` or `$loadout unequip <slot>`" } };
+    const loadoutEmbed = { color: 0xf5b042, title: `⚔️ ${target.username}'s Loadout`, fields: [ { name: '❤️ Health', value: `${userPData.health}/${userPData.maxHealth}`, inline: false }, { name: '🗡️ Weapon', value: weapon ? `${weapon.name} (DMG: ${weapon.damage})` : 'None', inline: true }, { name: '🛡️ Armor', value: armor ? `${armor.name} (DEF: ${armor.defense})` : 'None', inline: true }, { name: '💣 Throwable', value: throwable ? throwable.name : 'None', inline: true } ] };
     return message.channel.send({ embeds: [loadoutEmbed] });
 }
 
+// ==================================================
+// COMMAND: BATTLE / 1V1
+// ==================================================
 else if (command === 'battle' || command === '1v1') {
     const target = message.mentions.users.first();
     if (!target) return message.reply('❌ Please mention someone to battle! Example: `$battle @user`');
@@ -2943,7 +3069,7 @@ else if (command === 'battle' || command === '1v1') {
     const defenderData = getPlayerData(target.id);
     if (!challengerData.loadout.weapon) return message.reply('❌ You need to equip a weapon first! Use `$loadout equip <item_id>`');
     if (!defenderData.loadout.weapon) return message.reply(`❌ ${target.username} doesn't have a weapon equipped!`);
-    const challengeEmbed = new EmbedBuilder().setColor(0xff0000).setTitle('⚔️ AUTOMATED BATTLE CHALLENGE ⚔️').setDescription(`**${message.author.username}** has challenged **${target.username}** to an automated 1v1 battle!\n\n` + `**${target.username}**, react with ⚔️ to accept the challenge!\n\n` + `This battle will resolve automatically.`).addFields({ name: `${message.author.username}'s Loadout`, value: `🔫 ${challengerData.loadout.weapon ? findItem(challengerData.loadout.weapon).name : 'None'}`, inline: true }, { name: `${target.username}'s Loadout`, value: `🔫 ${defenderData.loadout.weapon ? findItem(defenderData.loadout.weapon).name : 'None'}`, inline: true }).setImage("https://i.imgur.com/yourTopBattle.gif").setFooter({ text: 'Challenge expires in 60 seconds' });
+    const challengeEmbed = new EmbedBuilder().setColor(0xff0000).setTitle('⚔️ AUTOMATED BATTLE CHALLENGE ⚔️').setDescription(`**${message.author.username}** has challenged **${target.username}** to an automated battle!\n\n${target}, react with ⚔️ to accept!`).setImage('https://i.imgur.com/8f1V3gI.gif').setFooter({ text: 'Challenge expires in 60 seconds.' });
     const challengeMsg = await message.channel.send({ embeds: [challengeEmbed] });
     await challengeMsg.react('⚔️');
     botData.activeBattles[challengeMsg.id] = { challenger: message.author.id, defender: target.id, status: 'pending', timestamp: Date.now() };
@@ -2957,6 +3083,9 @@ else if (command === 'battle' || command === '1v1') {
     }, 60000);
 }
 
+// ==================================================
+// COMMAND: DEADLIEST WARRIOR (DW)
+// ==================================================
 else if (command === 'dw' || command === 'deadliestwarrior') {
     const target = message.mentions.users.first();
     if (!target) return message.reply('❌ Please mention someone to battle! Example: `$dw @user`');
@@ -2966,10 +3095,10 @@ else if (command === 'dw' || command === 'deadliestwarrior') {
     const defenderData = getPlayerData(target.id);
     if (!challengerData.loadout.weapon) return message.reply('❌ You need to equip a weapon first! Use `$loadout equip <item_id>`');
     if (!defenderData.loadout.weapon) return message.reply(`❌ ${target.username} doesn't have a weapon equipped!`);
-    const challengeEmbed = new EmbedBuilder().setColor('#8B0000').setTitle("🔥 TX SOLDIER'S DEADLIEST WARRIOR 🔥").setDescription(`**${message.author.username}** has challenged **${target.username}** to a turn-based duel to the death!\n\n` + `**${target.username}**, react with ⚔️ to accept the challenge!\n\n` + `This is a turn-based battle. You will choose your actions each round.`).addFields({ name: `${message.author.username}'s Loadout`, value: `🔫 ${challengerData.loadout.weapon ? findItem(challengerData.loadout.weapon).name : 'None'}\n🛡️ ${challengerData.loadout.armor ? findItem(challengerData.loadout.armor).name : 'None'}\n💣 ${challengerData.loadout.throwable ? findItem(challengerData.loadout.throwable).name : 'None'}`, inline: true }, { name: `${target.username}'s Loadout`, value: `🔫 ${defenderData.loadout.weapon ? findItem(defenderData.loadout.weapon).name : 'None'}\n🛡️ ${defenderData.loadout.armor ? findItem(defenderData.loadout.armor).name : 'None'}\n💣 ${defenderData.loadout.throwable ? findItem(defenderData.loadout.throwable).name : 'None'}`, inline: true }).setImage('https://i.imgur.com/eT824xG.gif').setFooter({ text: 'Challenge expires in 60 seconds' });
+    const challengeEmbed = new EmbedBuilder().setColor('#8B0000').setTitle("🔥 TX SOLDIER'S DEADLIEST WARRIOR 🔥").setDescription(`**${message.author.username}** has challenged **${target.username}** to a turn-based Deadliest Warrior battle!\n\n${target}, react with ⚔️ to accept!`).setImage('https://i.imgur.com/8f1V3gI.gif').setFooter({ text: 'Challenge expires in 60 seconds.' });
     const challengeMsg = await message.channel.send({ embeds: [challengeEmbed] });
     await challengeMsg.react('⚔️');
-    botData.activeDWGames[challengeMsg.id] = { channelId: message.channel.id, status: 'pending', p1: { id: message.author.id, name: message.author.username, weapon: findItem(challengerData.loadout.weapon), armor: findItem(challengerData.loadout.armor), throwable: findItem(challengerData.loadout.throwable) }, p2: { id: target.id, name: target.username, weapon: findItem(defenderData.loadout.weapon), armor: findItem(defenderData.loadout.armor), throwable: findItem(defenderData.loadout.throwable) }, };
+    botData.activeDWGames[challengeMsg.id] = { channelId: message.channel.id, status: 'pending', p1: { id: message.author.id, name: message.author.username, weapon: findItem(challengerData.loadout.weapon), armor: findItem(challengerData.loadout.armor), throwable: findItem(challengerData.loadout.throwable) }, p2: { id: target.id, name: target.username, weapon: findItem(defenderData.loadout.weapon), armor: findItem(defenderData.loadout.armor), throwable: findItem(defenderData.loadout.throwable) } };
     saveDWBattles();
     setTimeout(() => {
         if (botData.activeDWGames[challengeMsg.id] && botData.activeDWGames[challengeMsg.id].status === 'pending') {
@@ -2980,6 +3109,9 @@ else if (command === 'dw' || command === 'deadliestwarrior') {
     }, 60000);
 }
 
+// ==================================================
+// COMMAND: DROP PAYLOAD / SELF DESTRUCT
+// ==================================================
 else if (
     (command === 'drop' && args[0]?.toLowerCase() === 'payload') ||
     (command === 'payload' && args[0]?.toLowerCase() === 'self' && args[1]?.toLowerCase() === 'destruct')
@@ -2990,12 +3122,10 @@ else if (
         args[0]?.toLowerCase() === 'self' &&
         args[1]?.toLowerCase() === 'destruct';
 
-    // 👑 OWNER ONLY FOR SELF-DESTRUCT
     if (isSelfDestruct && message.author.id !== OWNER_ID) {
         return message.reply('❌ Access denied.');
     }
 
-    // 🔴 NORMAL PAYLOAD FRAMES
     const payloadFrames = [
 `[ INITIALIZING ]
 ┌────────────────────┐
@@ -3047,7 +3177,6 @@ Payload execution complete
 Awaiting further instructions...`
     ];
 
-    // 🟢 SELF-DESTRUCT FRAMES
     const selfDestructFrames = [
 `[ SELF-DESTRUCT SEQUENCE ARMED ]
 ┌──────────────────────────┐
@@ -3117,7 +3246,6 @@ Residual traces dissolving`,
         }]
     });
 
-    // 🎞️ Animate frames
     for (let i = 1; i < frames.length; i++) {
         await new Promise(r => setTimeout(r, isSelfDestruct ? 1400 : 1200));
         await sentMessage.edit({
@@ -3131,15 +3259,16 @@ Residual traces dissolving`,
         });
     }
 
-    // 🧹 Auto-delete after 30 seconds
     setTimeout(() => {
         sentMessage.delete().catch(() => {});
     }, 30000);
 }
-  
+
+// ==================================================
+// COMMAND: CITYCAM
+// ==================================================
 else if (command === 'citycam') {
 
-    // ⏱ Cooldown (5 seconds per user)
     const now = Date.now();
     const last = cityCamCooldown.get(message.author.id);
 
@@ -3190,7 +3319,6 @@ else if (command === 'citycam') {
 
     const input = args.join(' ').toLowerCase();
 
-    // 📜 LIST
     if (!input || input === 'list') {
         const list = Object.values(cams)
             .map(c => `• ${c.name.split('–')[0].trim()}`)
@@ -3232,6 +3360,10 @@ else if (command === 'citycam') {
 
     message.channel.send({ embeds: [embed] });
 }
+
+// ==================================================
+// COMMAND: LOGMODE
+// ==================================================
 else if (command === 'logmode') {
     if (!checkPermission(PermissionsBitField.Flags.ManageGuild)) return;
     const subcommand = args[0];
@@ -3287,6 +3419,9 @@ else if (command === 'logmode') {
     }
 }
 
+// ==================================================
+// COMMAND: PROMOTE
+// ==================================================
 else if (command === 'promote') {
     if (message.author.id !== OWNER_ID) {
         return message.reply('❌ You do not have permission to use this command.');
@@ -3311,6 +3446,9 @@ else if (command === 'promote') {
     message.reply(`✅ **${target.tag}** has been promoted to **${rank}** and now has immunity.`);
 }
 
+// ==================================================
+// COMMAND: DEMOTE
+// ==================================================
 else if (command === 'demote') {
     if (message.author.id !== OWNER_ID) {
         return message.reply('❌ You do not have permission to use this command.');
@@ -3333,27 +3471,23 @@ else if (command === 'demote') {
         message.reply(`❌ **${target.tag}** is not an immune user.`);
     }
 }
-// ===============================
-// EMBED SYSTEM COMMAND (Mobile Friendly + GIF Only Compatible)
-// ===============================
 
+// ==================================================
+// COMMAND: EMBED SYSTEM
+// ==================================================
 if (command === 'embed') {
-  // Check permission (Owner or immune)
   if (!isImmune(message.author)) {
     return message.reply('❌ You do not have permission to use this command.');
   }
 
   const sub = args[0]?.toLowerCase();
 
-  // Initialize data store if missing
   if (!botData.customEmbeds) botData.customEmbeds = {};
 
-  // --- CREATE Command ---
   if (sub === 'create') {
     const parts = args.slice(1).join(' ').split('~').map(p => p.trim());
     const [name, title, description, imageUrl, color] = parts;
 
-    // Require at least a name + one content field
     if (!name) {
       return message.reply('⚙️ Usage: `$embed create <name> ~ <title> ~ <description> ~ [image/gif URL] ~ [color]`');
     }
@@ -3368,20 +3502,17 @@ if (command === 'embed') {
     if (title) embed.setTitle(title);
     if (description) embed.setDescription(description);
 
-    // ✅ Validate and attach image
     if (imageUrl && /^https?:\/\/[^\s]+$/.test(imageUrl)) {
       embed.setImage(imageUrl);
     } else if (imageUrl) {
       message.reply('⚠️ Invalid image URL detected — image skipped.');
     }
 
-    // Save to botData
     botData.customEmbeds[name] = { title, description, imageUrl, color: embedColor };
-    saveMasterLog(); // markDirty for JSONBin or your save system
+    saveMasterLog();
     message.channel.send({ embeds: [embed] });
     message.reply(`✅ Embed **${name}** has been created and saved.`);
 
-  // --- EDIT Command ---
   } else if (sub === 'edit') {
     const parts = args.slice(1).join(' ').split('/').map(p => p.trim());
     const [name, title, description, imageUrl, color] = parts;
@@ -3404,7 +3535,6 @@ if (command === 'embed') {
     if (embedData.title) embed.setTitle(embedData.title);
     if (embedData.description) embed.setDescription(embedData.description);
 
-    // ✅ Validate and attach image
     if (embedData.imageUrl && /^https?:\/\/\S+\.\S+/.test(embedData.imageUrl)) {
       embed.setImage(embedData.imageUrl);
     } else if (embedData.imageUrl) {
@@ -3415,7 +3545,6 @@ if (command === 'embed') {
     message.channel.send({ embeds: [embed] });
     message.reply(`✏️ Embed **${name}** updated successfully.`);
 
-  // --- DELETE Command ---
   } else if (sub === 'delete') {
     const name = args[1];
     if (!name || !botData.customEmbeds[name]) {
@@ -3425,13 +3554,11 @@ if (command === 'embed') {
     saveMasterLog();
     message.reply(`🗑️ Embed **${name}** deleted.`);
 
-  // --- LIST Command ---
   } else if (sub === 'list') {
     const names = Object.keys(botData.customEmbeds);
     if (names.length === 0) return message.reply('No saved embeds yet.');
     message.reply(`📋 Saved embeds:\n\`\`\`${names.join(', ')}\`\`\``);
 
-  // --- SEND Command ---
   } else if (sub === 'send') {
     const name = args[1];
     const channelMention = message.mentions.channels.first();
@@ -3458,7 +3585,6 @@ if (command === 'embed') {
     targetChannel.send({ embeds: [embed] });
     message.reply(`✅ Embed **${name}** sent to ${targetChannel}.`);
 
-  // --- HELP Command ---
   } else {
     message.reply('🧾 Usage:\n```' +
       '$embed create <name> ~ <title> ~ <description> ~ [image/gif URL] ~ [color]\n' +
@@ -3468,7 +3594,10 @@ if (command === 'embed') {
       '$embed send <name> [#channel]\n```');
   }
 }
-  
+
+// ==================================================
+// COMMAND: SERVERLIST
+// ==================================================
 else if (command === 'serverlist') {
     if (!isImmune(message.author)) {
         return message.reply('❌ You do not have permission to use this command.');
@@ -3487,6 +3616,9 @@ else if (command === 'serverlist') {
     }
 }
 
+// ==================================================
+// COMMAND: GIVEAWAY
+// ==================================================
 else if (command === 'giveaway') {
     if (!checkPermission(PermissionsBitField.Flags.ManageGuild)) return;
     const durationStr = args[0];
@@ -3505,7 +3637,7 @@ else if (command === 'giveaway') {
         description: `React with 🎉 to enter!\n\n**Prize:** ${prize}`, 
         footer: { text: 'Ends at' }, 
         timestamp: new Date(endTime).toISOString(),
-        image: { url: 'https://media1.giphy.com/media/v1.Y2lkPTZjMDliOTUyNjhnd2Q1dDB1bGxkMmQ4c3RiejB5NmRocTNiMWRmdjJnc2tzZXo1OCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/JqTZqf0HTAy9yOo38W/giphy.gif' }, // START GIF
+        image: { url: 'https://media1.giphy.com/media/v1.Y2lkPTZjMDliOTUyNjhnd2Q1dDB1bGxkMmQ4c3RiejB5NmRocTNiMWRmdjJnc2tzZXo1OCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/JqTZqf0HTAy9yOo38W/giphy.gif' }
     };
     const giveawayMessage = await message.channel.send({ embeds: [embed] });
     await giveawayMessage.react('🎉');
@@ -3516,7 +3648,7 @@ else if (command === 'giveaway') {
         const users = await reactions.users.fetch();
         const entrants = users.filter(user => !user.bot);
         if (entrants.size === 0) {
-          const noWinnerEmbed = { color: 0xFF0000, title: '🎉 **GIVEAWAY ENDED** 🎉', description: `**Prize:** ${prize}\n\nNo one entered the giveaway. 😢`, footer: { text: 'Ended at' }, timestamp: new Date().toISOString(), };
+          const noWinnerEmbed = { color: 0xFF0000, title: '🎉 **GIVEAWAY ENDED** 🎉', description: `**Prize:** ${prize}\n\nNo one entered the giveaway. 😢`, footer: { text: 'Ended at' }, timestamp: new Date().toISOString() };
           return giveawayMessage.edit({ embeds: [noWinnerEmbed] });
         }
         const winner = entrants.random();
@@ -3526,7 +3658,7 @@ else if (command === 'giveaway') {
             description: `**Prize:** ${prize}\n**Winner:** ${winner}!`, 
             footer: { text: 'Ended at' }, 
             timestamp: new Date().toISOString(),
-            image: { url: 'https://media3.giphy.com/media/v1.Y2lkPTZjMDliOTUyYmpqN2Z2cDc3aDk1OXR0MGs1cW1hZ2RlbnB5d2ZidWVhemdzbWh0OSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/Z2XIQz9AXISznANAbB/giphy.gif' }, // WINNER GIF
+            image: { url: 'https://media3.giphy.com/media/v1.Y2lkPTZjMDliOTUyYmpqN2Z2cDc3aDk1OXR0MGs1cW1hZ2RlbnB5d2ZidWVhemdzbWh0OSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/Z2XIQz9AXISznANAbB/giphy.gif' }
         };
         await giveawayMessage.edit({ embeds: [winnerEmbed] });
         message.channel.send(`Congratulations ${winner}! You won the **${prize}**!`);
@@ -3535,7 +3667,12 @@ else if (command === 'giveaway') {
         message.channel.send('❌ There was an error determining the giveaway winner.');
       }
     }, durationMs);
-} else if (command === 'continue') {
+}
+
+// ==================================================
+// COMMAND: CONTINUE (GIVEAWAY)
+// ==================================================
+else if (command === 'continue') {
     if (!checkPermission(PermissionsBitField.Flags.ManageGuild)) return;
     const messageId = args[0];
     if (!messageId) {
@@ -3543,18 +3680,15 @@ else if (command === 'giveaway') {
     }
 
     try {
-        // Fetch the original message to get the end time and prize
         const giveawayMessage = await message.channel.messages.fetch(messageId);
         const embed = giveawayMessage.embeds[0];
 
-        // Basic check to confirm it's a giveaway embed
         if (!embed || embed.title !== '🎉 **GIVEAWAY** 🎉' || embed.footer?.text !== 'Ends at') {
             return message.reply('❌ The message ID provided is not for an active giveaway.');
         }
 
         const endTime = new Date(embed.timestamp).getTime();
         const remainingDurationMs = endTime - Date.now();
-        // Extract the prize from the description
         const prizeMatch = embed.description.match(/\*\*Prize:\*\*\s*(.*)/);
         const prize = prizeMatch ? prizeMatch[1].trim() : 'Unknown Prize';
 
@@ -3564,10 +3698,8 @@ else if (command === 'giveaway') {
 
         message.reply(`✅ **Giveaway Continued!** The **${prize}** giveaway will now end in approximately **${Math.ceil(remainingDurationMs / 60000)} minutes**.`);
 
-        // Set a new timeout for the remaining time
         setTimeout(async () => {
             try {
-                // Re-fetch message to get latest reactions
                 const fetchedMessage = await message.channel.messages.fetch(giveawayMessage.id);
                 const reactions = fetchedMessage.reactions.cache.get('🎉');
                 const users = await reactions.users.fetch();
@@ -3591,7 +3723,7 @@ else if (command === 'giveaway') {
                     description: `**Prize:** ${prize}\n**Winner:** ${winner}!`,
                     footer: { text: 'Ended at' },
                     timestamp: new Date().toISOString(),
-                    image: { url: 'https://i.imgur.com/u7B4DmJ.gif' }, // WINNER GIF
+                    image: { url: 'https://i.imgur.com/u7B4DmJ.gif' },
                 };
                 await fetchedMessage.edit({ embeds: [winnerEmbed] });
                 message.channel.send(`Congratulations ${winner}! You won the **${prize}**!`);
@@ -3606,7 +3738,12 @@ else if (command === 'giveaway') {
         console.error("Giveaway continue error:", error);
         return message.reply('❌ Could not fetch the message. Check the ID and make sure it\'s in this channel.');
     }
-} else if (command === 'endgiveaway') {
+}
+
+// ==================================================
+// COMMAND: END GIVEAWAY
+// ==================================================
+else if (command === 'endgiveaway') {
     if (!checkPermission(PermissionsBitField.Flags.ManageGuild)) return;
     const messageId = args[0];
     if (!messageId) {
@@ -3614,11 +3751,9 @@ else if (command === 'giveaway') {
     }
 
     try {
-        // Fetch the message to end
         const giveawayMessage = await message.channel.messages.fetch(messageId);
         const embed = giveawayMessage.embeds[0];
 
-        // Basic check to confirm it's a giveaway embed
         if (!embed || embed.title !== '🎉 **GIVEAWAY** 🎉' || embed.footer?.text !== 'Ends at') {
             return message.reply('❌ The message ID provided is not for an active giveaway.');
         }
@@ -3626,14 +3761,13 @@ else if (command === 'giveaway') {
         const prizeMatch = embed.description.match(/\*\*Prize:\*\*\s*(.*)/);
         const prize = prizeMatch ? prizeMatch[1].trim() : 'Unknown Prize';
         
-        // --- Giveaway ending logic ---
         const reactions = giveawayMessage.reactions.cache.get('🎉');
         const users = await reactions.users.fetch();
         const entrants = users.filter(user => !user.bot);
 
         if (entrants.size === 0) {
             const noWinnerEmbed = {
-                color: 0xFF0000, // Red
+                color: 0xFF0000,
                 title: '🛑 **GIVEAWAY ENDED EARLY** 🛑',
                 description: `**Prize:** ${prize}\n\nNo one entered the giveaway. 😢`,
                 footer: { text: 'Ended by Moderator' },
@@ -3644,12 +3778,12 @@ else if (command === 'giveaway') {
 
         const winner = entrants.random();
         const winnerEmbed = {
-            color: 0xFF0000, // Red color as requested for early end
+            color: 0xFF0000,
             title: '🛑 **GIVEAWAY ENDED EARLY** 🛑',
             description: `**Prize:** ${prize}\n**Winner:** ${winner}!\n\n*(Giveaway ended by a moderator)*`,
             footer: { text: 'Ended by Moderator' },
             timestamp: new Date().toISOString(),
-            image: { url: 'https://media3.giphy.com/media/v1.Y2lkPTZjMDliOTUyYmpqN2Z2cDc3aDk1OXR0MGs1cW1hZ2RlbnB5d2ZidWVhemdzbWh0OSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/Z2XIQz9AXISznANAbB/giphy.gif' }, // WINNER GIF
+            image: { url: 'https://media3.giphy.com/media/v1.Y2lkPTZjMDliOTUyYmpqN2Z2cDc3aDk1OXR0MGs1cW1hZ2RlbnB5d2ZidWVhemdzbWh0OSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/Z2XIQz9AXISznANAbB/giphy.gif' }
         };
         await giveawayMessage.edit({ embeds: [winnerEmbed] });
         message.channel.send(`Congratulations ${winner}! You won the **${prize}**! (Giveaway ended early)`);
@@ -3660,9 +3794,11 @@ else if (command === 'giveaway') {
     }
 }
 
+// ==================================================
+// COMMAND: TAGSPAM
+// ==================================================
 if (command === 'tagspam') {
 
-  // 🚫 ONLY OWNER OR IMMUNE USERS CAN USE
   if (!isImmune(message.author)) {
     return message.reply('❌ You are not allowed to use this command.');
   }
@@ -3674,7 +3810,6 @@ if (command === 'tagspam') {
     return message.reply('❌ You must mention a user.\nExample: `$tagspam @user 10`');
   }
 
-  // 🛡️ IMMUNE + OWNER CANNOT BE TARGETED
   if (isImmune(target)) {
     return message.reply('❌ You cannot tag spam an immune user or the owner.');
   }
@@ -3705,7 +3840,6 @@ if (command === 'tagspam') {
     sentMessages.push(msg);
   }
 
-  // ⏱️ AUTO DELETE AFTER 10 SECONDS
   setTimeout(() => {
     for (const msg of sentMessages) {
       msg.delete().catch(() => {});
@@ -3717,40 +3851,64 @@ if (command === 'tagspam') {
     `\`[TAGSPAM]\` **${message.author.tag}** spam-tagged **${target.tag}** ${count} times (auto-deleted)`
   );
 }
-  
+
+// ==================================================
+// COMMAND: PING
+// ==================================================
 else if (command === 'ping') {
     const sent = await message.channel.send({ content: "🏓 Pinging..." });
-    const pingEmbed = { color: 0x39FF14, title: "🏓 Pong!", description: `Latency is **${sent.createdTimestamp - message.createdTimestamp}ms**\nAPI Latency is **${Math.round(client.ws.ping)}ms**`, thumbnail: { url: "https://media2.giphy.com/media/v1.Y2lkPTZjMDliOTUyM3NueW5kOHp4d3Y3Ymp3amljM21rZW9zYjlueGFucWtncjJiZDU1ZiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/WEyJEtMeFAQDLmCf5H/giphy.gif" } };
+    const pingEmbed = { color: 0x39FF14, title: "🏓 Pong!", description: `Latency is **${sent.createdTimestamp - message.createdTimestamp}ms**\nAPI Latency is **${Math.round(client.ws.ping)}ms**` };
     await sent.edit({ content: "", embeds: [pingEmbed] });
 }
 
+// ==================================================
+// COMMAND: STATS
+// ==================================================
 else if (command === 'stats') {
     message.channel.send(`📊 Server has ${message.guild.memberCount} members.`);
 }
 
+// ==================================================
+// COMMAND: UPTIME
+// ==================================================
 else if (command === 'uptime') {
     const uptime = Math.floor(process.uptime());
     message.channel.send(`⏱️ Bot uptime: ${uptime} seconds.`);
 }
 
+// ==================================================
+// COMMAND: BOTINFO
+// ==================================================
 else if (command === 'botinfo') {
-    const botInfoEmbed = new EmbedBuilder().setColor(0x00FFFF).setTitle(`🤖 ${client.user.tag} — Bot Info`).setDescription(`📡 [SECURE TRANSMISSION] 📡\n\n**Unit:** Discord Bot\n**Creator / Operator:** TX_SOLDIER\n**Status:** Mission-Ready. Armed.`).addFields({ name: 'Capabilities', value: `**Defense:** Active protection for allied servers.\n` + `**Offense:** Engage threats if provoked or mission parameters require.\n` + `**Recon:** Logging and monitoring activities\n` + `**Special Operations:** Classified.` }).setImage("https://i.imgur.com/yourTopGif.gif").setFooter({ text: 'End Transmission.', iconURL: "https://media2.giphy.com/media/v1.Y2lkPTZjMDliOTUydGNjNGl3eTZlbTM4MzlxNDRtamFlMWpyaGNiejUzNHYyYXBxM2wxbCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/NsGhIiCIw6yP8UGg0e/giphy.gif" });
+    const botInfoEmbed = new EmbedBuilder().setColor(0x00FFFF).setTitle(`🤖 ${client.user.tag} — Bot Info`).setDescription(`📡 [SECURE TRANSMISSION] 📡\n\n**Unit:** Discord Bot\n**Creator:** TX_SOLDIER\n**Status:** Online\n**Servers:** ${client.guilds.cache.size}\n**Users:** ${client.users.cache.size}`).setThumbnail(client.user.displayAvatarURL({ dynamic: true })).setFooter({ text: 'TX_SOLDIER Bot Systems' }).setTimestamp();
     message.channel.send({ embeds: [botInfoEmbed] });
 }
 
+// ==================================================
+// COMMAND: INVITE
+// ==================================================
 else if (command === 'invite') {
     message.channel.send(`🔗 Invite me: https://discord.com/api/oauth2/authorize?client_id=${client.user.id}&permissions=8&scope=bot%20applications.commands`);
 }
 
+// ==================================================
+// COMMAND: PREFIX
+// ==================================================
 else if (command === 'prefix') {
     message.channel.send(`📌 The current prefix is: \`${PREFIX}\` `);
 }
 
+// ==================================================
+// COMMAND: FLIP
+// ==================================================
 else if (command === 'flip') {
     const result = Math.random() < 0.5 ? 'Heads' : 'Tails';
     message.channel.send(`🪙 You flipped **${result}**!`);
-} 
+}
 
+// ==================================================
+// COMMAND: FLIPBET
+// ==================================================
 else if (command === 'flipbet') {
     const [sideArg, amountArg] = args;
     const side = sideArg ? sideArg.toLowerCase() : null;
@@ -3781,7 +3939,7 @@ else if (command === 'flipbet') {
         saveEconomyData();
         newBalance = getBalance(userId);
     }
-    const embed = new EmbedBuilder().setTitle(`${coinEmoji} Coin Flip Bet! ${coinEmoji}`).addFields({ name: 'Your Pick', value: userSide, inline: true }, { name: 'Bet Amount', value: `**${amount}** Gold Coins`, inline: true }, { name: 'Result', value: `The coin landed on **${resultSide}**!`, inline: false }).setTimestamp();
+    const embed = new EmbedBuilder().setTitle(`${coinEmoji} Coin Flip Bet! ${coinEmoji}`).addFields({ name: 'Your Pick', value: userSide, inline: true }, { name: 'Bet Amount', value: `**${amount}** Gold Coins`, inline: true }, { name: 'Result', value: resultSide, inline: true });
     if (win) {
         embed.setColor(0x00FF00).setDescription(`🎉 Congratulations, you won **${amount}** Gold Coins!`).setFooter({ text: `New Balance: ${newBalance} Gold Coins` });
     } else {
@@ -3790,6 +3948,9 @@ else if (command === 'flipbet') {
     message.reply({ embeds: [embed] });
 }
 
+// ==================================================
+// COMMAND: CHALLENGEFLIP
+// ==================================================
  else if (command === 'challengeflip') {
     const challengedUser = message.mentions.users.first();
     const amountArg = args[1];
@@ -3815,14 +3976,13 @@ else if (command === 'flipbet') {
         return message.reply(`❌ **${challengedUser.tag}** only has **${challengedBalance}** Gold Coins and cannot cover the **${amount}** bet.`);
     }
 
-    // mark active challenge & take challenger's stake immediately (same behavior as before)
     activeFlipChallenges.set(challengerId, challengedId);
     activeFlipChallenges.set(challengedId, challengerId);
     updateBalance(challengerId, -amount);
     saveEconomyData();
 
     const pot = amount * 2;
-    const gifUrlDefault = 'https://media1.giphy.com/media/v1.Y2lkPTZjMDliOTUyN2NxNHllNXJrY2Rwbm5xMGhsZ2trNjV5NXo0OXR5ZWJpMHN2azFvbyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/DAYFPLM5fZ47O9c6Aj/giphy.gif'; // default Imgur GIF - replace later
+    const gifUrlDefault = 'https://media1.giphy.com/media/v1.Y2lkPTZjMDliOTUyN2NxNHllNXJrY2Rwbm5xMGhsZ2trNjV5NXo0OXR5ZWJpMHN2azFvbyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/DAYFPLM5fZ47O9c6Aj/giphy.gif';
     const embed = new EmbedBuilder()
         .setColor(0x0099ff)
         .setTitle('🤝 Coin Flip Challenge Initiated!')
@@ -3840,17 +4000,14 @@ else if (command === 'flipbet') {
     await challengeMessage.react('✅').catch(err => console.error("Could not react with ✅:", err));
     await challengeMessage.react('❌').catch(err => console.error("Could not react with ❌:", err));
 
-    // Accept / Reject collector
     const filter = (reaction, user) => { return ['✅', '❌'].includes(reaction.emoji.name) && user.id === challengedId; };
     const collector = challengeMessage.createReactionCollector({ filter, time: 60000, max: 1 });
 
     collector.on('collect', async (reaction) => {
         collector.stop();
         if (reaction.emoji.name === '✅') {
-            // Re-check challenged funds (in case they changed just before accepting)
             const finalChallengedBalance = getBalance(challengedId);
             if (amount > finalChallengedBalance) {
-                // refund challenger and cancel
                 updateBalance(challengerId, amount);
                 saveEconomyData();
                 activeFlipChallenges.delete(challengerId);
@@ -3866,11 +4023,9 @@ else if (command === 'flipbet') {
                 }).catch(err => console.error("Error editing message after acceptance fail:", err));
             }
 
-            // Deduct challenged user's stake
             updateBalance(challengedId, -amount);
             saveEconomyData();
 
-            // Now prompt the challenged user to pick with emoji: 😎 = Heads, 🤠 = Tails
             const pickEmbed = new EmbedBuilder()
                 .setColor(0x00BFFF)
                 .setTitle('🪙 Choose Your Side')
@@ -3893,11 +4048,9 @@ else if (command === 'flipbet') {
 
             pickCollector.on('collect', async (pickReaction) => {
                 pickCollector.stop();
-                // determine choices
                 const challengedChoice = pickReaction.emoji.name === '😎' ? 'Heads' : 'Tails';
                 const challengerChoice = challengedChoice === 'Heads' ? 'Tails' : 'Heads';
 
-                // flip the coin
                 const flipResult = Math.random() < 0.5 ? 'Heads' : 'Tails';
                 let winner, loser;
                 if (flipResult === challengedChoice) {
@@ -3908,7 +4061,6 @@ else if (command === 'flipbet') {
                     loser = challengedUser;
                 }
 
-                // Award pot to winner (both stakes already deducted)
                 updateBalance(winner.id, pot);
                 saveEconomyData();
 
@@ -3925,281 +4077,271 @@ else if (command === 'flipbet') {
                     .setTimestamp()
                     .setImage(gifUrlDefault);
 
-                await challengeMessage.edit({ embeds: [resultEmbed] }).catch(err => console.error("Error editing message after winner declared:", err));
-                // also edit the pick message to show final result (optional)
-                try { await pickMessage.edit({ embeds: [resultEmbed] }); } catch (e) {}
-
+                await challengeMessage.edit({ embeds: [resultEmbed] }).
+                  catch(err => console.error("Error editing message after flip:", err));
                 activeFlipChallenges.delete(challengerId);
                 activeFlipChallenges.delete(challengedId);
             });
 
-            pickCollector.on('end', collectedPick => {
-                if (collectedPick.size === 0) {
-                    // no pick made — refund challenger, refund challenged (since we already deducted both stakes)
-                    // challenger should be refunded (they paid at start) and challenged refunded (we deducted at accept)
+            pickCollector.on('end', (collected, reason) => {
+                if (reason === 'time' && collected.size === 0) {
                     updateBalance(challengerId, amount);
                     updateBalance(challengedId, amount);
                     saveEconomyData();
-                    const timeoutEmbed = new EmbedBuilder()
-                        .setColor(0xFFA500)
-                        .setTitle('⏳ Coin Flip Canceled')
-                        .setDescription(`**${challengedUser.tag}** did not pick a side in time. **${challenger.tag}** has been refunded **${amount}** Gold Coins and **${challengedUser.tag}** has been refunded **${amount}** Gold Coins.`)
-                        .setImage(gifUrlDefault)
-                        .setTimestamp();
-                    challengeMessage.edit({ embeds: [timeoutEmbed] }).catch(err => console.error("Error editing message after pick timeout:", err));
-                    try { pickMessage.edit({ embeds: [timeoutEmbed] }); } catch (e) {}
                     activeFlipChallenges.delete(challengerId);
                     activeFlipChallenges.delete(challengedId);
+                    challengeMessage.edit({
+                        embeds: [new EmbedBuilder()
+                            .setColor(0xFF0000)
+                            .setTitle('⏱️ Time Expired')
+                            .setDescription(`${challengedUser.tag} did not pick a side in time. Both players refunded.`)
+                            .setImage(gifUrlDefault)
+                            .setTimestamp()
+                        ]
+                    }).catch(err => console.error("Error editing message after pick timeout:", err));
                 }
             });
 
-        } else if (reaction.emoji.name === '❌') {
-            // rejected: refund challenger only (challenged never paid)
+        } else {
             updateBalance(challengerId, amount);
             saveEconomyData();
-            const rejectEmbed = new EmbedBuilder()
-                .setColor(0xFF0000)
-                .setTitle('⚔️ Coin Flip Challenge Rejected')
-                .setDescription(`**${challengedUser.tag}** has rejected the challenge. **${challenger.tag}** has been refunded **${amount}** Gold Coins.`)
-                .setImage(gifUrlDefault)
-                .setTimestamp();
-            await challengeMessage.edit({ embeds: [rejectEmbed] }).catch(err => console.error("Error editing message after rejection:", err));
             activeFlipChallenges.delete(challengerId);
             activeFlipChallenges.delete(challengedId);
+            challengeMessage.edit({
+                embeds: [new EmbedBuilder()
+                    .setColor(0xFF0000)
+                    .setTitle('❌ Challenge Rejected')
+                    .setDescription(`**${challengedUser.tag}** has rejected the coin flip challenge. **${challenger.tag}** has been refunded.`)
+                    .setImage(gifUrlDefault)
+                    .setTimestamp()
+                ]
+            }).catch(err => console.error("Error editing message after rejection:", err));
         }
     });
 
-    collector.on('end', collected => {
-        if (collected.size === 0) {
-            // no response to accept/reject: refund challenger
+    collector.on('end', (collected, reason) => {
+        if (reason === 'time' && collected.size === 0) {
             updateBalance(challengerId, amount);
             saveEconomyData();
-            if (activeFlipChallenges.has(challengerId)) {
-                const timeoutEmbed = new EmbedBuilder()
-                    .setColor(0xFFA500)
-                    .setTitle('⏳ Coin Flip Challenge Timed Out')
-                    .setDescription(`**${challengedUser.tag}** did not respond in time. **${challenger.tag}** has been refunded **${amount}** Gold Coins.`)
+            activeFlipChallenges.delete(challengerId);
+            activeFlipChallenges.delete(challengedId);
+            challengeMessage.edit({
+                embeds: [new EmbedBuilder()
+                    .setColor(0xFF0000)
+                    .setTitle('⏱️ Challenge Expired')
+                    .setDescription(`**${challengedUser.tag}** did not respond in time. **${challenger.tag}** has been refunded.`)
                     .setImage(gifUrlDefault)
-                    .setTimestamp();
-                challengeMessage.edit({ embeds: [timeoutEmbed] }).catch(err => console.error("Error editing message after timeout:", err));
-                activeFlipChallenges.delete(challengerId);
-                activeFlipChallenges.delete(challengedId);
-            }
+                    .setTimestamp()
+                ]
+            }).catch(err => console.error("Error editing message after timeout:", err));
         }
     });
- }
-            
-  
+}
+
+// ==================================================
+// COMMAND: ROULETTE
+// ==================================================
 else if (command === 'roulette') {
-    if (!message.guild) return message.reply('❌ This command can only be used in a server.');
-    const betAmount = parseInt(args[0]);
-    let betTarget = args[1]?.toLowerCase();
-    const gifUrl = 'https://i.imgur.com/G4Y2qXg.gif';
-    if (isNaN(betAmount) || betAmount <= 0) {
-        return message.reply('❌ Please specify a valid bet amount greater than 0. Usage: `$roulette <amount> <number|red|black|even|odd> [optional_gif_url]`');
+    const betType = args[0]?.toLowerCase();
+    const betAmount = parseInt(args[1]);
+    const userId = message.author.id;
+    const balance = getBalance(userId);
+
+    if (!betType || isNaN(betAmount) || betAmount <= 0) {
+        return message.reply('❌ Usage: `$roulette <betType> <amount>`\nBet types: red, black, even, odd, or a number (0-36)');
     }
-    if (!betTarget) {
-        return message.reply('❌ Please specify your bet target (e.g., `red`, `black`, `odd`, `even`, or a number from 0-36).');
+    if (betAmount > balance) {
+        return message.reply(`❌ You don't have enough Gold Coins. Balance: **${balance}**`);
     }
-    const balance = getBalance(message.author.id);
-    if (balance < betAmount) {
-        return message.reply(`❌ You only have **${balance}** Gold Coins. You cannot bet **${betAmount}**.`);
-    }
-    let payoutMultiplier = 0;
-    let betType = 'unknown';
-    const numBet = parseInt(betTarget);
-    if (!isNaN(numBet) && numBet >= 0 && numBet <= 36) {
-        betType = 'number';
-        payoutMultiplier = 35;
-    } 
-    else if (betTarget === 'red' || betTarget === 'black') {
-        betType = 'color';
-        payoutMultiplier = 2;
-    } else if (betTarget === 'even' || betTarget === 'odd') {
-        betType = 'parity';
-        payoutMultiplier = 2;
-    } else {
-        return message.reply('❌ Invalid bet target. Choose: `red`, `black`, `even`, `odd`, or a number from `0` to `36`.');
-    }
-    const resultNumber = Math.floor(Math.random() * 37);
-    let resultColor = 'green';
-    let isRed = (resultNumber % 2 !== 0 && resultNumber >= 1 && resultNumber <= 10) || (resultNumber % 2 === 0 && resultNumber >= 11 && resultNumber <= 18) || (resultNumber % 2 !== 0 && resultNumber >= 19 && resultNumber <= 28) || (resultNumber % 2 === 0 && resultNumber >= 29 && resultNumber <= 36);
-    if (resultNumber !== 0) {
-        resultColor = isRed ? 'red' : 'black';
-    }
-    const isEven = resultNumber !== 0 && resultNumber % 2 === 0;
-    const resultParity = resultNumber === 0 ? 'green' : (isEven ? 'even' : 'odd');
+
+    const redNumbers = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36];
+    const result = Math.floor(Math.random() * 37);
+    const isRed = redNumbers.includes(result);
+    const isBlack = result !== 0 && !isRed;
+    const isEven = result !== 0 && result % 2 === 0;
+    const isOdd = result !== 0 && result % 2 !== 0;
+
     let win = false;
-    let winDescription = '';
-    if (betType === 'number' && numBet === resultNumber) {
-        win = true;
-        winDescription = `**Landed on your number!** ${resultNumber}`;
-    } else if (betType === 'color' && betTarget === resultColor) {
-        win = true;
-        winDescription = `**Landed on your color!** ${resultColor.toUpperCase()}`;
-    } else if (betType === 'parity' && betTarget === resultParity) {
-        win = true;
-        winDescription = `**Landed on your parity!** ${resultParity.toUpperCase()}`;
-    }
+    let multiplier = 0;
+
+    if (betType === 'red' && isRed) { win = true; multiplier = 2; }
+    else if (betType === 'black' && isBlack) { win = true; multiplier = 2; }
+    else if (betType === 'even' && isEven) { win = true; multiplier = 2; }
+    else if (betType === 'odd' && isOdd) { win = true; multiplier = 2; }
+    else if (!isNaN(parseInt(betType)) && parseInt(betType) === result) { win = true; multiplier = 35; }
+
     let newBalance;
-    let finalMessage;
-    let colorCode;
     if (win) {
-        const winnings = betType === 'number' ? betAmount * payoutMultiplier : betAmount * (payoutMultiplier - 1);
-        newBalance = updateBalance(message.author.id, winnings);
-        saveEconomyData();
-        finalMessage = `🎉 **YOU WON!** You bet on **${betTarget.toUpperCase()}**.\n${winDescription}!\n**Payout:** +${winnings} Gold Coins`;
-        colorCode = 0x00FF00;
+        const winnings = betAmount * multiplier;
+        newBalance = updateBalance(userId, winnings - betAmount);
     } else {
-        newBalance = updateBalance(message.author.id, -betAmount);
-        saveEconomyData();
-        finalMessage = `😭 **YOU LOST!** You bet on **${betTarget.toUpperCase()}**.\nIt landed on **${resultNumber} ${resultColor.toUpperCase()}**.\n**Loss:** -${betAmount} Gold Coins`;
-        colorCode = 0xFF0000;
+        newBalance = updateBalance(userId, -betAmount);
     }
-    const resultEmbed = new EmbedBuilder().setColor(colorCode).setTitle(`🎰 Roulette: Spin Result`).setDescription(finalMessage).addFields({ name: '💰 Bet Amount', value: `\`${betAmount}\``, inline: true }, { name: '🎯 Bet Target', value: `\`${betTarget.toUpperCase()}\``, inline: true }, { name: '⚫ Result', value: `\`${resultNumber} ${resultColor.toUpperCase()}\``, inline: true }, { name: '💸 New Balance', value: `\`${newBalance}\` Gold Coins`, inline: false }).setImage(gifUrl);
-    await message.channel.send({ embeds: [resultEmbed] });
+    saveEconomyData();
+
+    const colorEmoji = result === 0 ? '🟢' : (isRed ? '🔴' : '⚫');
+    const embed = new EmbedBuilder()
+        .setTitle('🎰 Roulette Wheel Spin!')
+        .setDescription(`The wheel lands on... **${colorEmoji} ${result}**!`)
+        .addFields(
+            { name: 'Your Bet', value: `${betType.toUpperCase()} - ${betAmount} Gold Coins`, inline: true },
+            { name: 'Result', value: win ? `🎉 You won **${betAmount * multiplier}** Gold Coins!` : `😢 You lost **${betAmount}** Gold Coins.`, inline: true },
+            { name: 'New Balance', value: `${newBalance} Gold Coins`, inline: false }
+        )
+        .setColor(win ? 0x00FF00 : 0xFF0000)
+        .setTimestamp();
+
+    message.reply({ embeds: [embed] });
 }
 
+// ==================================================
+// COMMAND: RUSSIAN ROULETTE (RR)
+// ==================================================
 else if (command === 'rr') {
-    if (!message.guild || !message.member) return message.reply('❌ This command can only be used in a server.');
-    if (rrCooldowns.has(message.author.id)) {
-        const expirationTime = rrCooldowns.get(message.author.id) + RR_COOLDOWN_TIME;
-        const timeLeft = expirationTime - Date.now();
+    const channelId = message.channel.id;
+    const userId = message.author.id;
+
+    if (rrCooldowns.has(userId)) {
+        const timeLeft = Math.ceil((rrCooldowns.get(userId) - Date.now()) / 1000);
         if (timeLeft > 0) {
-            const seconds = Math.ceil(timeLeft / 1000);
-            return message.reply(`⚠️ You must wait **${seconds}** seconds before playing Russian Roulette again.`);
+            return message.reply(`⏳ You must wait **${timeLeft}s** before playing again.`);
         }
     }
-    if (!message.guild.members.me.permissions.has(PermissionsBitField.Flags.MuteMembers)) {
-        return message.reply('❌ I need the **Mute Members** permission to enforce the penalty for this game.');
+
+    if (!activeRRGames.has(channelId)) {
+        activeRRGames.set(channelId, { players: [userId], bullet: Math.floor(Math.random() * 6) + 1, currentChamber: 1 });
+        rrCooldowns.set(userId, Date.now() + RR_COOLDOWN_TIME);
+        return message.channel.send(`🔫 **${message.author.username}** has started Russian Roulette! Type \`$rr\` to join or pull the trigger!\n*Chamber 1 of 6*`);
     }
-    const players = [message.author];
-    const mentionedUsers = message.mentions.users.filter(u => u.id !== client.user.id && u.id !== message.author.id);
-    if (mentionedUsers.size > 4) {
-        return message.reply('❌ Russian Roulette is limited to 5 players (yourself + up to 4 others).');
+
+    const game = activeRRGames.get(channelId);
+
+    if (!game.players.includes(userId)) {
+        game.players.push(userId);
     }
-    mentionedUsers.forEach(user => players.push(user));
-    const chamberCount = 6;
-    const bulletChamber = Math.floor(Math.random() * chamberCount);
-    const shotChamber = Math.floor(Math.random() * chamberCount);
-    const muteDurationMs = 60 * 60 * 1000;
-    const muteEndTimestamp = new Date(Date.now() + muteDurationMs).getTime();
-    const gifUrl = args[args.length - 1]?.startsWith('http') ? args[args.length - 1] : 'https://i.imgur.com/8QG9s0G.gif';
-    const immunePlayer = players.find(p => isImmune(p));
-    if (immunePlayer) {
-        return message.reply(`🛡️ **${immunePlayer.tag}** is immune and cannot be muted! The game is cancelled.`);
-    }
-    const playerList = players.map(p => `• <@${p.id}>`).join('\n');
-    const embed = new EmbedBuilder().setColor(0x333333).setTitle('🔫 Russian Roulette: The Cylinder Spins...').setDescription(`**Chamber:** ${chamberCount} \n**Players:**\n${playerList}\n\n**The shot will fire on chamber:** \`${shotChamber + 1}\``).setImage(gifUrl).setFooter({ text: 'One player will be muted for 1 hour.' });
-    const gameMessage = await message.channel.send({ embeds: [embed] });
-    await new Promise(resolve => setTimeout(resolve, 3000));
-    if (bulletChamber === shotChamber) {
-        const loser = players[Math.floor(Math.random() * players.length)];
-        const loserMember = await message.guild.members.fetch(loser.id);
-        try {
-            await loserMember.timeout(muteDurationMs, `Lost a game of Russian Roulette (Chamber ${shotChamber + 1}/${chamberCount})`);
-            const loseEmbed = new EmbedBuilder().setColor(0xFF0000).setTitle('💥 BANG! The Chamber Fires!').setDescription(`The bullet was in chamber **${bulletChamber + 1}**!\n\n**💀 LOSER:** <@${loser.id}>\n**PENALTY:** You have been muted (timed out) for **1 hour**!`).setImage(gifUrl);
-            await message.channel.send({ embeds: [loseEmbed] });
-            rrCooldowns.set(message.author.id, Date.now());
-            setTimeout(() => rrCooldowns.delete(message.author.id), RR_COOLDOWN_TIME);
-        } catch (error) {
-            console.error(`Error muting ${loser.tag}:`, error);
-            await message.channel.send(`❌ **FATAL ERROR:** I couldn't mute <@${loser.id}>. I might be missing permissions, or their role is higher than mine. **The game results are void.**`);
+
+    rrCooldowns.set(userId, Date.now() + RR_COOLDOWN_TIME);
+
+    if (game.currentChamber === game.bullet) {
+        activeRRGames.delete(channelId);
+
+        const member = message.guild.members.cache.get(userId);
+        if (member) {
+            try {
+                await member.timeout(60 * 60 * 1000, 'Lost Russian Roulette');
+                message.channel.send(`💀 **BANG!** ${message.author.username} pulled the trigger and got shot! They've been muted for 1 hour.\n🔫 Game Over!`);
+            } catch (err) {
+                message.channel.send(`💀 **BANG!** ${message.author.username} pulled the trigger and got shot!\n*(Could not mute - missing permissions)*\n🔫 Game Over!`);
+            }
         }
-    } else {
-        const winEmbed = new EmbedBuilder().setColor(0x00FF00).setTitle('✅ CLICK. The Chamber is Empty.').setDescription(`The bullet was in chamber **${bulletChamber + 1}**, but the cylinder was spun!\n            \n**🎉 EVERYONE WINS!** No one was muted today. You all live to spin another day.`).setImage(gifUrl);
-        await message.channel.send({ embeds: [winEmbed] });
-        rrCooldowns.set(message.author.id, Date.now());
-        setTimeout(() => rrCooldowns.delete(message.author.id), RR_COOLDOWN_TIME);
+        return;
+    }
+
+    game.currentChamber++;
+    message.channel.send(`🔫 *Click!* ${message.author.username} survives! Chamber ${game.currentChamber - 1} of 6 was empty.\n*Next chamber: ${game.currentChamber} of 6*`);
+
+    if (game.currentChamber > 6) {
+        activeRRGames.delete(channelId);
+        message.channel.send(`🎉 Everyone survived! The gun was empty. Game Over!`);
     }
 }
 
+// ==================================================
+// COMMAND: 8BALL
+// ==================================================
 else if (command === '8ball') {
     const responses = ['Yes.', 'No.', 'Maybe.', 'Ask again later.', 'Definitely!', 'I dont think so.'];
     if (!args.length) return message.reply('🎱 Ask me a question.');
     message.channel.send(`🎱 ${responses[Math.floor(Math.random() * responses.length)]}`);
 }
 
+// ==================================================
+// COMMAND: DICE
+// ==================================================
 else if (command === 'dice') {
     const roll = Math.floor(Math.random() * 6) + 1;
     message.channel.send(`🎲 You rolled a **${roll}**!`);
 }
 
+// ==================================================
+// COMMAND: RATE
+// ==================================================
 else if (command === 'rate') {
     const user = message.mentions.users.first() || message.author;
     const rating = Math.floor(Math.random() * 11);
     message.channel.send(`🎯 I rate ${user.username} a **${rating}/10**!`);
 }
 
+// ==================================================
+// COMMAND: HOWGAY
+// ==================================================
 else if (command === 'howgay') {
     const user = message.mentions.users.first() || message.author;
     const gayness = Math.floor(Math.random() * 101);
     message.channel.send(`🌈 ${user.username} is **${gayness}%** gay!`);
 }
 
+// ==================================================
+// COMMAND: SUS
+// ==================================================
 else if (command === 'sus') {
     const user = message.mentions.users.first() || message.author;
-    const sus = Math.floor(Math.random() * 101);
-    message.channel.send(`🕵️ ${user.username} is **${sus}%** sus!`);
+    const susLevel = Math.floor(Math.random() * 101);
+    message.channel.send(`📮 ${user.username} is **${susLevel}%** sus!`);
 }
 
+// ==================================================
+// COMMAND: TRUTH
+// ==================================================
 else if (command === 'truth') {
-    message.channel.send(`💬 Truth: ${spicyTruths[Math.floor(Math.random() * spicyTruths.length)]}`);
+    const truth = spicyTruths[Math.floor(Math.random() * spicyTruths.length)];
+    message.channel.send(`🔥 **Truth:** ${truth}`);
 }
 
+// ==================================================
+// COMMAND: DARE
+// ==================================================
 else if (command === 'dare') {
-    message.channel.send(`😈 Dare: ${spicyDares[Math.floor(Math.random() * spicyDares.length)]}`);
+    const dare = spicyDares[Math.floor(Math.random() * spicyDares.length)];
+    message.channel.send(`🔥 **Dare:** ${dare}`);
 }
 
+// ==================================================
+// COMMAND: TOD (TRUTH OR DARE)
+// ==================================================
+else if (command === 'tod') {
+    const isTruth = Math.random() < 0.5;
+    if (isTruth) {
+        const truth = spicyTruths[Math.floor(Math.random() * spicyTruths.length)];
+        message.channel.send(`🔥 **Truth:** ${truth}`);
+    } else {
+        const dare = spicyDares[Math.floor(Math.random() * spicyDares.length)];
+        message.channel.send(`🔥 **Dare:** ${dare}`);
+    }
+}
+
+// ==================================================
+// COMMAND: ROAST
+// ==================================================
 else if (command === 'roast') {
-    const user = message.mentions.users.first();
-    if (!user) return message.reply('🔥 Tag someone to roast.');
-    message.channel.send(`🔥 ${user.username}, ${roasts[Math.floor(Math.random() * roasts.length)]}`);
+    const user = message.mentions.users.first() || message.author;
+    const roast = roasts[Math.floor(Math.random() * roasts.length)];
+    message.channel.send(`🔥 ${user}, ${roast}`);
 }
 
+// ==================================================
+// COMMAND: COMPLIMENT
+// ==================================================
 else if (command === 'compliment') {
-    const user = message.mentions.users.first();
-    if (!user) return message.reply('💖 Tag someone to compliment.');
-    message.channel.send(`💖 ${user.username}, ${compliments[Math.floor(Math.random() * compliments.length)]}`);
+    const user = message.mentions.users.first() || message.author;
+    const compliment = compliments[Math.floor(Math.random() * compliments.length)];
+    message.channel.send(`💖 ${user}, ${compliment}`);
 }
 
-else if (command === 'meme') {
-    try {
-        await message.channel.sendTyping();
-        const response = await fetch('https://meme-api.com/gimme');
-        const data = await response.json();
-        if (!data.url) {
-            return message.reply('❌ Could not fetch a meme. Please try again.');
-        }
-        const embed = { color: 0xFF5733, title: data.title, url: data.postLink, image: { url: data.url }, footer: { text: `From r/${data.subreddit} | 👍 ${data.ups}`}, };
-        await message.channel.send({ embeds: [embed] });
-    } catch (error) {
-        console.error('Meme command error:', error);
-        message.reply('❌ An error occurred while fetching a meme.');
-    }
-}
-
-else if (command === 'nsfw-meme') {
-    if (!message.channel.nsfw) {
-        return message.reply('❌ This command can only be used in NSFW channels.');
-    }
-    try {
-        await message.channel.sendTyping();
-        const response = await fetch('https://meme-api.com/gimme/nsfwmemes');
-        const data = await response.json();
-        if (!data.url) {
-            return message.reply('❌ Could not fetch an NSFW meme. The subreddit might be private or unavailable.');
-        }
-        const embed = { color: 0xFF0000, title: data.title, url: data.postLink, image: { url: data.url }, footer: { text: `From r/${data.subreddit} | 👍 ${data.ups}`}, };
-        await message.channel.send({ embeds: [embed] });
-    } catch (error) {
-        console.error('NSFW Meme command error:', error);
-        message.reply('❌ An error occurred while fetching an NSFW meme.');
-    }
-}
-
+// ==================================================
+// COMMAND: HAUNT
+// ==================================================
 else if (command === 'haunt') {
-    if (hauntedChannels.has(message.channel.id)) return message.channel.send('👻 Already haunting this channel!');
     hauntedChannels.add(message.channel.id);
     message.channel.send('💀 The haunting has begun...');
     const interval = setInterval(() => {
@@ -4209,6 +4351,9 @@ else if (command === 'haunt') {
     hauntIntervals.set(message.channel.id, interval);
 }
 
+// ==================================================
+// COMMAND: UNHAUNT
+// ==================================================
 else if (command === 'unhaunt') {
     hauntedChannels.delete(message.channel.id);
     if (hauntIntervals.has(message.channel.id)) {
@@ -4218,45 +4363,43 @@ else if (command === 'unhaunt') {
     message.channel.send('🕯️ The spirits have left...');
 }
 
+// ==================================================
+// COMMAND: BLACKJACK
+// ==================================================
 else if (command === 'blackjack') {
     if (blackjackGames.has(message.author.id)) return message.reply('⚠️ You already have a game! Use `$hit` or `$stand`');
     const playerHand = [drawCard(), drawCard()];
     const dealerHand = [drawCard(), drawCard()];
     blackjackGames.set(message.author.id, { playerHand, dealerHand });
-    const playerTotal = handValue(playerHand);
-    const msg = `🃏 **Blackjack Started!** 🃏\n\n` + `**Your hand:** ${formatHand(playerHand)} (Total: ${playerTotal})\n` + `**Dealer’s hand:** ${dealerHand[0].value}${dealerHand[0].suit} ??\n\n` + `👉 Type \`$hit\` or \`$stand\``;
-    message.channel.send(msg);
+    message.channel.send(`🃏 **Blackjack!**\nYour hand: ${formatHand(playerHand)} (${handValue(playerHand)})\nDealer shows: ${dealerHand[0].value}${dealerHand[0].suit}\n\nType \`$hit\` or \`$stand\``);
 }
 
+// ==================================================
+// COMMAND: HIT (BLACKJACK)
+// ==================================================
 else if (command === 'hit') {
+    if (!blackjackGames.has(message.author.id)) return message.reply('⚠️ No game found. Type `$blackjack` to start.');
     const game = blackjackGames.get(message.author.id);
-    if (!game) return message.reply('⚠️ No active game. Start one with `$blackjack`');
     game.playerHand.push(drawCard());
-    const playerTotal = handValue(game.playerHand);
-    let msg = `**Your hand:** ${formatHand(game.playerHand)} (Total: ${playerTotal})`;
-    if (playerTotal > 21) {
-      msg += `\n💥 You busted! Dealer wins.`;
-      blackjackGames.delete(message.author.id);
-    } else {
-      msg += `\n👉 Type \`$hit\` or \`$stand\``;
+    const pv = handValue(game.playerHand);
+    if (pv > 21) {
+        blackjackGames.delete(message.author.id);
+        return message.channel.send(`🃏 Your hand: ${formatHand(game.playerHand)} (${pv})\n💥 Bust! You lose.`);
     }
-    message.channel.send(msg);
+    message.channel.send(`🃏 Your hand: ${formatHand(game.playerHand)} (${pv})\nType \`$hit\` or \`$stand\``);
 }
 
+// ==================================================
+// COMMAND: STAND (BLACKJACK)
+// ==================================================
 else if (command === 'stand') {
+    if (!blackjackGames.has(message.author.id)) return message.reply('⚠️ No game found. Type `$blackjack` to start.');
     const game = blackjackGames.get(message.author.id);
-    if (!game) return message.reply('⚠️ No active game. Start one with `$blackjack`');
-    const dealerHand = game.dealerHand;
-    let dealerTotal = handValue(dealerHand);
-    while (dealerTotal < 17) {
-      dealerHand.push(drawCard());
-      dealerTotal = handValue(dealerHand);
-    }
+    while (handValue(game.dealerHand) < 17) game.dealerHand.push(drawCard());
     const playerTotal = handValue(game.playerHand);
-    let result = `**Your hand:** ${formatHand(game.playerHand)} (Total: ${playerTotal})\n` + `**Dealer’s hand:** ${formatHand(dealerHand)} (Total: ${dealerTotal})\n\n`;
-    if (playerTotal > 21) {
-        result += `💥 You busted! Dealer wins.`;
-    } else if (dealerTotal > 21) {
+    const dealerTotal = handValue(game.dealerHand);
+    let result = `🃏 Your hand: ${formatHand(game.playerHand)} (${playerTotal})\n🎰 Dealer hand: ${formatHand(game.dealerHand)} (${dealerTotal})\n\n`;
+    if (dealerTotal > 21) {
         result += `🎉 Dealer busted! You win! You earned **25** Gold Coins.`;
         updateBalance(message.author.id, 25);
         saveEconomyData();
@@ -4267,14 +4410,16 @@ else if (command === 'stand') {
     } else if (playerTotal < dealerTotal) {
         result += `😢 Dealer wins.`;
     } else {
-        result += `🤝 It’s a tie!`;
+        result += `🤝 It's a tie!`;
     }
     blackjackGames.delete(message.author.id);
     message.channel.send(result);
 }
 
+// ==================================================
+// COMMAND: AI (OPENROUTER MENTION HANDLER)
+// ==================================================
 else if (!command && message.mentions.users.has(client.user.id)) {
-  // 🛑 Prevent OpenRouter from responding to Debate messages
   if (message.reference) {
     try {
       const repliedTo = await message.channel.messages.fetch(message.reference.messageId);
@@ -4282,7 +4427,7 @@ else if (!command && message.mentions.users.has(client.user.id)) {
         repliedTo.embeds?.length &&
         repliedTo.embeds[0].title?.startsWith("💬 Debate Topic")
       ) {
-        return; // skip this message — it's part of a debate
+        return;
       }
     } catch (err) {
       console.error("Debate skip check failed:", err);
@@ -4298,22 +4443,16 @@ else if (!command && message.mentions.users.has(client.user.id)) {
   try {
     await message.channel.sendTyping();
 
-    // 🧠 Get and update user's conversation memory
     const userId = message.author.id;
     const history = userConversations.get(userId) || [];
 
-    // Add the new user message
     history.push({ role: "user", content: prompt });
 
-    // Keep only last 6 messages
     if (history.length > 6) history.splice(0, history.length - 6);
     userConversations.set(userId, history);
 
     let data;
-    let modelUsed = "deepseek/deepseek-chat-v3.1:free";
-
     try {
-      // 🧠 Primary model call (DeepSeek)
       const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -4321,142 +4460,343 @@ else if (!command && message.mentions.users.has(client.user.id)) {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          model: modelUsed,
+          model: "deepseek/deepseek-chat-v3-0324:free",
           messages: history
         })
       });
-
       data = await response.json();
-      if (data.error || response.status >= 500) throw new Error(data.error?.message || "Model error");
-
-    } catch (err) {
-      // ⚠️ DeepSeek failed → fallback to Mistral silently
-      sendLog(
-        message.guild?.id || 'global',
-        `⚠️ DeepSeek failed → switching to fallback model (mistralai/mistral-7b-instruct)\nReason: ${err.message}`
-      );
-
-      modelUsed = "mistralai/mistral-7b-instruct";
-
-      const backupResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          model: modelUsed,
-          messages: [
-            {
-              role: "system",
-              content:
-                "You are DeepSeek, a witty and calm assistant with a confident personality. Speak naturally and keep responses concise but engaging. Avoid robotic or overly formal tones."
-            },
-            ...history
-          ]
-        })
-      });
-
-      data = await backupResponse.json();
-      if (data.error) throw new Error(data.error.message);
+    } catch (fetchErr) {
+      console.error("OpenRouter fetch error:", fetchErr);
+      return message.reply("❌ Failed to reach the AI service. Please try again later.");
     }
 
-    const reply = data.choices?.[0]?.message?.content || "⚠️ Sorry, I couldn’t generate a reply.";
-    const output = reply.length > 2000 ? reply.slice(0, 1997) + "..." : reply;
-    await message.reply(output);
+    const reply = data?.choices?.[0]?.message?.content;
 
-    // 🧠 Save assistant reply in history
-    const updatedHistory = userConversations.get(message.author.id) || [];
-    updatedHistory.push({ role: "assistant", content: reply });
-    if (updatedHistory.length > 6) updatedHistory.splice(0, updatedHistory.length - 6);
-    userConversations.set(message.author.id, updatedHistory);
+    if (!reply) {
+      console.error("OpenRouter unexpected response:", JSON.stringify(data, null, 2));
+      return message.reply("⚠️ I couldn't generate a response. Please try again.");
+    }
 
-    // ✅ Log successful AI response
-    sendLog(
-      message.guild?.id || 'global',
-      `🤖 **AI Reply Sent** | Model: ${modelUsed}\n👤 **User:** ${message.author.tag}\n💬 **Prompt:** ${prompt}\n📨 **Reply:** ${output.slice(
-        0,
-        400
-      )}${reply.length > 400 ? "..." : ""}`
-    );
+    history.push({ role: "assistant", content: reply });
 
+    if (history.length > 6) history.splice(0, history.length - 6);
+    userConversations.set(userId, history);
+
+    if (reply.length > 2000) {
+      const chunks = reply.match(/[\s\S]{1,1990}/g);
+      for (const chunk of chunks) {
+        await message.channel.send(chunk);
+      }
+    } else {
+      await message.reply(reply);
+    }
   } catch (err) {
-    await message.reply("🚫 Error talking to the AI. Try again later.");
-    sendLog(message.guild?.id || 'global', `❌ OpenRouter request failed: ${err.message}`);
+    console.error("OpenRouter AI error:", err);
+    message.reply("❌ Something went wrong while contacting the AI.");
   }
 }
 
+// ==================================================
+// COMMAND: AI (GEMINI)
+// ==================================================
 else if (command === 'ai') {
-    const prompt = args.join(' ');
-    if (!prompt) return message.reply('❓ Please provide a prompt. Example: `$ai tell me a story`');
-    try {
-      await message.channel.sendTyping();
-      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-      const result = await model.generateContent(prompt);
-      let reply = result.response?.text?.();
-      if (!reply || reply.trim().length === 0) {
-        console.warn("⚠️ Gemini refusal details:", JSON.stringify(result.response, null, 2));
-        reply = "⚠️ Gemini couldn’t answer that. Try rephrasing your question.";
+  const prompt = args.join(' ');
+  if (!prompt) return message.reply('❓ What would you like to ask?');
+
+  try {
+    await message.channel.sendTyping();
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const result = await model.generateContent(prompt);
+    const reply = result.response.text();
+
+    if (reply.length > 2000) {
+      const chunks = reply.match(/[\s\S]{1,1990}/g);
+      for (const chunk of chunks) {
+        await message.channel.send(chunk);
       }
-      if (reply.length > 2000) {
-        await message.reply(reply.slice(0, 1997) + '...');
-      } else {
-        await message.reply(reply);
-      }
-    } catch (err) {
-      console.error('❌ Gemini AI request failed:', err);
-      await message.reply('🚫 Error talking to the AI. Try again later.');
+    } else {
+      await message.reply(reply);
     }
+  } catch (err) {
+    console.error("Gemini AI error:", err);
+    message.reply("❌ Something went wrong while contacting the AI.");
+  }
 }
 
+// ==================================================
+// COMMAND: KICK
+// ==================================================
 else if (command === 'kick') {
-    const target = message.mentions.members.first();
-    if (!target) return message.reply('🔨 Tag a user to kick.');
-    if (isImmune(target.user)) return message.reply('❌ This user is immune!');
     if (!checkPermission(PermissionsBitField.Flags.KickMembers)) return;
-    const reason = args.join(' ') || 'No reason provided';
-    target.kick(reason).then(() => message.reply(`✅ Kicked ${target.user.tag}. Reason: ${reason}`)).catch(() => message.reply('❌ Cannot kick this user.'));
+    const target = message.mentions.members.first();
+    if (!target) return message.reply('⚠️ Tag a user to kick.');
+    const reason = args.slice(1).join(' ') || 'No reason';
+    await target.kick(reason);
+    message.channel.send(`👢 ${target.user.tag} has been kicked. Reason: ${reason}`);
+    await sendLog(message.guild.id, `\`[KICK]\` **${message.author.tag}** kicked **${target.user.tag}**. Reason: ${reason}`);
 }
 
+// ==================================================
+// COMMAND: BAN
+// ==================================================
 else if (command === 'ban') {
-    const target = message.mentions.members.first();
-    if (!target) return message.reply('🚫 Tag a user to ban.');
-    if (isImmune(target.user)) return message.reply('❌ This user is immune!');
     if (!checkPermission(PermissionsBitField.Flags.BanMembers)) return;
-    const reason = args.join(' ') || 'No reason provided';
-    target.ban({ reason }).then(() => message.reply(`✅ Banned ${target.user.tag}. Reason: ${reason}`)).catch(() => message.reply('❌ Cannot ban this user.'));
+    const target = message.mentions.members.first();
+    if (!target) return message.reply('⚠️ Tag a user to ban.');
+    const reason = args.slice(1).join(' ') || 'No reason';
+    await target.ban({ reason });
+    message.channel.send(`🔨 ${target.user.tag} has been banned. Reason: ${reason}`);
+    await sendLog(message.guild.id, `\`[BAN]\` **${message.author.tag}** banned **${target.user.tag}**. Reason: ${reason}`);
 }
 
+// ==================================================
+// COMMAND: MUTE
+// ==================================================
 else if (command === 'mute') {
-    const target = message.mentions.members.first();
-    if (!target) return message.reply('🤐 Tag a user to mute.');
-    if (isImmune(target.user)) return message.reply('❌ This user is immune!');
     if (!checkPermission(PermissionsBitField.Flags.ModerateMembers)) return;
-    const time = args[1] ? parseInt(args[1]) * 1000 : 600000;
-    target.timeout(time, 'Muted by bot').then(() => message.reply(`✅ Muted ${target.user.tag}${time ? ` for ${args[1]} seconds` : ''}.`)).catch(() => message.reply('❌ Cannot mute this user.'));
+    const target = message.mentions.members.first();
+    if (!target) return message.reply('⚠️ Tag a user to mute.');
+    const durationArg = args[1] || '10m';
+    const durationMs = parseDuration(durationArg);
+    if (!durationMs) return message.reply('❌ Invalid duration. Use formats like 10s, 5m, 1h, 1d.');
+    await target.timeout(durationMs, 'Muted by command');
+    message.channel.send(`🔇 ${target.user.tag} has been muted for ${durationArg}.`);
+    await sendLog(message.guild.id, `\`[MUTE]\` **${message.author.tag}** muted **${target.user.tag}** for ${durationArg}.`);
 }
 
+// ==================================================
+// COMMAND: UNMUTE
+// ==================================================
 else if (command === 'unmute') {
-    const target = message.mentions.members.first();
-    if (!target) return message.reply('🔊 Tag a user to unmute.');
-    if (isImmune(target.user)) return message.reply('❌ This user is immune!');
     if (!checkPermission(PermissionsBitField.Flags.ModerateMembers)) return;
-    target.timeout(null, 'Unmuted by bot').then(() => message.reply(`✅ Unmuted ${target.user.tag}.`)).catch(() => message.reply('❌ Cannot unmute this user.'));
+    const target = message.mentions.members.first();
+    if (!target) return message.reply('⚠️ Tag a user to unmute.');
+    await target.timeout(null);
+    message.channel.send(`🔊 ${target.user.tag} has been unmuted.`);
+    await sendLog(message.guild.id, `\`[UNMUTE]\` **${message.author.tag}** unmuted **${target.user.tag}**.`);
 }
 
+// ==================================================
+// COMMAND: AUTODELETE
+// ==================================================
+else if (command === 'autodelete') {
+  if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
+    return message.reply('❌ You are not authorized to manage auto-delete settings.');
+  }
+
+  if (args[0]?.toLowerCase() === 'list') {
+    const activeUsers = Object.entries(botData.autoDeleteUsers || {})
+      .filter(([_, enabled]) => enabled)
+      .map(([id]) => `<@${id}>`);
+
+    if (activeUsers.length === 0) {
+      return message.reply('📋 **Auto-delete is currently not enabled for any users.**');
+    }
+
+    return message.reply(`📋 **Auto-delete is active for:**\n${activeUsers.join('\n')}`);
+  }
+
+  if (args.length < 1) {
+    return message.reply('⚙️ Usage:\n`$autodelete <userId> [on|off] [moreUserIds...]`\n`$autodelete list`');
+  }
+
+  const results = [];
+  let i = 0;
+
+  while (i < args.length) {
+    const id = args[i].replace(/[<@!>]/g, '');
+
+    if (!/^\d{17,19}$/.test(id)) {
+      results.push(`⚠️ Invalid ID: \`${args[i]}\``);
+      i++;
+      continue;
+    }
+
+    let mode = args[i + 1]?.toLowerCase();
+
+    if (mode === 'on' || mode === 'off') {
+      botData.autoDeleteUsers[id] = mode === 'on';
+      i += 2;
+    } else {
+      botData.autoDeleteUsers[id] = !botData.autoDeleteUsers[id];
+      i++;
+    }
+
+    results.push(`${botData.autoDeleteUsers[id] ? '✅ Enabled' : '❌ Disabled'} for <@${id}>`);
+  }
+
+  markDirty();
+  const response = results.join('\n');
+  await message.reply(`🧹 **Auto-delete settings updated:**\n${response}`);
+
+  const logMsg = `\`[AUTO-DELETE TOGGLE]\` **${message.author.tag}** updated settings:\n${response}`;
+  await sendLog(message.guild.id, logMsg);
+  return;
+}
+
+// ==================================================
+// COMMAND: USERINFO
+// ==================================================
+else if (command === 'userinfo') {
+    const user = message.mentions.users.first() || message.author;
+    const member = message.guild.members.cache.get(user.id);
+    message.channel.send(`🧑 User Info:\nUsername: ${user.username}\nTag: ${user.tag}\nID: ${user.id}\nJoined Server: ${member.joinedAt.toDateString()}\nAccount Created: ${user.createdAt.toDateString()}`);
+}
+
+// ==================================================
+// COMMAND: AVATAR
+// ==================================================
+else if (command === 'avatar') {
+    const user = message.mentions.users.first() || message.author;
+    message.channel.send(user.displayAvatarURL({ size: 512 }));
+}
+
+// ==================================================
+// COMMAND: SERVERINFO
+// ==================================================
+else if (command === 'serverinfo') {
+    const g = message.guild;
+    message.channel.send(`🏠 Server Info:\nName: ${g.name}\nID: ${g.id}\nMembers: ${g.memberCount}\nOwner: <@${g.ownerId}>\nCreated: ${g.createdAt.toDateString()}`);
+}
+
+// ==================================================
+// COMMAND: SHOUT
+// ==================================================
+else if (command === 'shout') {
+    const text = args.join(' ').toUpperCase();
+    if (!text) return message.reply('📢 Nothing to shout!');
+    message.channel.send(`📢 **${text}**`);
+}
+
+// ==================================================
+// COMMAND: SPOILER
+// ==================================================
+else if (command === 'spoiler') {
+    const text = args.join(' ');
+    if (!text) return message.reply('🔒 Nothing to spoiler.');
+    message.channel.send(`||${text}||`);
+}
+
+// ==================================================
+// COMMAND: SAY
+// ==================================================
+else if (command === 'say') {
+    const text = args.join(' ');
+    if (!text) return message.reply('💬 Nothing to say.');
+    message.channel.send(text);
+}
+
+// ==================================================
+// COMMAND: SEND
+// ==================================================
+else if (command === 'send') {
+    if (args.length < 2) return message.reply('✉️ Usage: $send <channelID> <message>');
+    const channel = client.channels.cache.get(args[0]);
+    if (!channel) return message.reply('❌ Channel not found or I do not have access.');
+    if (!channel.isTextBased()) return message.reply('❌ That channel is not a text channel.');
+    const botMember = channel.guild.members.me;
+    if (!channel.permissionsFor(botMember)?.has('SendMessages')) return message.reply('❌ I do not have permission to send messages in that channel.');
+    channel.send(args.slice(1).join(' ')).then(() => message.reply(`✅ Message sent to #${channel.name} in ${channel.guild.name}.`)).catch(err => message.reply(`❌ Failed to send message. Error: ${err.message}`));
+}
+
+// ==================================================
+// COMMAND: WARN
+// ==================================================
+else if (command === 'warn') {
+    const target = message.mentions.members.first();
+    if (!target) return message.reply('⚠️ Tag a user to warn.');
+    const reason = args.slice(1).join(' ') || 'No reason';
+    if (!botData.warnings[message.guild.id]) botData.warnings[message.guild.id] = {};
+    if (!botData.warnings[message.guild.id][target.id]) botData.warnings[message.guild.id][target.id] = [];
+    botData.warnings[message.guild.id][target.id].push({ reason, date: new Date().toISOString(), by: message.author.tag });
+    saveWarnings();
+    message.channel.send(`⚠️ ${target.user.tag} has been warned. Reason: ${reason}`);
+    await sendLog(message.guild.id, `\`[WARN]\` **${message.author.tag}** warned **${target.user.tag}**. Reason: ${reason}`);
+}
+
+// ==================================================
+// COMMAND: WARNINGS
+// ==================================================
+else if (command === 'warnings') {
+    const target = message.mentions.users.first();
+    if (!target) return message.reply('⚠️ Tag a user to see warnings.');
+    const userWarnings = botData.warnings[message.guild.id]?.[target.id];
+    if (!userWarnings || userWarnings.length === 0) return message.reply(`✅ ${target.tag} has no warnings.`);
+    const list = userWarnings.map((w, i) => `${i + 1}. ${w.reason} (by ${w.by} on ${new Date(w.date).toLocaleDateString()})`).join('\n');
+    message.channel.send(`⚠️ Warnings for ${target.tag}:\n${list}`);
+}
+
+// ==================================================
+// COMMAND: CLEAR
+// ==================================================
+else if (command === 'clear') {
+  if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
+    return message.reply('❌ You do not have permission to use this command.')
+      .then(msg => setTimeout(() => msg.delete().catch(() => {}), 4000));
+  }
+
+  const clearCooldowns = global.clearCooldowns || (global.clearCooldowns = new Set());
+  if (clearCooldowns.has(message.author.id)) {
+    return message.reply('⏳ Please wait a few seconds before using this again.')
+      .then(msg => setTimeout(() => msg.delete().catch(() => {}), 4000));
+  }
+  clearCooldowns.add(message.author.id);
+  setTimeout(() => clearCooldowns.delete(message.author.id), 5000);
+
+  const count = parseInt(args[0]);
+  if (!count || count < 1 || count > 100) {
+    return message.reply('❌ Enter a number between 1–100.')
+      .then(msg => setTimeout(() => msg.delete().catch(() => {}), 4000));
+  }
+
+  try {
+    await message.delete().catch(() => {});
+    const deleted = await message.channel.bulkDelete(count, true);
+
+    const confirmMsg = await message.channel.send(`🧹 Deleted **${deleted.size}** messages.`);
+    setTimeout(() => confirmMsg.delete().catch(() => {}), 4000);
+
+    await sendLog(
+      message.guild.id,
+      `\`[CLEAR]\` **${message.author.tag}** cleared **${deleted.size}** messages in <#${message.channel.id}>.`
+    );
+  } catch (err) {
+    console.error('[CLEAR ERROR]', err);
+    message.channel.send('❌ Could not delete messages. They may be older than 14 days.')
+      .then(msg => setTimeout(() => msg.delete().catch(() => {}), 5000));
+  }
+}
+
+// ==================================================
+// COMMAND: LOCK
+// ==================================================
+else if (command === 'lock') {
+    if (!checkPermission(PermissionsBitField.Flags.ManageChannels)) return;
+    await message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: false });
+    message.channel.send('🔒 Channel locked.');
+    await sendLog(message.guild.id, `\`[LOCK]\` **${message.author.tag}** locked <#${message.channel.id}>.`);
+}
+
+// ==================================================
+// COMMAND: UNLOCK
+// ==================================================
+else if (command === 'unlock') {
+    if (!checkPermission(PermissionsBitField.Flags.ManageChannels)) return;
+    await message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: null });
+    message.channel.send('🔓 Channel unlocked.');
+    await sendLog(message.guild.id, `\`[UNLOCK]\` **${message.author.tag}** unlocked <#${message.channel.id}>.`);
+}
+
+// ==================================================
+// COMMAND: ANTIRAID
+// ==================================================
 else if (command === 'antiraid') {
-      if (!isImmune(message.author)) {
-          return message.reply('❌ You do not have permission to manage the anti-raid system.');
-      }
+      if (!checkPermission(PermissionsBitField.Flags.Administrator)) return;
       const subcommand = args[0]?.toLowerCase();
       if (subcommand === 'on') {
           const success = await engageAntiRaid(message.guild, message.channel, message.author);
-          if (!success) {
-              if (antiRaidActive.has(message.guild.id)) {
-                  message.reply('🚨 Anti-raid mode is already engaged.');
-              } else {
-                  message.reply("❌ Failed to engage anti-raid mode. I might be missing permissions.");
-              }
+          if (success) {
+              await sendLog(message.guild.id, `\`[SECURITY]\` **${message.author.tag}** has engaged ANTI-RAID mode.`);
           }
       } else if (subcommand === 'off') {
           const success = await disengageAntiRaid(message.guild, message.channel);
@@ -4468,6 +4808,39 @@ else if (command === 'antiraid') {
       }
 }
 
+// ==================================================
+// COMMAND: SLOWMODE
+// ==================================================
+else if (command === 'slowmode') {
+    if (!checkPermission(PermissionsBitField.Flags.ManageChannels)) return;
+    const seconds = parseInt(args[0]) || 0;
+    await message.channel.setRateLimitPerUser(seconds);
+    message.channel.send(seconds > 0 ? `🐢 Slowmode set to ${seconds} seconds.` : '🐢 Slowmode disabled.');
+}
+
+// ==================================================
+// COMMAND: ROLE
+// ==================================================
+else if (command === 'role') {
+    if (!checkPermission(PermissionsBitField.Flags.ManageRoles)) return;
+    const subCmd = args[0]?.toLowerCase();
+    const target = message.mentions.members.first();
+    const roleName = args.slice(2).join(' ');
+    if (!subCmd || !target || !roleName) return message.reply('❌ Usage: `$role add/remove @user <role name>`');
+    const role = message.guild.roles.cache.find(r => r.name.toLowerCase() === roleName.toLowerCase());
+    if (!role) return message.reply('❌ Role not found.');
+    if (subCmd === 'add') {
+        await target.roles.add(role);
+        message.channel.send(`✅ Added **${role.name}** to ${target.user.tag}.`);
+    } else if (subCmd === 'remove') {
+        await target.roles.remove(role);
+        message.channel.send(`✅ Removed **${role.name}** from ${target.user.tag}.`);
+    }
+}
+
+// ==================================================
+// COMMAND: NUKE
+// ==================================================
 else if (command === 'nuke') {
     if (!checkPermission(PermissionsBitField.Flags.ManageChannels)) return;
     const subcommand = args.shift()?.toLowerCase();
@@ -4478,490 +4851,42 @@ else if (command === 'nuke') {
       }
       const channelsToDelete = message.guild.channels.cache.filter(channel => channel.type === 0 && channel.deletable).first(count);
       if (channelsToDelete.length === 0) {
-        return message.reply('❌ No text channels found to delete.');
+        return message.reply('❌ No channels found that can be deleted.');
       }
-      try {
-        for (const channel of channelsToDelete) {
-          await channel.delete('Nuke command executed');
-        }
-        message.channel.send(`✅ Successfully deleted ${channelsToDelete.length} channels.`);
-      } catch (err) {
-        console.error('❌ Failed to delete channels:', err);
-        message.reply('❌ An error occurred while trying to delete channels.');
+      for (const channel of channelsToDelete) {
+        await channel.delete().catch(console.error);
       }
+      message.channel.send(`🧨 Deleted ${channelsToDelete.length} channel(s).`);
     } else if (subcommand === 'rename') {
-      const newName = args.join('-');
-      if (!newName) {
-        return message.reply('❌ Please provide a new name. Usage: `$nuke rename <new-name> [count]`');
-      }
-      if (count < 1 || count > 50) {
+      const newName = args.shift();
+      const renameCount = parseInt(args[0]) || 1;
+      if (!newName) return message.reply('❌ Please specify a new name for the channels.');
+      if (renameCount < 1 || renameCount > 50) {
         return message.reply('❌ Please specify a number between 1 and 50 to rename.');
       }
-      const channelsToRename = message.guild.channels.cache.filter(channel => channel.type === 0 && channel.manageable).first(count);
+      const channelsToRename = message.guild.channels.cache.filter(channel => channel.type === 0 && channel.manageable).first(renameCount);
       if (channelsToRename.length === 0) {
-        return message.reply('❌ No text channels found to rename.');
+        return message.reply('❌ No channels found that can be renamed.');
       }
-      try {
-        for (const channel of channelsToRename) {
-          await channel.setName(newName, 'Nuke command executed');
-        }
-        message.channel.send(`✅ Successfully renamed ${channelsToRename.length} channels to \`${newName}\`.`);
-      } catch (err) {
-        console.error('❌ Failed to rename channels:', err);
-        message.reply('❌ An error occurred while trying to rename channels.');
+      for (const channel of channelsToRename) {
+        await channel.setName(newName).catch(console.error);
       }
+      message.channel.send(`✏️ Renamed ${channelsToRename.length} channel(s) to **${newName}**.`);
     } else {
-      message.reply('❌ Usage: `$nuke delete [count]` or `$nuke rename <new-name> [count]`');
+      message.reply('❌ Invalid subcommand. Use `$nuke delete [count]` or `$nuke rename <new-name> [count]`.');
     }
 }
 
-  // ---- AUTO-DELETE COMMAND SYSTEM ----
-if (message.content.startsWith('$autodelete')) {
-  // Only owner or immune users can use
-  if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
-    return message.reply('❌ You do not have permission to use this command.');
-  }
-
-  const args = message.content.trim().split(/ +/);
-  args.shift(); // remove "$autodelete"
-
-  // 🖼️ Customize this GIF (shows at bottom of the list embed)
-  const AUTO_DELETE_GIF = "https://media4.giphy.com/media/v1.Y2lkPTZjMDliOTUyc2I2NTRkY204aGEwcjRob2ZhbjU5ZDd1ZzF5NWFvMXBkc3ptYXEwOCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/4AoU8U5hfS2meEXc3q/giphy.gif";
-
-  // ---- LIST ----
-  if (args[0]?.toLowerCase() === 'list') {
-    const activeIds = Object.keys(botData.autoDeleteUsers || {});
-    if (activeIds.length === 0) {
-      return message.reply('📜 No users are currently marked for auto-deletion.');
-    }
-
-    // Build pretty list with cached usernames if possible
-    const listed = activeIds.map(id => {
-      const user = client.users.cache.get(id);
-      return `• ${user ? `**${user.tag}** (${id})` : `\`${id}\``}`;
-    });
-
-    const { EmbedBuilder } = require('discord.js');
-    const listEmbed = new EmbedBuilder()
-      .setColor(0xff5555)
-      .setTitle('🧾 Auto-Delete Active List')
-      .setDescription(listed.join('\n'))
-      .setFooter({ text: `Total Users: ${activeIds.length}` })
-      .setImage(AUTO_DELETE_GIF)
-      .setTimestamp();
-
-    return message.reply({ embeds: [listEmbed], allowedMentions: { parse: [] } });
-  }
-
-  // ---- MAIN FUNCTIONALITY ----
-  if (args.length === 0) {
-    return message.reply(
-      '⚠️ Usage: `$autodelete <userId> [on|off] [moreUserIds...]`\n' +
-      'Example:\n`$autodelete 123456789 on`\n`$autodelete 111 222 333`\n`$autodelete list`'
-    );
-  }
-
-  // Detect explicit ON/OFF mode
-  let explicitMode = null;
-  const modeIndex = args.findIndex(a => a.toLowerCase() === 'on' || a.toLowerCase() === 'off');
-  if (modeIndex !== -1) {
-    explicitMode = args[modeIndex].toLowerCase();
-    args.splice(modeIndex, 1);
-  }
-
-  // Collect all valid user IDs
-  const userIds = args.filter(id => /^\d+$/.test(id));
-  if (userIds.length === 0) {
-    return message.reply('⚠️ Please provide at least one valid **user ID**.');
-  }
-
-  let results = [];
-
-  for (const id of userIds) {
-    if (explicitMode === 'on') {
-      botData.autoDeleteUsers[id] = true;
-      results.push(`✅ Enabled for <@${id}>`);
-    } else if (explicitMode === 'off') {
-      delete botData.autoDeleteUsers[id];
-      results.push(`❌ Disabled for <@${id}>`);
-    } else {
-      botData.autoDeleteUsers[id] = !botData.autoDeleteUsers[id];
-      results.push(`${botData.autoDeleteUsers[id] ? '✅ Enabled' : '❌ Disabled'} for <@${id}>`);
-    }
-  }
-
-  markDirty();
-  const response = results.join('\n');
-  await message.reply(`🧹 **Auto-delete settings updated:**\n${response}`);
-
-  // Log to master/global log
-  const logMsg = `\`[AUTO-DELETE TOGGLE]\` **${message.author.tag}** updated settings:\n${response}`;
-  await sendLog(message.guild.id, logMsg);
-  return;
+// ==================================================
+// COMMAND: UNAUTHORIZED
+// ==================================================
+else if (command === 'unauthorized') {
+    message.channel.send('🚫 **ACCESS DENIED** 🚫\nYou are not authorized to perform this action.');
 }
 
-else if (command === 'userinfo') {
-    const user = message.mentions.users.first() || message.author;
-    const member = message.guild.members.cache.get(user.id);
-    message.channel.send(`🧑 User Info:\nUsername: ${user.username}\nTag: ${user.tag}\nID: ${user.id}\nJoined Server: ${member.joinedAt.toDateString()}\nAccount Created: ${user.createdAt.toDateString()}`);
-}
-
-else if (command === 'avatar') {
-    const user = message.mentions.users.first() || message.author;
-    message.channel.send(`${user.username}'s Avatar: ${user.displayAvatarURL({ dynamic: true, size: 1024 })}`);
-}
-
-else if (command === 'serverinfo') {
-    const guild = message.guild;
-    message.channel.send(`🏠 Server Info:\nName: ${guild.name}\nID: ${guild.id}\nMembers: ${guild.memberCount}\nCreated: ${guild.createdAt.toDateString()}`);
-}
-
-else if (command === 'shout') {
-    if (!args.length) return message.reply('📢 Provide a message to shout.');
-    message.channel.send(args.join(' ').toUpperCase());
-}
-
-else if (command === 'spoiler') {
-    if (!args.length) return message.reply('🤐 Provide a message to hide as spoiler.');
-    message.channel.send(`||${args.join(' ')}||`);
-}
-
-else if (command === 'say') {
-    if (!args.length) return message.reply('📣 Provide a message to echo.');
-    message.channel.send(args.join(' '));
-}
-
-else if (command === 'send') {
-    if (args.length < 2) return message.reply('✉️ Usage: $send <channelID> <message>');
-    const channel = client.channels.cache.get(args[0]);
-    if (!channel) return message.reply('❌ Channel not found or I do not have access.');
-    if (!channel.isTextBased()) return message.reply('❌ That channel is not a text channel.');
-    const botMember = channel.guild.members.me;
-    if (!channel.permissionsFor(botMember)?.has('SendMessages')) return message.reply('❌ I do not have permission to send messages in that channel.');
-    channel.send(args.slice(1).join(' ')).then(() => message.reply(`✅ Message sent to #${channel.name} in ${channel.guild.name}.`)).catch(err => message.reply(`❌ Failed to send message. Error: ${err.message}`));
-}
-
-else if (command === 'warn') {
-    const target = message.mentions.members.first();
-    if (!target) return message.reply('⚠️ Tag a user to warn.');
-    if (isImmune(target.user)) return message.reply('❌ This user is immune!');
-    if (!checkPermission(PermissionsBitField.Flags.KickMembers)) return;
-    const reason = args.slice(1).join(' ') || 'No reason provided';
-    if (!botData.warnings[target.id]) botData.warnings[target.id] = [];
-    botData.warnings[target.id].push({ reason, date: new Date().toISOString(), mod: message.author.tag });
-    saveWarnings();
-    message.reply(`⚠️ Warned ${target.user.tag}. Reason: ${reason}`);
-}
-
-else if (command === 'warnings') {
-    const target = message.mentions.members.first() || message.member;
-    const userWarnings = botData.warnings[target.id] || [];
-    if (!userWarnings.length) return message.reply('ℹ️ No warnings found.');
-    let text = `⚠️ Warnings for ${target.user.tag}:\n`;
-    userWarnings.forEach((w, i) => text += `${i + 1}. [${w.date}] ${w.mod}: ${w.reason}\n`);
-    message.channel.send(text);
-}
-
-else if (command === 'clear') {
-  // ✅ Owner or immune users only
-  if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
-    return message.reply('❌ You do not have permission to use this command.')
-      .then(msg => setTimeout(() => msg.delete().catch(() => {}), 4000));
-  }
-
-  // ✅ Cooldown to prevent spam
-  const clearCooldowns = global.clearCooldowns || (global.clearCooldowns = new Set());
-  if (clearCooldowns.has(message.author.id)) {
-    return message.reply('⏳ Please wait a few seconds before using this again.')
-      .then(msg => setTimeout(() => msg.delete().catch(() => {}), 4000));
-  }
-  clearCooldowns.add(message.author.id);
-  setTimeout(() => clearCooldowns.delete(message.author.id), 5000); // 5 sec cooldown
-
-  const count = parseInt(args[0]);
-  if (!count || count < 1 || count > 100) {
-    return message.reply('❌ Enter a number between 1–100.')
-      .then(msg => setTimeout(() => msg.delete().catch(() => {}), 4000));
-  }
-
-  try {
-    // Delete command message first
-    await message.delete().catch(() => {});
-
-    // Perform the bulk deletion
-    const requested = count;
-    const deleted = await message.channel.bulkDelete(requested, true);
-    const skipped = requested - deleted.size;
-
-    // 🧹 Temporary confirmation
-    const confirmMsg = await message.channel.send(
-      skipped > 0
-        ? `🧹 Deleted ${deleted.size} messages (skipped ${skipped} old messages).`
-        : `🧹 Deleted ${deleted.size} messages.`
-    );
-    setTimeout(() => confirmMsg.delete().catch(() => {}), 4000);
-
-    // 🪶 Log embed
-    const logEmbed = new EmbedBuilder()
-      .setColor(0x5865F2)
-      .setTitle('🧹 Message Clear Executed')
-      .addFields(
-        { name: 'Server', value: `${message.guild.name}`, inline: false },
-        { name: 'Moderator', value: `${message.author.tag} (<@${message.author.id}>)`, inline: false },
-        { name: 'Channel', value: `<#${message.channel.id}>`, inline: true },
-        { name: 'Messages Deleted', value: `${deleted.size}`, inline: true },
-        { name: 'Skipped (Old Messages)', value: `${skipped}`, inline: true }
-      )
-      .setFooter({ text: `User ID: ${message.author.id}` })
-      .setTimestamp();
-
-    // ✅ Send log to all log systems
-    await sendLog(message.guild.id, { embeds: [logEmbed] });
-
-  } catch (err) {
-    console.error('❌ Clear command error:', err);
-    message.reply('❌ Cannot delete messages (they may be older than 14 days or I lack permissions).')
-      .then(msg => setTimeout(() => msg.delete().catch(() => {}), 4000));
-  }
-}
-
-else if (command === 'lock') {
-    if (!checkPermission(PermissionsBitField.Flags.ManageChannels)) return;
-    message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: false }).then(() => message.reply('🔒 Channel locked.')).catch(() => message.reply('❌ Cannot lock this channel.'));
-}
-
-else if (command === 'unlock') {
-    if (!checkPermission(PermissionsBitField.Flags.ManageChannels)) return;
-    message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: true }).then(() => message.reply('🔓 Channel unlocked.')).catch(() => message.reply('❌ Cannot unlock this channel.'));
-}
-
-else if (command === 'slowmode') {
-    if (!checkPermission(PermissionsBitField.Flags.ManageChannels)) return;
-    const time = parseInt(args[0]);
-    if (isNaN(time) || time < 0 || time > 21600) return message.reply('❌ Enter a valid number (0-21600 seconds).');
-    message.channel.setRateLimitPerUser(time).then(() => message.reply(`🐌 Slowmode set to ${time} seconds.`)).catch(() => message.reply('❌ Cannot set slowmode.'));
-}
-
-else if (command === 'role') {
-    const subcommand = args.shift();
-    const target = message.mentions.members.first();
-    if (!target) return message.reply('🏷️ Tag a user.');
-    if (isImmune(target.user)) return message.reply('❌ This user is immune!');
-    const roleName = args.join(' ');
-    const role = message.guild.roles.cache.find(r => r.name === roleName);
-    if (!role) return message.reply('❌ Role not found.');
-    if (!checkPermission(PermissionsBitField.Flags.ManageRoles)) return;
-    if (subcommand === 'add') {
-      target.roles.add(role).then(() => message.reply(`✅ Added role ${role.name} to ${target.user.tag}.`)).catch(() => message.reply('❌ Cannot add role.'));
-    } else if (subcommand === 'remove') {
-      target.roles.remove(role).then(() => message.reply(`✅ Removed role ${role.name} from ${target.user.tag}.`)).catch(() => message.reply('❌ Cannot remove role.'));
-    } else {
-      message.reply('❌ Use `$role add @user <role>` or `$role remove @user <role>`');
-    }
-}
-
-  // ===============================
-// XP + Prestige System — Full Command Suite
-// ===============================
-
-// ---- RANK CARD (Prestige Frames + Gradient Bar) ----
-if (command === 'rank') {
-  const user = message.mentions.users.first() || message.author;
-  const xpData = getXPData(user.id);
-  const balance = getBalance(user.id);
-  const xpToLevel =
-    botData.xpSettings.xpToNext * Math.pow(xpData.level, botData.xpSettings.levelMultiplier);
-
-  const { Rank } = require('canvacord');
-
-const prestigeIcon = ['⭐','🌟','💫','🔥','⚡','👑','💎','🏆','🪙','🎖️'][xpData.prestige] || '⭐';
-
-// ✅ Safe fallback backgrounds (Imgur — guaranteed online)
-const prestigeBackgrounds = {
-  0: 'https://i.imgur.com/Qm9X9jN.png',
-  1: 'https://i.imgur.com/Qm9X9jN.png',
-  2: 'https://i.imgur.com/Qm9X9jN.png',
-  3: 'https://i.imgur.com/Qm9X9jN.png',
-  4: 'https://i.imgur.com/Qm9X9jN.png',
-  5: 'https://i.imgur.com/Qm9X9jN.png',
-  6: 'https://i.imgur.com/Qm9X9jN.png',
-  7: 'https://i.imgur.com/Qm9X9jN.png',
-  8: 'https://i.imgur.com/Qm9X9jN.png',
-  9: 'https://i.imgur.com/Qm9X9jN.png',
-};
-
-const background = xpData.background || prestigeBackgrounds[Math.min(xpData.prestige, 9)] || 'https://i.imgur.com/Qm9X9jN.png';
-
-  const rank = new Rank()
-    .setAvatar(user.displayAvatarURL({ extension:'png' }))
-    .setUsername(`${user.username} ${prestigeIcon.repeat(Math.min(xpData.prestige,5))}`)
-    .setDiscriminator(user.discriminator)
-    .setLevel(xpData.level).setRank(xpData.prestige)
-    .setCurrentXP(xpData.xp).setRequiredXP(xpToLevel)
-    .setProgressBar(['#FFD700','#FFA500','#FF4500'],'GRADIENT')
-    .setBackground('IMAGE',background)
-    .setOverlay('#000',0.3,false)
-    .setLevelColor('#FFD700','#FFF').setRankColor('#00BFFF','#FFF');
-    
-  const card = await rank.build();
-  const embed = new EmbedBuilder()
-    .setColor(0xFFD700)
-    .setTitle(`${user.username}'s Profile`)
-    .setDescription(
-      `🧠 **Level:** ${xpData.level}\n⭐ **Prestige:** ${xpData.prestige}\n` +
-      `💰 **Coins:** ${balance}\n📈 **Total XP:** ${xpData.totalXp.toLocaleString()}`
-    )
-    .setFooter({ text:'XP & Prestige System — Prestige Frames Edition' });
-
-  message.channel.send({ embeds:[embed], files:[{ attachment:card, name:'rank.png' }] });
-}
-
-// ---- SET BACKGROUND ----
-if (command === 'setbg') {
-  const url = args[0];
-  if (!url || !/^https?:\/\/[^\s]+$/.test(url))
-    return message.reply('⚠️ Provide a valid image URL.');
-  const data = getXPData(message.author.id);
-  data.background = url; saveXPData();
-  message.reply('✅ Background image updated for your rank card!');
-}
-
-// ---- PRESTIGE ----
-if (command === 'prestige') {
-  const data = getXPData(message.author.id);
-  if (data.level < botData.xpSettings.maxLevel)
-    return message.reply(`⛔ Reach level ${botData.xpSettings.maxLevel} to prestige!`);
-  if (data.prestige >= botData.xpSettings.maxPrestige)
-    return message.reply('🏁 You have reached max prestige!');
-  handlePrestige(message.author.id, data);
-  message.reply(`⭐ You have prestiged! Now Prestige ${data.prestige}.`);
-}
-
-// ---- XP LEADERBOARD ----
-if (command === 'xpleaderboard' || command === 'xplb') {
-  const top = Object.entries(botData.xpData)
-    .filter(([id]) => message.guild.members.cache.has(id))
-    .sort(([,a],[,b]) => b.totalXp - a.totalXp).slice(0,10);
-  if (!top.length) return message.reply('📉 No XP data found yet.');
-  const embed = new EmbedBuilder()
-    .setTitle(`🏆 XP Leaderboard — ${message.guild.name}`)
-    .setColor(0xFFD700)
-    .setDescription(top.map(([id,d],i)=>{
-      const coins=getBalance(id);
-      const icon=['⭐','🌟','💫','🔥','⚡','👑','💎','🏆','🪙','🎖️'][d.prestige]||'⭐';
-      return `**${i+1}.** <@${id}> — 🧠 Lvl **${d.level}** (${icon}${d.prestige}) • 💰 **${coins}**`;
-    }).join('\n'))
-    .setFooter({ text:'Prestige = total resets, Level resets every 100.' });
-  message.channel.send({ embeds:[embed] });
-}
-
-// ---- XPINFO ----
-if (command === 'xpinfo') {
-  const target = message.mentions.users.first() || message.author;
-  const data = getXPData(target.id); const coins=getBalance(target.id);
-  const xpToNext=Math.floor(botData.xpSettings.xpToNext*Math.pow(data.level,botData.xpSettings.levelMultiplier));
-  const remaining=Math.max(0,xpToNext-data.xp);
-  const percent=Math.min(100,((data.xp/xpToNext)*100).toFixed(1));
-  const totalBars=20, filled=Math.round((percent/100)*totalBars);
-  const bar=`\`${'█'.repeat(filled)}${'░'.repeat(totalBars-filled)}\` ${percent}%`;
-  const s=botData.xpSettings;
-  const embed=new EmbedBuilder()
-    .setColor(0x00bfff).setTitle(`📘 XP & CP Information — ${target.username}`)
-    .setThumbnail(target.displayAvatarURL({ dynamic:true }))
-    .setDescription(
-      `**🧠 Level:** ${data.level}\n⭐ **Prestige:** ${data.prestige}\n💰 **Coins (CP):** ${coins.toLocaleString()}\n`+
-      `**📈 XP:** ${data.xp.toLocaleString()} / ${xpToNext.toLocaleString()}\n${bar}\n`+
-      `**⬆️ Needed:** ${remaining.toLocaleString()} XP\n\n`+
-      `**🎯 XP Earn Rate:**\n• ${s.baseXp}–${s.baseXp+10} XP per message\n• Cooldown: ${s.cooldown}s\n• Growth: ${s.levelMultiplier}× per level\n• Reward: ${s.coinRewardPerLevel} CP/level\n• Prestige bonus: ${s.coinRewardPerPrestige}×tier CP\n\n`+
-      `**🏅 How to Earn:**\n• Chat every ${s.cooldown}s\n• Join events & commands\n• Level up & prestige\n• Max level ${s.maxLevel} → new prestige\n\n`+
-      `**📖 Tips:**\n• Prestige resets level but boosts rewards\n• Use $rank & $xpleaderboard to track progress`
-    )
-    .setFooter({ text:'XP & Prestige System — Player Guide' }).setTimestamp();
-  message.channel.send({ embeds:[embed] });
-}
-
-// ===============================
-// Level-Up Announcement Controls
-// ===============================
-
-// ---- SET LEVEL-UP CHANNEL ----
-if (command === 'setlevelupchannel') {
-  if (!isImmune(message.author)) return message.reply('❌ No permission.');
-  const ch = message.mentions.channels.first();
-  if (!ch) return message.reply('⚙️ Usage: `$setlevelupchannel #channel`');
-  botData.levelUpChannel = ch.id; markDirty();
-  message.reply(`✅ Level-up announcements will now appear in ${ch}.`);
-}
-
-// ---- DISABLE LEVEL-UP ANNOUNCEMENTS ----
-if (command === 'disablelevelup') {
-  if (!isImmune(message.author)) return message.reply('❌ No permission.');
-  botData.levelUpChannel = null; markDirty();
-  message.reply('🚫 Level-up announcements disabled.');
-}
-
-// ===============================
-// XP Management & Admin Commands
-// ===============================
-
-if (command === 'addxp') {
-  if (!isImmune(message.author)) return message.reply('❌ No permission.');
-  const u=message.mentions.users.first(); const amt=parseInt(args[1]);
-  if(!u||isNaN(amt))return message.reply('⚙️ `$addxp @user <amount>`');
-  addXP(u.id,amt); message.reply(`✅ Added **${amt} XP** to ${u.username}.`);
-}
-
-if (command === 'removexp') {
-  if (!isImmune(message.author)) return message.reply('❌ No permission.');
-  const u=message.mentions.users.first(); const amt=parseInt(args[1]);
-  if(!u||isNaN(amt))return message.reply('⚙️ `$removexp @user <amount>`');
-  const d=getXPData(u.id); d.xp=Math.max(0,d.xp-amt); saveXPData();
-  message.reply(`🧹 Removed **${amt} XP** from ${u.username}.`);
-}
-
-if (command === 'setlevel') {
-  if (!isImmune(message.author)) return message.reply('❌ No permission.');
-  const u=message.mentions.users.first(); const lvl=parseInt(args[1]);
-  if(!u||isNaN(lvl))return message.reply('⚙️ `$setlevel @user <level>`');
-  const d=getXPData(u.id); d.level=Math.min(lvl,botData.xpSettings.maxLevel); saveXPData();
-  message.reply(`🔧 Set ${u.username}'s level to **${d.level}**.`);
-}
-
-if (command === 'setprestige') {
-  if (!isImmune(message.author)) return message.reply('❌ No permission.');
-  const u=message.mentions.users.first(); const p=parseInt(args[1]);
-  if(!u||isNaN(p))return message.reply('⚙️ `$setprestige @user <prestige>`');
-  const d=getXPData(u.id); d.prestige=Math.min(p,botData.xpSettings.maxPrestige); saveXPData();
-  message.reply(`👑 Set ${u.username}'s prestige to **${d.prestige}**.`);
-}
-
-if (command === 'resetxp') {
-  if (!isImmune(message.author)) return message.reply('❌ No permission.');
-  const u=message.mentions.users.first();
-  if(!u)return message.reply('⚙️ `$resetxp @user`');
-  delete botData.xpData[u.id]; saveXPData();
-  message.reply(`♻️ Reset all XP data for ${u.username}.`);
-}
-
-if (command === 'xpsettings') {
-  const s=botData.xpSettings;
-  const embed=new EmbedBuilder()
-    .setTitle('⚙️ XP System Settings').setColor(0x00bfff)
-    .setDescription(
-      `Base XP/msg: ${s.baseXp}\nCooldown: ${s.cooldown}s\nXP Next(base): ${s.xpToNext}\nMultiplier: ${s.levelMultiplier}\nCoins/Level: ${s.coinRewardPerLevel}\nCoins/Prestige: ${s.coinRewardPerPrestige}\nMax Level: ${s.maxLevel}\nMax Prestige: ${s.maxPrestige}`
-    ).setFooter({ text:'Use $setxpsetting <key> <value> to modify.' });
-  message.channel.send({ embeds:[embed] });
-}
-
-if (command === 'setxpsetting') {
-  if (!isImmune(message.author)) return message.reply('❌ No permission.');
-  const k=args[0]; const v=parseFloat(args[1]);
-  if(!k||isNaN(v))return message.reply('⚙️ `$setxpsetting <key> <value>`');
-  if(!(k in botData.xpSettings))return message.reply('⚠️ Invalid key.');
-  botData.xpSettings[k]=v; markDirty();
-  message.reply(`✅ Updated **${k}** → **${v}**.`);
-}
-
+// ==================================================
+// COMMAND: QOTD
+// ==================================================
 else if (command === 'qotd') {
     if (!checkPermission(PermissionsBitField.Flags.ManageChannels)) return;
     const subcommand = args[0];
@@ -4972,176 +4897,391 @@ else if (command === 'qotd') {
       }
       activeQotdChannels.add(channelId);
       saveQotdState();
-      message.reply('✅ Question of the Day has been enabled in this channel!');
-      const channel = message.channel;
-      const sendInitialQuestion = () => {
-        const question = qotdQuestions[Math.floor(Math.random() * qotdQuestions.length)];
-        channel.send(`**❓ Question of the Day:** ${question}`);
-        logToGlobal(question, message.guild.name, channel.name);
-      };
-      sendInitialQuestion();
+      sendQuestion(channelId);
       const interval = setInterval(() => sendQuestion(channelId), 24 * 60 * 60 * 1000);
       qotdIntervals.set(channelId, interval);
+      message.reply('✅ QOTD has been enabled in this channel.');
     } else if (subcommand === 'off') {
-      if (!activeQotdChannels.has(channelId)) {
-        return message.reply('❌ QOTD is not currently active in this channel.');
-      }
-      stopQotd(channelId); // Use the helper function
-      message.reply('✅ Question of the Day has been disabled in this channel.');
+      stopQotd(channelId);
+      message.reply('✅ QOTD has been disabled in this channel.');
     } else if (subcommand === 'everyone') {
-        const toggle = args[1]?.toLowerCase();
-        if (toggle !== 'on' && toggle !== 'off') {
-            return message.reply('❌ Usage: `$qotd everyone <on|off>`');
-        }
-        botData.qotdSettings[channelId] = { everyone: toggle === 'on' };
+      const toggle = args[1]?.toLowerCase();
+      if (toggle === 'on') {
+        if (!botData.qotdSettings[channelId]) botData.qotdSettings[channelId] = {};
+        botData.qotdSettings[channelId].everyone = true;
         saveQotdSettings();
-        message.reply(`✅ @everyone pings for QOTD have been turned **${toggle}** in this channel.`);
+        message.reply('✅ QOTD will now ping @everyone.');
+      } else if (toggle === 'off') {
+        if (botData.qotdSettings[channelId]) botData.qotdSettings[channelId].everyone = false;
+        saveQotdSettings();
+        message.reply('✅ QOTD will no longer ping @everyone.');
+      } else {
+        message.reply('❌ Usage: `$qotd everyone on` or `$qotd everyone off`');
+      }
     } else {
-      message.reply('❌ Usage: `$qotd on`, `$qotd off`, or `$qotd everyone <on|off>`.');
+      message.reply('❌ Usage: `$qotd on`, `$qotd off`, or `$qotd everyone on/off`');
     }
 }
 
+// ==================================================
+// COMMAND: SETWELCOME
+// ==================================================
 else if (command === 'setwelcome') {
     if (!checkPermission(PermissionsBitField.Flags.ManageGuild)) return;
     const channel = message.mentions.channels.first() || message.channel;
-    
-    let welcomeMessage = '';
-    let gifUrl = null;
-    
-    // Check if the last argument is a URL
-    const potentialUrl = args[args.length - 1];
-    if (potentialUrl && (potentialUrl.startsWith('http://') || potentialUrl.startsWith('https://'))) {
-        gifUrl = potentialUrl;
-        welcomeMessage = args.slice(1, -1).join(' '); // All args except channel mention and URL
-    } else {
-        welcomeMessage = args.slice(1).join(' '); // All args except channel mention
-    }
-
-    if (!welcomeMessage) return message.reply('❌ Please provide a welcome message. Usage: `$setwelcome [#channel] <message> [gif_url]`');
-
-    botData.welcomeMessages[message.guild.id] = { 
-        channelId: channel.id, 
-        message: welcomeMessage,
-        gifUrl: gifUrl // Store the URL (can be null)
-    };
+    const parts = args.filter(a => !a.startsWith('<#')).join(' ').split('|').map(p => p.trim());
+    const welcomeMessage = parts[0] || 'Welcome {user} to {server}!';
+    const gifUrl = parts[1] || null;
+    botData.welcomeMessages[message.guild.id] = { channelId: channel.id, message: welcomeMessage, gifUrl: gifUrl };
     saveWelcomeMessages();
-    
-    let confirmation = `✅ Welcome message set for ${channel}.`;
-    if (gifUrl) {
-        confirmation += `\nThe GIF will also be displayed.`;
-    }
-    message.reply(confirmation + `\nUse \`{user}\` to tag the user, \`{server}\` for the server name, and \`{membercount}\` for the member count.`);
+    let reply = `✅ Welcome message set in ${channel}.\nMessage: "${welcomeMessage}"`;
+    if (gifUrl) reply += `\nGIF: ${gifUrl}`;
+    message.reply(reply);
 }
 
+// ==================================================
+// COMMAND: CLEARWELCOME
+// ==================================================
 else if (command === 'clearwelcome') {
     if (!checkPermission(PermissionsBitField.Flags.ManageGuild)) return;
-    if (!botData.welcomeMessages[message.guild.id]) {
-      return message.reply('❌ No welcome message is currently set for this server.');
-    }
     delete botData.welcomeMessages[message.guild.id];
     saveWelcomeMessages();
     message.reply('✅ Welcome message has been cleared for this server.');
 }
 
+// ==================================================
+// COMMAND: SETLEAVE
+// ==================================================
 else if (command === 'setleave') {
     if (!checkPermission(PermissionsBitField.Flags.ManageGuild)) return;
     const channel = message.mentions.channels.first() || message.channel;
-    
-    let leaveMessage = '';
-    let gifUrl = null;
-
-    // Check if the last argument is a URL
-    const potentialUrl = args[args.length - 1];
-    if (potentialUrl && (potentialUrl.startsWith('http://') || potentialUrl.startsWith('https://'))) {
-        gifUrl = potentialUrl;
-        leaveMessage = args.slice(1, -1).join(' ');
-    } else {
-        leaveMessage = args.slice(1).join(' ');
-    }
-
-    if (!leaveMessage) return message.reply('❌ Please provide a leave message. Usage: `$setleave [#channel] <message> [gif_url]`');
-    
-    botData.leaveMessages[message.guild.id] = { 
-        channelId: channel.id, 
-        message: leaveMessage,
-        gifUrl: gifUrl // Store the URL (can be null)
-    };
+    const parts = args.filter(a => !a.startsWith('<#')).join(' ').split('|').map(p => p.trim());
+    const leaveMessage = parts[0] || '{user} has left {server}.';
+    const gifUrl = parts[1] || null;
+    botData.leaveMessages[message.guild.id] = { channelId: channel.id, message: leaveMessage, gifUrl: gifUrl };
     saveLeaveMessages();
+    let reply = `✅ Leave message set in ${channel}.\nMessage: "${leaveMessage}"`;
+    if (gifUrl) reply += `\nGIF: ${gifUrl}`;
+    message.reply(reply);
+}
 
-    let confirmation = `✅ Leave message set for ${channel}.`;
-    if (gifUrl) {
-        confirmation += `\nThe GIF will also be displayed.`;
-    }
-    message.reply(confirmation + `\nUse \`{user}\` for the user's tag, \`{server}\` for the server name, and \`{membercount}\` for the member count.`);
-      }
-
+// ==================================================
+// COMMAND: CLEARLEAVE
+// ==================================================
 else if (command === 'clearleave') {
     if (!checkPermission(PermissionsBitField.Flags.ManageGuild)) return;
-    if (!botData.leaveMessages[message.guild.id]) {
-      return message.reply('❌ No leave message is currently set for this server.');
-    }
     delete botData.leaveMessages[message.guild.id];
     saveLeaveMessages();
     message.reply('✅ Leave message has been cleared for this server.');
-} 
+}
 
-});
+// ==================================================
+// COMMAND: XP LEADERBOARD
+// ==================================================
+else if (command === 'xpleaderboard' || command === 'xplb') {
+  const entries = Object.entries(botData.xpData)
+    .map(([id, d]) => ({ id, ...d }))
+    .sort((a, b) => (b.prestige * 1000000 + b.level * 10000 + b.xp) - (a.prestige * 1000000 + a.level * 10000 + a.xp))
+    .slice(0, 10);
 
-// Track how many times data has been saved this session
+  if (entries.length === 0) return message.reply('No XP data yet.');
 
-client.on("messageCreate", async (message) => {
-  if (message.author.bot) return;
+  const desc = entries.map((e, i) => `**${i + 1}.** <@${e.id}> — P${e.prestige} Lv${e.level} (${e.totalXp.toLocaleString()} XP)`).join('\n');
+  const embed = new EmbedBuilder().setColor(0xFFD700).setTitle('🏆 XP Leaderboard').setDescription(desc).setTimestamp();
+  message.channel.send({ embeds: [embed] });
+}
 
-  const prefix = "$"; // Your bot's prefix
-  if (!message.content.startsWith(prefix)) return;
+// ==================================================
+// COMMAND: XPINFO
+// ==================================================
+else if (command === 'xpinfo') {
+  const user = message.mentions.users.first() || message.author;
+  const d = getXPData(user.id);
+  const xpNeeded = Math.floor(botData.xpSettings.xpToNext * Math.pow(d.level, botData.xpSettings.levelMultiplier));
+  const pct = Math.min(100, Math.floor((d.xp / xpNeeded) * 100));
+  const bar = '█'.repeat(Math.floor(pct / 10)) + '░'.repeat(10 - Math.floor(pct / 10));
 
-  const args = message.content.slice(prefix.length).trim().split(/ +/);
-  const command = args.shift().toLowerCase();
+  const embed = new EmbedBuilder()
+    .setColor(0x00BFFF)
+    .setTitle(`📊 ${user.username}'s XP Info`)
+    .setThumbnail(user.displayAvatarURL({ dynamic: true }))
+    .addFields(
+      { name: '⭐ Prestige', value: `${d.prestige}`, inline: true },
+      { name: '📈 Level', value: `${d.level}`, inline: true },
+      { name: '✨ XP', value: `${d.xp}/${xpNeeded}`, inline: true },
+      { name: '📊 Progress', value: `[${bar}] ${pct}%`, inline: false },
+      { name: '🏅 Total XP', value: `${d.totalXp.toLocaleString()}`, inline: true },
+      { name: '💰 Balance', value: `${getBalance(user.id).toLocaleString()} CP`, inline: true }
+    )
+    .setTimestamp();
+  message.channel.send({ embeds: [embed] });
+}
 
-  // ---- Force Save Command ----
-  if (command === "forcesave") {
-    // Only the bot owner or immune users can use this
+// ==================================================
+// COMMAND: RANK
+// ==================================================
+else if (command === 'rank') {
+  const user = message.mentions.users.first() || message.author;
+  const d = getXPData(user.id);
+  const xpNeeded = Math.floor(botData.xpSettings.xpToNext * Math.pow(d.level, botData.xpSettings.levelMultiplier));
+  const pct = Math.min(100, Math.floor((d.xp / xpNeeded) * 100));
+  const bar = '█'.repeat(Math.floor(pct / 10)) + '░'.repeat(10 - Math.floor(pct / 10));
+
+  const embed = new EmbedBuilder()
+    .setColor(0xFFD700)
+    .setTitle(`🎖️ ${user.username}'s Rank Card`)
+    .setThumbnail(user.displayAvatarURL({ dynamic: true }))
+    .addFields(
+      { name: '⭐ Prestige', value: `${d.prestige}`, inline: true },
+      { name: '📈 Level', value: `${d.level}`, inline: true },
+      { name: '✨ XP', value: `${d.xp}/${xpNeeded}`, inline: true },
+      { name: '📊 Progress', value: `[${bar}] ${pct}%`, inline: false }
+    )
+    .setImage(d.background || 'https://i.imgur.com/Qm9X9jN.png')
+    .setTimestamp();
+  message.channel.send({ embeds: [embed] });
+}
+
+// ==================================================
+// COMMAND: SETBG
+// ==================================================
+else if (command === 'setbg') {
+  const url = args[0];
+  if (!url || !/^https?:\/\/\S+\.\S+/.test(url)) {
+    return message.reply('⚙️ Usage: `$setbg <imageURL>`');
+  }
+  const d = getXPData(message.author.id);
+  d.background = url;
+  saveXPData();
+  message.reply('✅ Rank card background updated!');
+}
+
+// ==================================================
+// COMMAND: PRESTIGE
+// ==================================================
+else if (command === 'prestige') {
+  const d = getXPData(message.author.id);
+  if (d.level < botData.xpSettings.maxLevel) {
+    return message.reply(`❌ You must reach level **${botData.xpSettings.maxLevel}** to prestige.`);
+  }
+  if (d.prestige >= botData.xpSettings.maxPrestige) {
+    return message.reply(`🏆 You've reached max prestige (**${botData.xpSettings.maxPrestige}**)!`);
+  }
+  handlePrestige(message.author.id, d);
+  message.reply(`🌟 Congratulations! You're now **Prestige ${d.prestige}**!`);
+}
+
+// ==================================================
+// COMMAND: XPSETTINGS
+// ==================================================
+else if (command === 'xpsettings') {
+  const s = botData.xpSettings;
+  const embed = new EmbedBuilder()
+    .setColor(0x9B59B6)
+    .setTitle('⚙️ XP System Settings')
+    .addFields(
+      { name: 'Base XP', value: `${s.baseXp}`, inline: true },
+      { name: 'Cooldown', value: `${s.cooldown}s`, inline: true },
+      { name: 'XP to Next', value: `${s.xpToNext}`, inline: true },
+      { name: 'Level Multiplier', value: `${s.levelMultiplier}`, inline: true },
+      { name: 'Coin/Level', value: `${s.coinRewardPerLevel}`, inline: true },
+      { name: 'Coin/Prestige', value: `${s.coinRewardPerPrestige}`, inline: true },
+      { name: 'Max Level', value: `${s.maxLevel}`, inline: true },
+      { name: 'Max Prestige', value: `${s.maxPrestige}`, inline: true }
+    )
+    .setTimestamp();
+  message.channel.send({ embeds: [embed] });
+}
+
+// ==================================================
+// COMMAND: SETXPSETTING
+// ==================================================
+else if (command === 'setxpsetting') {
+  if (!isImmune(message.author)) return message.reply('❌ No permission.');
+  const k = args[0];
+  const v = parseFloat(args[1]);
+  if (!k || isNaN(v)) return message.reply('⚙️ `$setxpsetting <key> <value>`');
+  if (!(k in botData.xpSettings)) return message.reply('⚠️ Invalid key.');
+  botData.xpSettings[k] = v;
+  markDirty();
+  message.reply(`✅ Updated **${k}** → **${v}**.`);
+}
+
+// ==================================================
+// COMMAND: SETLEVELUPCHANNEL
+// ==================================================
+else if (command === 'setlevelupchannel') {
+  if (!isImmune(message.author)) return message.reply('❌ No permission.');
+  const ch = message.mentions.channels.first();
+  if (!ch) return message.reply('⚙️ Usage: `$setlevelupchannel #channel`');
+  botData.levelUpChannel = ch.id;
+  markDirty();
+  message.reply(`✅ Level-up announcements will now appear in ${ch}.`);
+}
+
+// ==================================================
+// COMMAND: DISABLELEVELUP
+// ==================================================
+else if (command === 'disablelevelup') {
+  if (!isImmune(message.author)) return message.reply('❌ No permission.');
+  botData.levelUpChannel = null;
+  markDirty();
+  message.reply('🚫 Level-up announcements disabled.');
+}
+
+// ==================================================
+// COMMAND: ADDXP
+// ==================================================
+else if (command === 'addxp') {
+  if (!isImmune(message.author)) return message.reply('❌ No permission.');
+  const u = message.mentions.users.first();
+  const amt = parseInt(args[1]);
+  if (!u || isNaN(amt)) return message.reply('⚙️ `$addxp @user <amount>`');
+  addXP(u.id, amt);
+  message.reply(`✅ Added **${amt}** XP to ${u.username}.`);
+}
+
+// ==================================================
+// COMMAND: REMOVEXP
+// ==================================================
+else if (command === 'removexp') {
+  if (!isImmune(message.author)) return message.reply('❌ No permission.');
+  const u = message.mentions.users.first();
+  const amt = parseInt(args[1]);
+  if (!u || isNaN(amt)) return message.reply('⚙️ `$removexp @user <amount>`');
+  const d = getXPData(u.id);
+  d.xp = Math.max(0, d.xp - amt);
+  d.totalXp = Math.max(0, d.totalXp - amt);
+  saveXPData();
+  message.reply(`✅ Removed **${amt}** XP from ${u.username}.`);
+}
+
+// ==================================================
+// COMMAND: SETLEVEL
+// ==================================================
+else if (command === 'setlevel') {
+  if (!isImmune(message.author)) return message.reply('❌ No permission.');
+  const u = message.mentions.users.first();
+  const lvl = parseInt(args[1]);
+  if (!u || isNaN(lvl)) return message.reply('⚙️ `$setlevel @user <level>`');
+  const d = getXPData(u.id);
+  d.level = Math.min(lvl, botData.xpSettings.maxLevel);
+  saveXPData();
+  message.reply(`🔧 Set ${u.username}'s level to **${d.level}**.`);
+}
+
+// ==================================================
+// COMMAND: SETPRESTIGE
+// ==================================================
+else if (command === 'setprestige') {
+  if (!isImmune(message.author)) return message.reply('❌ No permission.');
+  const u = message.mentions.users.first();
+  const p = parseInt(args[1]);
+  if (!u || isNaN(p)) return message.reply('⚙️ `$setprestige @user <prestige>`');
+  const d = getXPData(u.id);
+  d.prestige = Math.min(p, botData.xpSettings.maxPrestige);
+  saveXPData();
+  message.reply(`👑 Set ${u.username}'s prestige to **${d.prestige}**.`);
+}
+
+// ==================================================
+// COMMAND: RESETXP
+// ==================================================
+else if (command === 'resetxp') {
+  if (!isImmune(message.author)) return message.reply('❌ No permission.');
+  const u = message.mentions.users.first();
+  if (!u) return message.reply('⚙️ `$resetxp @user`');
+  delete botData.xpData[u.id];
+  saveXPData();
+  message.reply(`🔄 Reset XP data for ${u.username}.`);
+}
+
+// ==================================================
+// COMMAND: FORCESAVE
+// ==================================================
+else if (command === 'forcesave') {
     if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
-      return message.reply("❌ You don’t have permission to force save.");
+      return message.reply("❌ You don't have permission to force save.");
     }
 
     try {
       const before = Date.now();
+      dirty = true;
       await saveData();
       const duration = ((Date.now() - before) / 1000).toFixed(2);
 
       saveCount++;
       lastSaveTime = new Date().toLocaleTimeString();
 
-      // Build an info message
-      const infoMsg = `💾 **Force Save Complete!**  
-**User:** ${message.author.tag} (${message.author.id})
-**Save Count (this session):** ${saveCount}
-**Last Save:** ${lastSaveTime}
-**Duration:** ${duration}s`;
+      const infoEmbed = new EmbedBuilder()
+        .setColor(0x00FF00)
+        .setTitle('💾 Force Save Complete')
+        .addFields(
+          { name: '⏱️ Duration', value: `${duration}s`, inline: true },
+          { name: '🔢 Save Count', value: `${saveCount}`, inline: true },
+          { name: '🕐 Last Save', value: lastSaveTime, inline: true }
+        )
+        .setTimestamp();
 
-      await message.reply(infoMsg);
-
-      // --- Log it globally and/or to master log ---
-      const logMsg = `💾 **Force Save Triggered**
-👤 User: **${message.author.tag}** (${message.author.id})
-🏠 Server: **${message.guild?.name || 'DM'}**
-🕒 Time: ${lastSaveTime}
-💾 Total Saves This Session: ${saveCount}
-⚙️ Duration: ${duration}s`;
-
-      await sendLog(message.guild?.id, logMsg);
-      console.log(`[DATA] Force save by ${message.author.tag} (${duration}s) — total saves: ${saveCount}`);
+      message.reply({ embeds: [infoEmbed] });
     } catch (err) {
-      console.error("Force save failed:", err);
-      message.reply("⚠️ Failed to save data. Check console for details.");
+      console.error('[FORCESAVE ERROR]', err);
+      message.reply('❌ Failed to save data. Check console for errors.');
     }
-
-    // ✅ Stop here after handling $forcesave
     return;
   }
 
-}); // ---- End of messageCreate ----
+// ==================================================
+// END OF MESSAGE HANDLER
+// ==================================================
+});
 
-// ---- Login ----
+// ==================================================
+// SECONDARY MESSAGE HANDLER - FORCESAVE FALLBACK
+// ==================================================
+client.on("messageCreate", async (message) => {
+  if (message.author.bot) return;
+
+  const prefix = "$";
+  if (!message.content.startsWith(prefix)) return;
+
+  const args = message.content.slice(prefix.length).trim().split(/ +/);
+  const command = args.shift().toLowerCase();
+
+  if (command === "forcesave") {
+    if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
+      return message.reply("❌ You don't have permission to force save.");
+    }
+
+    try {
+      const before = Date.now();
+      dirty = true;
+      await saveData();
+      const duration = ((Date.now() - before) / 1000).toFixed(2);
+
+      saveCount++;
+      lastSaveTime = new Date().toLocaleTimeString();
+
+      const infoEmbed = new EmbedBuilder()
+        .setColor(0x00FF00)
+        .setTitle('💾 Force Save Complete')
+        .addFields(
+          { name: '⏱️ Duration', value: `${duration}s`, inline: true },
+          { name: '🔢 Save Count', value: `${saveCount}`, inline: true },
+          { name: '🕐 Last Save', value: lastSaveTime, inline: true }
+        )
+        .setTimestamp();
+
+      message.reply({ embeds: [infoEmbed] });
+    } catch (err) {
+      console.error('[FORCESAVE ERROR]', err);
+      message.reply('❌ Failed to save data. Check console for errors.');
+    }
+    return;
+  }
+});
+
+// ==================================================
+// BOT LOGIN
+// ==================================================
 client.login(process.env.BOT_TOKEN);
