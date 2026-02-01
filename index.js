@@ -53,6 +53,8 @@ app.listen(PORT, () => console.log(`✅ Keep-alive server running on port ${PORT
 // ==================================================
 // DISCORD CLIENT INITIALIZATION
 // ==================================================
+require('events').EventEmitter.defaultMaxListeners = 20;
+
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
