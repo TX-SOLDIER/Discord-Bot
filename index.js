@@ -8723,7 +8723,7 @@ else if (command === 'citycam') {
         },
         tokyo: {
             name: "🇯🇵 Tokyo – Shibuya Crossing",
-            url: "https://www.youtube.com/watch?v=3hZp1p4z1Ww",
+            url: "https://www.youtube.com/live/tujkoXI8rWM?si=rBML8lABDgUO1E_8",
             platform: "YouTube",
             aliases: ["tokyo", "japan", "shibuya"]
         },
