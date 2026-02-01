@@ -10217,13 +10217,44 @@ RULES:
                 usedModel = AI_MODELS[i].name;
                 success = true;
 
-                // Clean up response (remove thinking/reasoning and extra formatting)
-data.choices[0].message.content = data.choices[0].message.content
-    // Remove thinking blocks (DeepSeek R1 style)
-    .replace(/<think>[\s\S]*?<\/think>/gi, '')
-    .replace(/\*\*Thinking[\s\S]*?\*\*\n?/gi, '')
-    .replace(/^(Okay|Alright|Let me|I need to|I should|Let's see|Hmm)[\s\S]*?\n\n/gi, '')
-    // Remove markdown formatting
+                // Success!
+usedModel = AI_MODELS[i].name;
+success = true;
+
+// Clean up response (remove thinking/reasoning)
+let cleanedResponse = data.choices[0].message.content;
+
+// Method 1: If response has a clear "final answer" after thinking, extract it
+const thinkingPatterns = [
+    /^[\s\S]*?\n\n(?=")/,  // Everything before a quote
+    /^[\s\S]*?(?=My pookie|Morning|Hey|Hi|Hello|Sure|Yes|No|I'm|I am|The |That|This|It's|Well,|Honestly|Actually)/m,
+];
+
+// Method 2: Remove common thinking prefixes
+const thinkingPrefixes = [
+    /^(Okay|Alright|Let me|I need to|I should|Let's see|Hmm|So,|Well,)[\s\S]*?\n\n/gi,
+    /^(The user|According to|I'll|I will|Let me check|I should respond)[\s\S]*?\n\n/gi,
+    /^[\s\S]*?(According to my|my system prompt|personalization settings)[\s\S]*?\n\n/gi,
+];
+
+for (const pattern of thinkingPrefixes) {
+    cleanedResponse = cleanedResponse.replace(pattern, '');
+}
+
+// Method 3: If there's still thinking, take only the last paragraph
+if (cleanedResponse.match(/^(Okay|Alright|Let me|I need|I should|The user|According)/i)) {
+    const paragraphs = cleanedResponse.split('\n\n');
+    cleanedResponse = paragraphs[paragraphs.length - 1];
+}
+
+// Method 4: Take only the last 1-2 lines if still has thinking
+const lines = cleanedResponse.split('\n');
+if (lines.length > 1 && lines[0].match(/^(Okay|Alright|Let me|I need|I should|The user|According|I'll)/i)) {
+    cleanedResponse = lines.slice(-2).join('\n');
+}
+
+// Remove markdown formatting
+cleanedResponse = cleanedResponse
     .replace(/\*\*/g, '')
     .replace(/\*/g, '')
     .replace(/```[\s\S]*?```/g, '')
@@ -10231,19 +10262,11 @@ data.choices[0].message.content = data.choices[0].message.content
     .replace(/#{1,6}\s?/g, '')
     .replace(/>\s?/g, '')
     .replace(/\n{3,}/g, '\n\n')
-    .replace(/^\s+|\s+$/g, '')
     .trim();
 
-// If response still has reasoning, extract just the final answer
-const lines = data.choices[0].message.content.split('\n');
-const finalResponse = lines.filter(line => 
-    !line.match(/^(I need to|I should|Let me|Maybe|That works|Also|Keep it)/i)
-).join('\n').trim();
+data.choices[0].message.content = cleanedResponse;
 
-if (finalResponse.length > 10) {
-    data.choices[0].message.content = finalResponse;
-}
-                break;
+break;
 
             } catch (modelErr) {
                 failureReasons.push({ model: AI_MODELS[i].name, reason: modelErr.message || "Connection failed" });
