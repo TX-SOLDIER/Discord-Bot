@@ -10221,91 +10221,91 @@ RULES:
                 usedModel = AI_MODELS[i].name;
                 success = true;
 
-                // Success!
-usedModel = AI_MODELS[i].name;
-success = true;
+                                // Success!
+                usedModel = AI_MODELS[i].name;
+                success = true;
 
-// NUCLEAR CLEANUP v2
-let cleanedResponse = data.choices[0].message.content;
+                // NUCLEAR CLEANUP v2
+                let cleanedResponse = data.choices[0].message.content;
 
-// Method 1: If there's "Final answer:" - take everything after it
-if (cleanedResponse.toLowerCase().includes('final answer')) {
-    cleanedResponse = cleanedResponse.split(/final answer[:\s]*/i).pop();
-}
+                // Method 1: If there's "Final answer:" - take everything after it
+                if (cleanedResponse.toLowerCase().includes('final answer')) {
+                    cleanedResponse = cleanedResponse.split(/final answer[:\s]*/i).pop();
+                }
 
-// Method 2: If there's a quoted response that looks like an answer (not the question), extract it
-const quotedMatches = cleanedResponse.match(/"([^"]+)"/g);
-if (quotedMatches && quotedMatches.length > 0) {
-    // Get the LAST quote (usually the answer, not the question)
-    let bestQuote = '';
-    for (const quote of quotedMatches) {
-        const inner = quote.replace(/"/g, '');
-        // Skip if it's just the user's question repeated
-        if (inner.length > 10 && !inner.toLowerCase().includes('who is your pookie')) {
-            bestQuote = inner;
-        }
-    }
-    if (bestQuote) {
-        cleanedResponse = bestQuote;
-    }
-}
-    // Method 3: Take the LAST sentence that has an emoji or ends with punctuation
-    const sentences = cleanedResponse.split(/(?<=[.!?~])\s+/);
-    
-    const thinkingPatterns = [
-        /^(okay|alright|let me|first|i need|i should|i'll|i will|let's|hmm|so,|well,)/i,
-        /^(i think|thinking|let me think|i recall|i remember|i know|i believe)/i,
-        /^(analyzing|processing|checking|looking at|reviewing|considering)/i,
-        /^(the user|according|make sure|my personality|since it|also,|now i|got it)/i,
-        /^(based on|given that|since they|the question|this question|they asked)/i,
-        /^(user asked|user wants|user is asking|they want|seems like)/i,
-        /^(i want to|i plan to|planning to|going to|gonna|gotta)/i,
-        /^(my goal|the goal|objective|task is|need to make|should make)/i,
-        /^(don't show|keep it|i should respond|check my|it says|that's|maybe add)/i,
-        /^(just a|straightforward|answer with|if appropriate|a simple|here's my|my response)/i,
-        /^(no reasoning|no thinking|no internal|just the answer|here it is|here is my|direct answer)/i,
-        /^(responding|response ready|time to respond|i can say|i could say)/i,
-        /(system prompt|personality traits|internal thoughts|respond with|concise and)/i,
-        /(keep it short|under \d+ char|emoji sparingly|casual tone|friendly tone)/i,
-        /(be concise|stay in character|don't reveal|never reveal|maintain my)/i,
-        /(i was told|instructions say|prompt says|rules say|guidelines say)/i,
-        /(as instructed|as requested|as asked|per the|following the)/i,
-        /(without thinking|without reasoning|no explanation|skip the|hiding my)/i,
-        /(thought process|reasoning process|internal monologue|inner thoughts)/i,
-        /(i have emotions|according to my|the response should|this fits|stays true)/i,
-        /(final answer|character limit|within the|personality guidelines)/i,
-    ];
+                // Method 2: If there's a quoted response that looks like an answer (not the question), extract it
+                const quotedMatches = cleanedResponse.match(/"([^"]+)"/g);
+                if (quotedMatches && quotedMatches.length > 0) {
+                    // Get the LAST quote (usually the answer, not the question)
+                    let bestQuote = '';
+                    for (const quote of quotedMatches) {
+                        const inner = quote.replace(/"/g, '');
+                        // Skip if it's just the user's question repeated
+                        if (inner.length > 10 && !inner.toLowerCase().includes('who is your pookie')) {
+                            bestQuote = inner;
+                        }
+                    }
+                    if (bestQuote) {
+                        cleanedResponse = bestQuote;
+                    }
+                }
 
-    const cleanSentences = sentences.filter(s => {
-        const trimmed = s.trim();
-        if (trimmed.length < 5) return false;
-        for (const pattern of thinkingPatterns) {
-            if (pattern.test(trimmed)) return false;
-        }
-        return true;
-    });
+                // Method 3: Take the LAST sentence that has an emoji or ends with punctuation
+                const sentences = cleanedResponse.split(/(?<=[.!?~])\s+/);
+                
+                const thinkingPatterns = [
+                    /^(okay|alright|let me|first|i need|i should|i'll|i will|let's|hmm|so,|well,)/i,
+                    /^(i think|thinking|let me think|i recall|i remember|i know|i believe)/i,
+                    /^(analyzing|processing|checking|looking at|reviewing|considering)/i,
+                    /^(the user|according|make sure|my personality|since it|also,|now i|got it)/i,
+                    /^(based on|given that|since they|the question|this question|they asked)/i,
+                    /^(user asked|user wants|user is asking|they want|seems like)/i,
+                    /^(i want to|i plan to|planning to|going to|gonna|gotta)/i,
+                    /^(my goal|the goal|objective|task is|need to make|should make)/i,
+                    /^(don't show|keep it|i should respond|check my|it says|that's|maybe add)/i,
+                    /^(just a|straightforward|answer with|if appropriate|a simple|here's my|my response)/i,
+                    /^(no reasoning|no thinking|no internal|just the answer|here it is|here is my|direct answer)/i,
+                    /^(responding|response ready|time to respond|i can say|i could say)/i,
+                    /(system prompt|personality traits|internal thoughts|respond with|concise and)/i,
+                    /(keep it short|under \d+ char|emoji sparingly|casual tone|friendly tone)/i,
+                    /(be concise|stay in character|don't reveal|never reveal|maintain my)/i,
+                    /(i was told|instructions say|prompt says|rules say|guidelines say)/i,
+                    /(as instructed|as requested|as asked|per the|following the)/i,
+                    /(without thinking|without reasoning|no explanation|skip the|hiding my)/i,
+                    /(thought process|reasoning process|internal monologue|inner thoughts)/i,
+                    /(i have emotions|according to my|the response should|this fits|stays true)/i,
+                    /(final answer|character limit|within the|personality guidelines)/i,
+                ];
 
-    if (cleanSentences.length > 0) {
-        cleanedResponse = cleanSentences[cleanSentences.length - 1];
-    } else {
-        cleanedResponse = sentences[sentences.length - 1];
-    }
-}
+                const cleanSentences = sentences.filter(s => {
+                    const trimmed = s.trim();
+                    if (trimmed.length < 5) return false;
+                    for (const pattern of thinkingPatterns) {
+                        if (pattern.test(trimmed)) return false;
+                    }
+                    return true;
+                });
 
-// Remove markdown and clean up
-cleanedResponse = cleanedResponse
-    .replace(/\*\*/g, '')
-    .replace(/\*/g, '')
-    .replace(/```[\s\S]*?```/g, '')
-    .replace(/`/g, '')
-    .replace(/"/g, '')
-    .replace(/#{1,6}\s?/g, '')
-    .replace(/>\s?/g, '')
-    .trim();
+                if (cleanSentences.length > 0) {
+                    cleanedResponse = cleanSentences[cleanSentences.length - 1];
+                } else if (sentences.length > 0) {
+                    cleanedResponse = sentences[sentences.length - 1];
+                }
 
-data.choices[0].message.content = cleanedResponse;
+                // Remove markdown and clean up
+                cleanedResponse = cleanedResponse
+                    .replace(/\*\*/g, '')
+                    .replace(/\*/g, '')
+                    .replace(/```[\s\S]*?```/g, '')
+                    .replace(/`/g, '')
+                    .replace(/"/g, '')
+                    .replace(/#{1,6}\s?/g, '')
+                    .replace(/>\s?/g, '')
+                    .trim();
 
-break;
+                data.choices[0].message.content = cleanedResponse;
+
+                break;
             } catch (modelErr) {
                 failureReasons.push({ model: AI_MODELS[i].name, reason: modelErr.message || "Connection failed" });
                 console.error(`[AI] ${AI_MODELS[i].name} error:`, modelErr.message);
