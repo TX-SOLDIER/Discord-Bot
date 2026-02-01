@@ -4426,7 +4426,7 @@ await loadingMsg.delete().catch(() => {});
 await message.channel.send({ embeds: [embed1, embed2, embed3, embed4, embed5] });
 await message.channel.send({ embeds: [embed6, embed7, embed8, embed9, embed10] });
 await message.channel.send({ embeds: [embed11, embed12, embed13] });
-  {
+}
 // ==================================================
 // COMMAND: NOTE (Add Staff Note)
 // ==================================================
