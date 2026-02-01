@@ -12340,6 +12340,731 @@ else if (command === 'resetxp') {
   saveXPData();
   message.reply(`🔄 Reset XP data for ${u.username}.`);
 }
+// ==================================================
+// CLASH ROYALE COMMANDS
+// ==================================================
+
+// COMMAND: CR - Player Stats / Help
+else if (command === 'cr' || command === 'clashroyale') {
+    const playerTag = args[0];
+    
+    if (!playerTag) {
+        const embed = new EmbedBuilder()
+            .setColor(0x1E90FF)
+            .setTitle('👑 Clash Royale Commands')
+            .setDescription(
+                `**Player Commands:**\n` +
+                `\`${PREFIX}cr #TAG\` - Player profile\n` +
+                `\`${PREFIX}crdeck #TAG\` - Current deck\n` +
+                `\`${PREFIX}crbattles #TAG\` - Recent battles\n` +
+                `\`${PREFIX}crchests #TAG\` - Upcoming chests\n\n` +
+                `**Clan Commands:**\n` +
+                `\`${PREFIX}crclan #TAG\` - Clan info\n` +
+                `\`${PREFIX}crmembers #TAG\` - Top members\n` +
+                `\`${PREFIX}crwar #TAG\` - River race status\n` +
+                `\`${PREFIX}crattacks #TAG\` - Who attacked today\n` +
+                `\`${PREFIX}crwarhistory #TAG\` - War history\n\n` +
+                `**Other:**\n` +
+                `\`${PREFIX}crcard [name]\` - Card info\n\n` +
+                `💡 Include the # in your tag!`
+            )
+            .setFooter({ text: 'SOLDIER¹ Clash Royale' })
+            .setTimestamp();
+        return message.channel.send({ embeds: [embed] });
+    }
+
+    const formattedTag = playerTag.toUpperCase().replace('#', '');
+    
+    try {
+        await message.channel.sendTyping();
+        
+        const response = await fetch(`https://api.clashroyale.com/v1/players/%23${formattedTag}`, {
+            headers: {
+                'Authorization': `Bearer ${process.env.CLASH_ROYALE_API_KEY}`
+            }
+        });
+        
+        if (!response.ok) {
+            if (response.status === 404) {
+                return message.reply('❌ Player not found. Make sure the tag is correct!');
+            } else if (response.status === 403) {
+                return message.reply('❌ API access denied. Contact bot owner.');
+            }
+            return message.reply('❌ Failed to fetch player data.');
+        }
+        
+        const player = await response.json();
+        
+        const getArenaEmoji = (trophies) => {
+            if (trophies >= 8000) return '🏆';
+            if (trophies >= 6000) return '⚡';
+            if (trophies >= 5000) return '👑';
+            if (trophies >= 4000) return '💎';
+            return '🎯';
+        };
+        
+        const getRoleEmoji = (role) => {
+            if (role === 'leader') return '👑';
+            if (role === 'coLeader') return '⚔️';
+            if (role === 'elder') return '🛡️';
+            return '👤';
+        };
+        
+        const embed = new EmbedBuilder()
+            .setColor(0x1E90FF)
+            .setTitle(`${getArenaEmoji(player.trophies)} ${player.name}`)
+            .setDescription(`Tag: \`#${formattedTag}\``)
+            .addFields(
+                { name: '🏆 Trophies', value: `${player.trophies.toLocaleString()}`, inline: true },
+                { name: '⭐ Best Trophies', value: `${player.bestTrophies.toLocaleString()}`, inline: true },
+                { name: '🎖️ Level', value: `${player.expLevel}`, inline: true },
+                { name: '🏅 Arena', value: `${player.arena?.name || 'Unknown'}`, inline: true },
+                { name: '⚔️ Wins', value: `${player.wins.toLocaleString()}`, inline: true },
+                { name: '❌ Losses', value: `${player.losses.toLocaleString()}`, inline: true },
+                { name: '🎮 Total Battles', value: `${player.battleCount.toLocaleString()}`, inline: true },
+                { name: '👑 Three Crowns', value: `${player.threeCrownWins.toLocaleString()}`, inline: true },
+                { name: '🃏 Cards Found', value: `${player.cards?.length || 0}`, inline: true }
+            )
+            .setFooter({ text: 'SOLDIER¹ Clash Royale' })
+            .setTimestamp();
+        
+        if (player.clan) {
+            embed.addFields(
+                { name: '🏰 Clan', value: `${player.clan.name}`, inline: true },
+                { name: `${getRoleEmoji(player.role)} Role`, value: `${player.role || 'Member'}`, inline: true },
+                { name: '🎁 Donations', value: `${player.donations || 0}`, inline: true }
+            );
+        }
+        
+        if (player.currentFavouriteCard) {
+            embed.addFields(
+                { name: '❤️ Favorite Card', value: `${player.currentFavouriteCard.name}`, inline: true }
+            );
+        }
+        
+        return message.channel.send({ embeds: [embed] });
+        
+    } catch (err) {
+        console.error('Clash Royale API error:', err);
+        return message.reply('❌ Something went wrong while fetching player data.');
+    }
+}
+
+// COMMAND: CRCLAN - Clan Info
+else if (command === 'crclan') {
+    const clanTag = args[0];
+    
+    if (!clanTag) {
+        return message.reply(`❌ Please provide a clan tag!\nExample: \`${PREFIX}crclan #CLANTAG\``);
+    }
+
+    const formattedTag = clanTag.toUpperCase().replace('#', '');
+    
+    try {
+        await message.channel.sendTyping();
+        
+        const response = await fetch(`https://api.clashroyale.com/v1/clans/%23${formattedTag}`, {
+            headers: {
+                'Authorization': `Bearer ${process.env.CLASH_ROYALE_API_KEY}`
+            }
+        });
+        
+        if (!response.ok) {
+            if (response.status === 404) {
+                return message.reply('❌ Clan not found. Make sure the tag is correct!');
+            } else if (response.status === 403) {
+                return message.reply('❌ API access denied. Contact bot owner.');
+            }
+            return message.reply('❌ Failed to fetch clan data.');
+        }
+        
+        const clan = await response.json();
+        
+        const getTypeEmoji = (type) => {
+            if (type === 'open') return '🟢 Open';
+            if (type === 'inviteOnly') return '🟡 Invite Only';
+            return '🔴 Closed';
+        };
+        
+        const embed = new EmbedBuilder()
+            .setColor(0xFFD700)
+            .setTitle(`🏰 ${clan.name}`)
+            .setDescription(`${clan.description || 'No description'}\n\nTag: \`#${formattedTag}\``)
+            .addFields(
+                { name: '🏆 Clan Score', value: `${clan.clanScore.toLocaleString()}`, inline: true },
+                { name: '⚔️ War Trophies', value: `${clan.clanWarTrophies?.toLocaleString() || '0'}`, inline: true },
+                { name: '👥 Members', value: `${clan.members}/50`, inline: true },
+                { name: '🚪 Type', value: `${getTypeEmoji(clan.type)}`, inline: true },
+                { name: '🎯 Required Trophies', value: `${clan.requiredTrophies.toLocaleString()}`, inline: true },
+                { name: '🎁 Donations/Week', value: `${clan.donationsPerWeek.toLocaleString()}`, inline: true },
+                { name: '📍 Location', value: `${clan.location?.name || 'Unknown'}`, inline: true }
+            )
+            .setFooter({ text: 'SOLDIER¹ Clash Royale' })
+            .setTimestamp();
+        
+        if (clan.badgeId) {
+            embed.setThumbnail(`https://royaleapi.github.io/cr-api-assets/badges/${clan.badgeId}.png`);
+        }
+        
+        return message.channel.send({ embeds: [embed] });
+        
+    } catch (err) {
+        console.error('Clash Royale Clan error:', err);
+        return message.reply('❌ Something went wrong while fetching clan data.');
+    }
+}
+
+// COMMAND: CRDECK - Current Deck
+else if (command === 'crdeck') {
+    const playerTag = args[0];
+    
+    if (!playerTag) {
+        return message.reply(`❌ Please provide a player tag!\nExample: \`${PREFIX}crdeck #PLAYERTAG\``);
+    }
+
+    const formattedTag = playerTag.toUpperCase().replace('#', '');
+    
+    try {
+        await message.channel.sendTyping();
+        
+        const response = await fetch(`https://api.clashroyale.com/v1/players/%23${formattedTag}`, {
+            headers: {
+                'Authorization': `Bearer ${process.env.CLASH_ROYALE_API_KEY}`
+            }
+        });
+        
+        if (!response.ok) {
+            if (response.status === 404) {
+                return message.reply('❌ Player not found. Make sure the tag is correct!');
+            }
+            return message.reply('❌ Failed to fetch player data.');
+        }
+        
+        const player = await response.json();
+        
+        if (!player.currentDeck || player.currentDeck.length === 0) {
+            return message.reply('❌ No current deck found for this player.');
+        }
+        
+        const totalElixir = player.currentDeck.reduce((sum, card) => sum + (card.elixirCost || 0), 0);
+        const avgElixir = (totalElixir / player.currentDeck.length).toFixed(1);
+        
+        const getRarityEmoji = (rarity) => {
+            if (rarity === 'legendary') return '🟡';
+            if (rarity === 'epic') return '🟣';
+            if (rarity === 'rare') return '🟠';
+            if (rarity === 'champion') return '🔴';
+            return '⚪';
+        };
+        
+        const deckList = player.currentDeck.map(card => 
+            `${getRarityEmoji(card.rarity)} **${card.name}** (Lvl ${card.level}) - ${card.elixirCost}💧`
+        ).join('\n');
+        
+        const embed = new EmbedBuilder()
+            .setColor(0x9B59B6)
+            .setTitle(`🃏 ${player.name}'s Current Deck`)
+            .setDescription(`**Average Elixir:** ${avgElixir} 💧\n\n${deckList}`)
+            .setFooter({ text: 'SOLDIER¹ Clash Royale' })
+            .setTimestamp();
+        
+        return message.channel.send({ embeds: [embed] });
+        
+    } catch (err) {
+        console.error('Clash Royale Deck error:', err);
+        return message.reply('❌ Something went wrong while fetching deck data.');
+    }
+}
+
+// COMMAND: CRBATTLES - Battle Log
+else if (command === 'crbattles' || command === 'crbattle') {
+    const playerTag = args[0];
+    
+    if (!playerTag) {
+        return message.reply(`❌ Please provide a player tag!\nExample: \`${PREFIX}crbattles #PLAYERTAG\``);
+    }
+
+    const formattedTag = playerTag.toUpperCase().replace('#', '');
+    
+    try {
+        await message.channel.sendTyping();
+        
+        const response = await fetch(`https://api.clashroyale.com/v1/players/%23${formattedTag}/battlelog`, {
+            headers: {
+                'Authorization': `Bearer ${process.env.CLASH_ROYALE_API_KEY}`
+            }
+        });
+        
+        if (!response.ok) {
+            if (response.status === 404) {
+                return message.reply('❌ Player not found or battle log unavailable.');
+            }
+            return message.reply('❌ Failed to fetch battle log.');
+        }
+        
+        const battles = await response.json();
+        
+        if (!battles || battles.length === 0) {
+            return message.reply('❌ No recent battles found.');
+        }
+        
+        const recentBattles = battles.slice(0, 5);
+        
+        const battleList = recentBattles.map((battle, index) => {
+            const player = battle.team[0];
+            const opponent = battle.opponent[0];
+            const won = player.crowns > opponent.crowns;
+            const draw = player.crowns === opponent.crowns;
+            
+            let result = draw ? '🟡 Draw' : (won ? '✅ Win' : '❌ Loss');
+            
+            return `**${index + 1}.** ${result} vs **${opponent.name}**\n` +
+                   `   👑 ${player.crowns} - ${opponent.crowns} | ${battle.type.replace(/([A-Z])/g, ' $1').trim()}`;
+        }).join('\n\n');
+        
+        const embed = new EmbedBuilder()
+            .setColor(0xE74C3C)
+            .setTitle(`⚔️ Recent Battles`)
+            .setDescription(battleList)
+            .setFooter({ text: 'SOLDIER¹ Clash Royale • Last 5 battles' })
+            .setTimestamp();
+        
+        return message.channel.send({ embeds: [embed] });
+        
+    } catch (err) {
+        console.error('Clash Royale Battles error:', err);
+        return message.reply('❌ Something went wrong while fetching battle log.');
+    }
+}
+
+// COMMAND: CRCHESTS - Upcoming Chests
+else if (command === 'crchests') {
+    const playerTag = args[0];
+    
+    if (!playerTag) {
+        return message.reply(`❌ Please provide a player tag!\nExample: \`${PREFIX}crchests #PLAYERTAG\``);
+    }
+
+    const formattedTag = playerTag.toUpperCase().replace('#', '');
+    
+    try {
+        await message.channel.sendTyping();
+        
+        const response = await fetch(`https://api.clashroyale.com/v1/players/%23${formattedTag}/upcomingchests`, {
+            headers: {
+                'Authorization': `Bearer ${process.env.CLASH_ROYALE_API_KEY}`
+            }
+        });
+        
+        if (!response.ok) {
+            if (response.status === 404) {
+                return message.reply('❌ Player not found.');
+            }
+            return message.reply('❌ Failed to fetch chest data.');
+        }
+        
+        const data = await response.json();
+        
+        if (!data.items || data.items.length === 0) {
+            return message.reply('❌ No upcoming chests found.');
+        }
+        
+        const getChestEmoji = (name) => {
+            const lower = name.toLowerCase();
+            if (lower.includes('legendary')) return '🟡';
+            if (lower.includes('mega lightning')) return '⚡';
+            if (lower.includes('epic')) return '🟣';
+            if (lower.includes('giant')) return '🟤';
+            if (lower.includes('magical')) return '🔵';
+            if (lower.includes('gold')) return '💰';
+            if (lower.includes('silver')) return '⚪';
+            if (lower.includes('royal wild')) return '👑';
+            if (lower.includes('overflow')) return '🌊';
+            return '📦';
+        };
+        
+        const chestList = data.items.slice(0, 10).map((chest, index) => {
+            const position = chest.index === 0 ? 'Next' : `+${chest.index}`;
+            return `${getChestEmoji(chest.name)} **${position}:** ${chest.name}`;
+        }).join('\n');
+        
+        const embed = new EmbedBuilder()
+            .setColor(0xF1C40F)
+            .setTitle(`📦 Upcoming Chests`)
+            .setDescription(chestList)
+            .setFooter({ text: 'SOLDIER¹ Clash Royale' })
+            .setTimestamp();
+        
+        return message.channel.send({ embeds: [embed] });
+        
+    } catch (err) {
+        console.error('Clash Royale Chests error:', err);
+        return message.reply('❌ Something went wrong while fetching chest data.');
+    }
+}
+
+// COMMAND: CRWAR - River Race Status
+else if (command === 'crwar' || command === 'crrace') {
+    const clanTag = args[0];
+    
+    if (!clanTag) {
+        return message.reply(`❌ Please provide a clan tag!\nExample: \`${PREFIX}crwar #CLANTAG\``);
+    }
+
+    const formattedTag = clanTag.toUpperCase().replace('#', '');
+    
+    try {
+        await message.channel.sendTyping();
+        
+        const response = await fetch(`https://api.clashroyale.com/v1/clans/%23${formattedTag}/currentriverrace`, {
+            headers: {
+                'Authorization': `Bearer ${process.env.CLASH_ROYALE_API_KEY}`
+            }
+        });
+        
+        if (!response.ok) {
+            if (response.status === 404) {
+                return message.reply('❌ Clan not found or not in a river race.');
+            }
+            return message.reply('❌ Failed to fetch war data.');
+        }
+        
+        const race = await response.json();
+        
+        if (!race.clan) {
+            return message.reply('❌ No active river race found.');
+        }
+        
+        const sortedClans = race.clans?.sort((a, b) => b.fame - a.fame) || [];
+        const clanRank = sortedClans.findIndex(c => c.tag === `#${formattedTag}`) + 1;
+        
+        const embed = new EmbedBuilder()
+            .setColor(0xFF6B6B)
+            .setTitle(`⚔️ ${race.clan.name} - River Race`)
+            .addFields(
+                { name: '🏆 Fame', value: `${race.clan.fame?.toLocaleString() || 0}`, inline: true },
+                { name: '📊 Position', value: `#${clanRank || '?'} of ${sortedClans.length}`, inline: true },
+                { name: '🔧 Repair Points', value: `${race.clan.repairPoints || 0}`, inline: true },
+                { name: '👥 Participants', value: `${race.clan.participants?.length || 0}`, inline: true }
+            )
+            .setFooter({ text: 'SOLDIER¹ Clash Royale' })
+            .setTimestamp();
+        
+        if (sortedClans.length > 0) {
+            const leaderboard = sortedClans.slice(0, 5).map((clan, i) => {
+                const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
+                const isYou = clan.tag === `#${formattedTag}` ? ' ⬅️' : '';
+                return `${medal} **${clan.name}** - ${clan.fame?.toLocaleString() || 0} fame${isYou}`;
+            }).join('\n');
+            
+            embed.addFields({ name: '🏁 Race Standings', value: leaderboard, inline: false });
+        }
+        
+        return message.channel.send({ embeds: [embed] });
+        
+    } catch (err) {
+        console.error('Clash Royale War error:', err);
+        return message.reply('❌ Something went wrong while fetching war data.');
+    }
+}
+
+// COMMAND: CRATTACKS - Who Attacked Today
+else if (command === 'crattacks') {
+    const clanTag = args[0];
+    
+    if (!clanTag) {
+        return message.reply(`❌ Please provide a clan tag!\nExample: \`${PREFIX}crattacks #CLANTAG\``);
+    }
+
+    const formattedTag = clanTag.toUpperCase().replace('#', '');
+    
+    try {
+        await message.channel.sendTyping();
+        
+        const response = await fetch(`https://api.clashroyale.com/v1/clans/%23${formattedTag}/currentriverrace`, {
+            headers: {
+                'Authorization': `Bearer ${process.env.CLASH_ROYALE_API_KEY}`
+            }
+        });
+        
+        if (!response.ok) {
+            if (response.status === 404) {
+                return message.reply('❌ Clan not found or not in a river race.');
+            }
+            return message.reply('❌ Failed to fetch war data.');
+        }
+        
+        const race = await response.json();
+        
+        if (!race.clan?.participants || race.clan.participants.length === 0) {
+            return message.reply('❌ No war participants found.');
+        }
+        
+        const participants = race.clan.participants
+            .sort((a, b) => b.decksUsedToday - a.decksUsedToday);
+        
+        const totalParticipants = participants.length;
+        const attacked = participants.filter(p => p.decksUsedToday > 0).length;
+        const notAttacked = participants.filter(p => p.decksUsedToday === 0).length;
+        
+        const topAttackers = participants
+            .filter(p => p.decksUsedToday > 0)
+            .slice(0, 10)
+            .map((p, i) => `${i + 1}. **${p.name}** - ${p.decksUsedToday}/4 decks | ${p.fame} fame`)
+            .join('\n') || 'No attacks yet today';
+        
+        const slackers = participants
+            .filter(p => p.decksUsedToday === 0)
+            .slice(0, 10)
+            .map(p => `❌ ${p.name}`)
+            .join('\n') || 'Everyone attacked! 🎉';
+        
+        const embed = new EmbedBuilder()
+            .setColor(attacked === totalParticipants ? 0x00FF00 : 0xFFA500)
+            .setTitle(`⚔️ ${race.clan.name} - War Attacks Today`)
+            .addFields(
+                { name: '✅ Attacked', value: `${attacked}/${totalParticipants}`, inline: true },
+                { name: '❌ Not Attacked', value: `${notAttacked}`, inline: true },
+                { name: '📊 Attack Rate', value: `${Math.round((attacked/totalParticipants)*100)}%`, inline: true },
+                { name: '🏆 Top Attackers Today', value: topAttackers, inline: false }
+            )
+            .setFooter({ text: 'SOLDIER¹ Clash Royale' })
+            .setTimestamp();
+        
+        if (notAttacked > 0) {
+            embed.addFields({ 
+                name: `😴 Haven't Attacked Yet (${notAttacked})`, 
+                value: slackers.length > 500 ? slackers.substring(0, 500) + '...' : slackers, 
+                inline: false 
+            });
+        }
+        
+        return message.channel.send({ embeds: [embed] });
+        
+    } catch (err) {
+        console.error('Clash Royale Attacks error:', err);
+        return message.reply('❌ Something went wrong while fetching war attacks.');
+    }
+}
+
+// COMMAND: CRWARHISTORY - War History
+else if (command === 'crwarhistory') {
+    const clanTag = args[0];
+    
+    if (!clanTag) {
+        return message.reply(`❌ Please provide a clan tag!\nExample: \`${PREFIX}crwarhistory #CLANTAG\``);
+    }
+
+    const formattedTag = clanTag.toUpperCase().replace('#', '');
+    
+    try {
+        await message.channel.sendTyping();
+        
+        const response = await fetch(`https://api.clashroyale.com/v1/clans/%23${formattedTag}/riverracelog`, {
+            headers: {
+                'Authorization': `Bearer ${process.env.CLASH_ROYALE_API_KEY}`
+            }
+        });
+        
+        if (!response.ok) {
+            if (response.status === 404) {
+                return message.reply('❌ Clan not found or no war history.');
+            }
+            return message.reply('❌ Failed to fetch war history.');
+        }
+        
+        const data = await response.json();
+        
+        if (!data.items || data.items.length === 0) {
+            return message.reply('❌ No war history found.');
+        }
+        
+        const recentWars = data.items.slice(0, 5);
+        
+        const warHistory = recentWars.map((war, index) => {
+            const standings = war.standings || [];
+            const clanStanding = standings.find(s => s.clan?.tag === `#${formattedTag}`);
+            const rank = clanStanding?.rank || '?';
+            const trophyChange = clanStanding?.trophyChange || 0;
+            const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `#${rank}`;
+            const trophyEmoji = trophyChange > 0 ? '📈' : trophyChange < 0 ? '📉' : '➖';
+            
+            return `**${index + 1}.** ${medal} | ${trophyEmoji} ${trophyChange > 0 ? '+' : ''}${trophyChange} trophies`;
+        }).join('\n');
+        
+        const embed = new EmbedBuilder()
+            .setColor(0x9B59B6)
+            .setTitle(`📜 War History`)
+            .setDescription(warHistory)
+            .setFooter({ text: 'SOLDIER¹ Clash Royale • Last 5 wars' })
+            .setTimestamp();
+        
+        return message.channel.send({ embeds: [embed] });
+        
+    } catch (err) {
+        console.error('Clash Royale War History error:', err);
+        return message.reply('❌ Something went wrong while fetching war history.');
+    }
+}
+
+// COMMAND: CRMEMBERS - Clan Members
+else if (command === 'crmembers' || command === 'crtop') {
+    const clanTag = args[0];
+    
+    if (!clanTag) {
+        return message.reply(`❌ Please provide a clan tag!\nExample: \`${PREFIX}crmembers #CLANTAG\``);
+    }
+
+    const formattedTag = clanTag.toUpperCase().replace('#', '');
+    
+    try {
+        await message.channel.sendTyping();
+        
+        const response = await fetch(`https://api.clashroyale.com/v1/clans/%23${formattedTag}/members`, {
+            headers: {
+                'Authorization': `Bearer ${process.env.CLASH_ROYALE_API_KEY}`
+            }
+        });
+        
+        if (!response.ok) {
+            if (response.status === 404) {
+                return message.reply('❌ Clan not found.');
+            }
+            return message.reply('❌ Failed to fetch member data.');
+        }
+        
+        const data = await response.json();
+        
+        if (!data.items || data.items.length === 0) {
+            return message.reply('❌ No members found.');
+        }
+        
+        const members = data.items.sort((a, b) => b.trophies - a.trophies);
+        
+        const getRoleEmoji = (role) => {
+            if (role === 'leader') return '👑';
+            if (role === 'coLeader') return '⚔️';
+            if (role === 'elder') return '🛡️';
+            return '';
+        };
+        
+        const memberList = members.slice(0, 15).map((m, i) => {
+            const roleEmoji = getRoleEmoji(m.role);
+            return `**${i + 1}.** ${roleEmoji} ${m.name} - 🏆 ${m.trophies.toLocaleString()}`;
+        }).join('\n');
+        
+        const totalTrophies = members.reduce((sum, m) => sum + m.trophies, 0);
+        const avgTrophies = Math.round(totalTrophies / members.length);
+        
+        const embed = new EmbedBuilder()
+            .setColor(0x3498DB)
+            .setTitle(`👥 Clan Members`)
+            .setDescription(memberList)
+            .addFields(
+                { name: '📊 Average Trophies', value: `${avgTrophies.toLocaleString()}`, inline: true },
+                { name: '👥 Total Members', value: `${members.length}/50`, inline: true }
+            )
+            .setFooter({ text: 'SOLDIER¹ Clash Royale • Top 15' })
+            .setTimestamp();
+        
+        return message.channel.send({ embeds: [embed] });
+        
+    } catch (err) {
+        console.error('Clash Royale Members error:', err);
+        return message.reply('❌ Something went wrong while fetching member data.');
+    }
+}
+
+// COMMAND: CRCARD - Card Info
+else if (command === 'crcard') {
+    const cardName = args.join(' ');
+    
+    if (!cardName) {
+        return message.reply(`❌ Please provide a card name!\nExample: \`${PREFIX}crcard mega knight\``);
+    }
+    
+    try {
+        await message.channel.sendTyping();
+        
+        const response = await fetch(`https://api.clashroyale.com/v1/cards`, {
+            headers: {
+                'Authorization': `Bearer ${process.env.CLASH_ROYALE_API_KEY}`
+            }
+        });
+        
+        if (!response.ok) {
+            return message.reply('❌ Failed to fetch card data.');
+        }
+        
+        const data = await response.json();
+        
+        const searchTerm = cardName.toLowerCase();
+        const card = data.items.find(c => 
+            c.name.toLowerCase() === searchTerm ||
+            c.name.toLowerCase().includes(searchTerm)
+        );
+        
+        if (!card) {
+            return message.reply(`❌ Card "${cardName}" not found. Try the exact name!`);
+        }
+        
+        const getRarityColor = (rarity) => {
+            if (rarity === 'legendary') return 0xFFD700;
+            if (rarity === 'epic') return 0x9B59B6;
+            if (rarity === 'rare') return 0xE67E22;
+            if (rarity === 'champion') return 0xE74C3C;
+            return 0x95A5A6;
+        };
+        
+        const embed = new EmbedBuilder()
+            .setColor(getRarityColor(card.rarity))
+            .setTitle(`🃏 ${card.name}`)
+            .setThumbnail(card.iconUrls?.medium || null)
+            .addFields(
+                { name: '💧 Elixir Cost', value: `${card.elixirCost || 'N/A'}`, inline: true },
+                { name: '⭐ Rarity', value: `${card.rarity?.charAt(0).toUpperCase() + card.rarity?.slice(1) || 'Unknown'}`, inline: true },
+                { name: '🏆 Max Level', value: `${card.maxLevel || 'N/A'}`, inline: true }
+            )
+            .setFooter({ text: 'SOLDIER¹ Clash Royale' })
+            .setTimestamp();
+        
+        return message.channel.send({ embeds: [embed] });
+        
+    } catch (err) {
+        console.error('Clash Royale Card error:', err);
+        return message.reply('❌ Something went wrong while fetching card data.');
+    }
+}
+// COMMAND: CRHELP - Clash Royale Help Menu
+else if (command === 'crhelp') {
+    const embed = new EmbedBuilder()
+        .setColor(0x1E90FF)
+        .setTitle('👑 Clash Royale Commands')
+        .setDescription('All available Clash Royale commands for SOLDIER¹ Bot')
+        .addFields(
+            { name: '━━━ PLAYER COMMANDS ━━━', value: '\u200b', inline: false },
+            { name: `\`${PREFIX}cr #TAG\``, value: 'View player profile, trophies, wins, and clan info', inline: false },
+            { name: `\`${PREFIX}crdeck #TAG\``, value: 'See player\'s current battle deck with elixir cost', inline: false },
+            { name: `\`${PREFIX}crbattles #TAG\``, value: 'View last 5 battles with wins/losses', inline: false },
+            { name: `\`${PREFIX}crchests #TAG\``, value: 'See upcoming chest cycle (next 10 chests)', inline: false },
+            
+            { name: '━━━ CLAN COMMANDS ━━━', value: '\u200b', inline: false },
+            { name: `\`${PREFIX}crclan #TAG\``, value: 'View clan info, members, and donation stats', inline: false },
+            { name: `\`${PREFIX}crmembers #TAG\``, value: 'See top 15 clan members by trophies', inline: false },
+            
+            { name: '━━━ WAR COMMANDS ━━━', value: '\u200b', inline: false },
+            { name: `\`${PREFIX}crwar #TAG\``, value: 'View current river race standings and fame', inline: false },
+            { name: `\`${PREFIX}crattacks #TAG\``, value: 'See who attacked and who\'s slacking today', inline: false },
+            { name: `\`${PREFIX}crwarhistory #TAG\``, value: 'View last 5 war results with trophy changes', inline: false },
+            
+            { name: '━━━ OTHER ━━━', value: '\u200b', inline: false },
+            { name: `\`${PREFIX}crcard [name]\``, value: 'Look up any card\'s elixir cost and rarity', inline: false }
+        )
+        .setFooter({ text: 'SOLDIER¹ Clash Royale • Include # in your tag!' })
+        .setTimestamp();
+    
+    return message.channel.send({ embeds: [embed] });
+}
 
 // ==================================================
 // COMMAND: FORCESAVE
