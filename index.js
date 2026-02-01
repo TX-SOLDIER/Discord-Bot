@@ -10239,6 +10239,7 @@ const thinkingPatterns = [
     /^(the user|according|make sure|my personality|since it|also,|now i|got it)/i,
     /^(don't show|keep it|i should respond|check my|it says|that's|maybe add)/i,
     /(system prompt|personality traits|internal thoughts|respond with|concise and)/i,
+    /^(just a|straightforward|answer with|if appropriate|a simple|here's my|my response)/i,
 ];
 
 const cleanSentences = allSentences.filter(sentence => {
