@@ -367,9 +367,9 @@ const spinCooldowns = new Map();
 // AI SYSTEM CONFIGURATION
 // ==================================================
 const AI_MODELS = [
-    { name: "DeepSeek R1", model: "deepseek/r1-0528:free" },
-    { name: "Llama 4 Maverick", model: "meta-llama/llama-4-maverick:free" },
-    { name: "GLM 4.5 Air", model: "z-ai/glm-4.5-air:free" }
+    { name: "DeepSeek R1T Chimera", model: "tngtech/deepseek-r1t-chimera:free" },
+    { name: "GLM 4.5 Air", model: "z-ai/glm-4.5-air:free" },
+    { name: "Devstral 2", model: "mistralai/devstral-2-2512:free" }
 ];
 
 // ==================================================
