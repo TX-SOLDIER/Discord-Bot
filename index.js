@@ -13067,9 +13067,7 @@ else if (command === 'crhelp') {
 }
 else if (command === 'myip') {
     // Bot owner only
-    if (message.author.id !== BOT_OWNER_ID) {
-        return message.reply('❌ Only the bot owner can use this command.');
-    }
+    if (message.author.id !== OWNER_ID) {
     
     try {
         const response = await fetch('https://api.ipify.org?format=json');
