@@ -10217,19 +10217,32 @@ RULES:
                 usedModel = AI_MODELS[i].name;
                 success = true;
 
-                // Clean up response if using fallback models
-                if (i > 0) {
-                    data.choices[0].message.content = data.choices[0].message.content
-                        .replace(/\*\*/g, '')
-                        .replace(/\*/g, '')
-                        .replace(/```[\s\S]*?```/g, '')
-                        .replace(/`/g, '')
-                        .replace(/#{1,6}\s?/g, '')
-                        .replace(/>\s?/g, '')
-                        .replace(/\n{3,}/g, '\n\n')
-                        .replace(/^\s+|\s+$/g, '')
-                        .trim();
-                }
+                // Clean up response (remove thinking/reasoning and extra formatting)
+data.choices[0].message.content = data.choices[0].message.content
+    // Remove thinking blocks (DeepSeek R1 style)
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .replace(/\*\*Thinking[\s\S]*?\*\*\n?/gi, '')
+    .replace(/^(Okay|Alright|Let me|I need to|I should|Let's see|Hmm)[\s\S]*?\n\n/gi, '')
+    // Remove markdown formatting
+    .replace(/\*\*/g, '')
+    .replace(/\*/g, '')
+    .replace(/```[\s\S]*?```/g, '')
+    .replace(/`/g, '')
+    .replace(/#{1,6}\s?/g, '')
+    .replace(/>\s?/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/^\s+|\s+$/g, '')
+    .trim();
+
+// If response still has reasoning, extract just the final answer
+const lines = data.choices[0].message.content.split('\n');
+const finalResponse = lines.filter(line => 
+    !line.match(/^(I need to|I should|Let me|Maybe|That works|Also|Keep it)/i)
+).join('\n').trim();
+
+if (finalResponse.length > 10) {
+    data.choices[0].message.content = finalResponse;
+}
                 break;
 
             } catch (modelErr) {
