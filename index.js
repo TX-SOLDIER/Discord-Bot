@@ -8760,14 +8760,7 @@ else if (command === 'citycam') {
             .map(c => `• ${c.name.split('–')[0].trim()}`)
             .join('\n');
 
-        return message.channel.send({
-            embeds: [{
-                color: 0x00aaff,
-                title: "🌍 Available Live City Cams",
-                description: `${list}\n\nUse: \`$citycam <city>\` or \`$citycam random\``,
-                footer: { text: "All feeds are public & live" }
-            }]
-        });
+        return message.channel.send(`🌍 **Available Live City Cams**\n\n${list}\n\nUse: \`$citycam <city>\` or \`$citycam random\``);
     }
 
     let cam;
@@ -8784,17 +8777,8 @@ else if (command === 'citycam') {
         return message.reply('❌ City not found. Use `$citycam list`.');
     }
 
-    const embed = {
-        color: 0x00aaff,
-        title: "📡 LIVE CITY CAMERA",
-        description: `**${cam.name}**\n\n▶ Click to watch the live feed.`,
-        url: cam.url,
-        footer: {
-            text: `Source: ${cam.platform} • Free public stream`
-        }
-    };
-
-    message.channel.send({ embeds: [embed] });
+    await message.channel.send(`📡 **LIVE CITY CAMERA**\n**${cam.name}**`);
+    message.channel.send(cam.url);
 }
 
 // ==================================================
