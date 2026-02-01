@@ -367,9 +367,9 @@ const spinCooldowns = new Map();
 // AI SYSTEM CONFIGURATION
 // ==================================================
 const AI_MODELS = [
-    { name: "DeepSeek R1", model: "deepseek/deepseek-r1:free" },
-    { name: "Gemma 3 4B", model: "google/gemma-3-4b-it:free" },
-    { name: "Llama 4 Scout", model: "meta-llama/llama-4-scout:free" }
+    { name: "DeepSeek R1", model: "deepseek/r1-0528:free" },
+    { name: "Llama 4 Maverick", model: "meta-llama/llama-4-maverick:free" },
+    { name: "GLM 4.5 Air", model: "z-ai/glm-4.5-air:free" }
 ];
 
 // ==================================================
@@ -10356,9 +10356,9 @@ else if (command === 'aistat' || command === 'aistats') {
             { name: '💬 Active Conversations', value: `${totalConversations}`, inline: true },
             { name: '📝 Total Messages Cached', value: `${totalMessages}`, inline: true },
             { name: '🧠 Memory Limit', value: '4 msgs / ~1000 tokens', inline: true },
-            { name: '⚡ Primary Model', value: 'DeepSeek R1', inline: true },
-{ name: '🔄 Fallback 1', value: 'Gemma 3 4B', inline: true },
-{ name: '🔄 Fallback 2', value: 'Llama 4 Scout', inline: true }
+         { name: '⚡ Primary Model', value: 'DeepSeek R1', inline: true },
+        { name: '🔄 Fallback 1', value: 'Llama 4 Maverick', inline: true },
+        { name: '🔄 Fallback 2', value: 'GLM 4.5 Air', inline: true }
         )
         .setFooter({ text: 'SOLDIER¹ AI System' })
         .setTimestamp();
