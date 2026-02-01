@@ -368,8 +368,8 @@ const spinCooldowns = new Map();
 // ==================================================
 const AI_MODELS = [
     { name: "DeepSeek R1T Chimera", model: "tngtech/deepseek-r1t-chimera:free" },
-    { name: "Qwen3 Coder", model: "qwen/qwen3-coder:free" },
-    { name: "Gemini Flash 1.5", model: "google/gemini-flash-1.5:free" }
+    { name: "OpenRouter Auto (Free)", model: "openrouter/auto" },
+    { name: "DeepSeek R1T Chimera Backup", model: "tngtech/deepseek-r1t-chimera:free" }
 ];
 
 // ==================================================
