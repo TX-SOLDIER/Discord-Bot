@@ -13065,6 +13065,20 @@ else if (command === 'crhelp') {
     
     return message.channel.send({ embeds: [embed] });
 }
+else if (command === 'myip') {
+    // Bot owner only
+    if (message.author.id !== BOT_OWNER_ID) {
+        return message.reply('❌ Only the bot owner can use this command.');
+    }
+    
+    try {
+        const response = await fetch('https://api.ipify.org?format=json');
+        const data = await response.json();
+        return message.reply(`🌐 Server IP: \`${data.ip}\``);
+    } catch (err) {
+        return message.reply('❌ Could not fetch IP');
+    }
+}
 
 // ==================================================
 // COMMAND: FORCESAVE
