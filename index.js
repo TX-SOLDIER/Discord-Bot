@@ -10240,6 +10240,7 @@ const thinkingPatterns = [
     /^(don't show|keep it|i should respond|check my|it says|that's|maybe add)/i,
     /(system prompt|personality traits|internal thoughts|respond with|concise and)/i,
     /^(just a|straightforward|answer with|if appropriate|a simple|here's my|my response)/i,
+    /^(no reasoning|no thinking|no internal|just the answer|here it is|here is my|direct answer)/i,
 ];
 
 const cleanSentences = allSentences.filter(sentence => {
