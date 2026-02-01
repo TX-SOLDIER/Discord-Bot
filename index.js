@@ -10233,11 +10233,22 @@ if (cleanedResponse.toLowerCase().includes('final answer')) {
     cleanedResponse = cleanedResponse.split(/final answer[:\s]*/i).pop();
 }
 
-// Method 2: If there's a quoted response, extract it
-const quotedMatch = cleanedResponse.match(/"([^"]+)"/);
-if (quotedMatch && quotedMatch[1].length > 10) {
-    cleanedResponse = quotedMatch[1];
-} else {
+// Method 2: If there's a quoted response that looks like an answer (not the question), extract it
+const quotedMatches = cleanedResponse.match(/"([^"]+)"/g);
+if (quotedMatches && quotedMatches.length > 0) {
+    // Get the LAST quote (usually the answer, not the question)
+    let bestQuote = '';
+    for (const quote of quotedMatches) {
+        const inner = quote.replace(/"/g, '');
+        // Skip if it's just the user's question repeated
+        if (inner.length > 10 && !inner.toLowerCase().includes('who is your pookie')) {
+            bestQuote = inner;
+        }
+    }
+    if (bestQuote) {
+        cleanedResponse = bestQuote;
+    }
+}
     // Method 3: Take the LAST sentence that has an emoji or ends with punctuation
     const sentences = cleanedResponse.split(/(?<=[.!?~])\s+/);
     
