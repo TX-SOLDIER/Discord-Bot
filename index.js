@@ -3628,169 +3628,136 @@ else if (command === 'investigate' || command === 'inv' || command === 'profile'
     // Wait for effect
     await new Promise(resolve => setTimeout(resolve, 2000));
       // ==================================================
-    // EMBED 1: IDENTITY & ACCOUNT INFO
-    // ==================================================
-    const embed1 = new EmbedBuilder()
-        .setColor(riskColor)
-        .setTitle('🔍 OPERATION: DEEP SCAN - CLASSIFIED REPORT')
-        .setDescription(
-            '```ansi\n' +
-            '\u001b[31m╔══════════════════════════════════════════════════════════╗\n' +
-            '║  ██████╗ ███████╗███████╗██████╗     ███████╗ ██████╗ █████╗ ███╗   ██╗  ║\n' +
-            '║  ██╔══██╗██╔════╝██╔════╝██╔══██╗    ██╔════╝██╔════╝██╔══██╗████╗  ██║  ║\n' +
-            '║  ██║  ██║█████╗  █████╗  ██████╔╝    ███████╗██║     ███████║██╔██╗ ██║  ║\n' +
-            '║  ██║  ██║██╔══╝  ██╔══╝  ██╔═══╝     ╚════██║██║     ██╔══██║██║╚██╗██║  ║\n' +
-            '║  ██████╔╝███████╗███████╗██║         ███████║╚██████╗██║  ██║██║ ╚████║  ║\n' +
-            '║  ╚═════╝ ╚══════╝╚══════╝╚═╝         ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝  ║\n' +
-            '║                                                                          ║\n' +
-            '║               🔒 CLASSIFIED - AUTHORIZED PERSONNEL ONLY 🔒               ║\n' +
-            '╚══════════════════════════════════════════════════════════════════════════╝\u001b[0m\n' +
-            '```'
-        )
-        .setThumbnail(user.displayAvatarURL({ dynamic: true, size: 256 }))
-        .setTimestamp();
+// EMBED 1: IDENTITY & ACCOUNT INFO
+// ==================================================
+const embed1 = new EmbedBuilder()
+    .setColor(riskColor)
+    .setTitle('🪖 OPERATION: DEEP SCAN')
+    .setDescription(
+        '**CLASSIFIED REPORT**\n' +
+        '🔒 Restricted Access · 📡 Scan Active'
+    )
+    .setThumbnail(user.displayAvatarURL({ dynamic: true, size: 256 }))
+    .setTimestamp();
     
     // ==================================================
-    // EMBED 2: SUBJECT IDENTIFICATION
-    // ==================================================
-    const embed2 = new EmbedBuilder()
-        .setColor(0x3498DB)
-        .setTitle('📸 SECTION 1: SUBJECT IDENTIFICATION')
-        .setDescription(
-            '```\n' +
-            '┌─────────────────────────────────────────────────────────────┐\n' +
-            '│  📸 SUBJECT IDENTIFICATION                                  │\n' +
-            '├─────────────────────────────────────────────────────────────┤\n' +
-            '│                                                             │\n' +
-            '│  TARGET: ' + user.tag.padEnd(45, ' ') + '│\n' +
-            '│  USER ID: ' + userId.padEnd(44, ' ') + '│\n' +
-            '│  GLOBAL NAME: ' + (user.globalName || 'None').slice(0, 35).padEnd(40, ' ') + '│\n' +
-            '│  DISPLAY NAME: ' + (target.displayName || user.username).slice(0, 35).padEnd(39, ' ') + '│\n' +
-            '│                                                             │\n' +
-            '│  📅 ACCOUNT CREATED: ' + user.createdAt.toDateString().padEnd(33, ' ') + '│\n' +
-            '│  ⏰ ACCOUNT AGE: ' + `${accountYears}y ${accountMonths}m ${accountDaysRem}d`.padEnd(37, ' ') + '│\n' +
-            '│                                                             │\n' +
-            '│  🤖 BOT: ' + (user.bot ? 'Yes' : 'No').padEnd(10, ' ') + '  🔒 SYSTEM: ' + (user.system ? 'Yes' : 'No').padEnd(15, ' ') + '│\n' +
-            '│                                                             │\n' +
-            '└─────────────────────────────────────────────────────────────┘\n' +
-            '```'
-        )
-        .addFields(
-            { name: '🎖️ Discord Badges', value: badgeString || 'None', inline: true },
-            { name: '📡 Status', value: `${statusEmoji[status]} ${status.toUpperCase()}`, inline: true },
-            { name: '🔄 Username History', value: `\`${userHistory.usernames?.length || 0} changes\``, inline: true }
-        );
-    
-    // Add activity if present
-    if (gameActivity) {
-        embed2.addFields({ name: '🎮 Playing', value: gameActivity.name, inline: true });
-    }
-    if (spotifyActivity) {
-        embed2.addFields({ name: '🎵 Spotify', value: `${spotifyActivity.details || 'Unknown'} - ${spotifyActivity.state || 'Unknown'}`, inline: true });
-    }
-    if (customStatus) {
-        embed2.addFields({ name: '💬 Custom Status', value: customStatus.state || 'None', inline: true });
-    }
+// EMBED 2: SUBJECT IDENTIFICATION
+// ==================================================
+const embed2 = new EmbedBuilder()
+    .setColor(0x3498DB)
+    .setTitle('📸 SUBJECT IDENTIFICATION')
+    .setDescription(
+        `🆔 **Target:** ${user.tag}\n` +
+        `📛 **User ID:** ${userId}\n` +
+        `👤 **Global:** ${user.globalName || 'None'}\n` +
+        `🏷️ **Display:** ${target.displayName || user.username}\n` +
+        `📅 **Created:** ${user.createdAt.toDateString()}\n` +
+        `⏱️ **Age:** ${accountYears}y ${accountMonths}m ${accountDaysRem}d\n` +
+        `🤖 **Bot:** ${user.bot ? 'Yes' : 'No'} · 🔒 **System:** ${user.system ? 'Yes' : 'No'}`
+    )
+    .addFields(
+        { name: '🎖️ Badges', value: badgeString || 'None', inline: true },
+        { name: '📡 Status', value: `${statusEmoji[status]} ${status.toUpperCase()}`, inline: true },
+        { name: '🔄 History', value: `\`${userHistory.usernames?.length || 0} changes\``, inline: true }
+    );
     
     // ==================================================
-    // EMBED 3: SERVER PRESENCE
-    // ==================================================
-    const embed3 = new EmbedBuilder()
-        .setColor(0x9B59B6)
-        .setTitle('🏠 SECTION 2: SERVER PRESENCE ANALYSIS')
-        .setDescription(
-            '```\n' +
-            '┌─────────────────────────────────────────────────────────────┐\n' +
-            '│  🏠 SERVER MEMBERSHIP ANALYSIS                              │\n' +
-            '├─────────────────────────────────────────────────────────────┤\n' +
-            '│                                                             │\n' +
-            '│  📅 JOINED SERVER: ' + target.joinedAt.toDateString().padEnd(35, ' ') + '│\n' +
-            '│  ⏰ MEMBER FOR: ' + `${memberYears}y ${memberMonths}m ${memberDaysRem}d`.padEnd(38, ' ') + '│\n' +
-            '│  📊 JOIN POSITION: #' + String(joinPosition).padEnd(10, ' ') + ' of ' + String(sortedMembers.length).padEnd(15, ' ') + '│\n' +
-            '│  📈 JOINED BEFORE: ' + `${joinPercentile}% of members`.padEnd(35, ' ') + '│\n' +
-            '│                                                             │\n' +
-            '│  👑 HIGHEST ROLE: ' + (roles[0] || 'None').slice(0, 36).padEnd(36, ' ') + '│\n' +
-            '│  🛡️ IMMUNE STATUS: ' + (isUserImmune ? `✅ YES (${immuneRank})` : '❌ NO').padEnd(35, ' ') + '│\n' +
-            '│  👑 SERVER OWNER: ' + (target.id === message.guild.ownerId ? '✅ YES' : '❌ NO').padEnd(36, ' ') + '│\n' +
-            '│                                                             │\n' +
-            '└─────────────────────────────────────────────────────────────┘\n' +
-            '```'
-        )
-        .addFields(
-            { name: `📋 Roles (${roles.length})`, value: roles.length > 0 ? roles.map(r => `\`${r}\``).join(', ').slice(0, 1024) : 'None', inline: false }
-        );
-    
-    // Add permissions check for admins
-    const dangerousPerms = [];
-    if (target.permissions.has('Administrator')) dangerousPerms.push('Administrator');
-    if (target.permissions.has('ManageGuild')) dangerousPerms.push('Manage Server');
-    if (target.permissions.has('ManageRoles')) dangerousPerms.push('Manage Roles');
-    if (target.permissions.has('ManageChannels')) dangerousPerms.push('Manage Channels');
-    if (target.permissions.has('KickMembers')) dangerousPerms.push('Kick');
-    if (target.permissions.has('BanMembers')) dangerousPerms.push('Ban');
-    if (target.permissions.has('ManageMessages')) dangerousPerms.push('Manage Messages');
-    if (target.permissions.has('MentionEveryone')) dangerousPerms.push('Mention Everyone');
-    
-    if (dangerousPerms.length > 0) {
-        embed3.addFields({ name: '⚠️ Dangerous Permissions', value: dangerousPerms.map(p => `\`${p}\``).join(', '), inline: false });
-    }
-    
-    // ==================================================
-    // EMBED 4: FINANCIAL INVESTIGATION
-    // ==================================================
-    
-    // Calculate wealth rankings
-    const allBalances = Object.entries(botData.economyData || {})
-        .map(([id, data]) => ({ id, balance: data.balance || 0 }))
-        .sort((a, b) => b.balance - a.balance);
-    const globalRank = allBalances.findIndex(u => u.id === odId) + 1;
-    
-    // Get recent transactions
-    const recentTrans = transactions.slice(-10).reverse();
-    let transactionLog = '';
-    if (recentTrans.length > 0) {
-        transactionLog = recentTrans.map(t => {
-            const timeAgo = formatTimeAgo(t.timestamp);
-            const sign = t.amount >= 0 ? '+' : '';
-            return `\`${timeAgo}\` ${sign}${t.amount.toLocaleString()} (${t.type})`;
-        }).join('\n');
-    } else {
-        transactionLog = 'No transactions recorded';
-    }
-    
-    // Calculate total earned/spent from transactions
-    let totalEarned = 0;
-    let totalSpent = 0;
-    transactions.forEach(t => {
-        if (t.amount > 0) totalEarned += t.amount;
-        else totalSpent += Math.abs(t.amount);
+// EMBED 3: SERVER PRESENCE
+// ==================================================
+const embed3 = new EmbedBuilder()
+    .setColor(0x9B59B6)
+    .setTitle('🏠 SERVER PRESENCE ANALYSIS')
+    .setDescription(
+        `📅 **Joined Server:** ${target.joinedAt.toDateString()}\n` +
+        `⏱️ **Member For:** ${memberYears}y ${memberMonths}m ${memberDaysRem}d\n` +
+        `📊 **Join Position:** #${joinPosition} of ${sortedMembers.length}\n` +
+        `📈 **Joined Before:** ${joinPercentile}% of members\n` +
+        `👑 **Highest Role:** ${roles[0] || 'None'}\n` +
+        `🛡️ **Immune:** ${isUserImmune ? `Yes (${immuneRank})` : 'No'} · ` +
+        `👑 **Owner:** ${target.id === message.guild.ownerId ? 'Yes' : 'No'}`
+    )
+    .addFields(
+        {
+            name: `📋 Roles (${roles.length})`,
+            value: roles.length
+                ? roles.map(r => `\`${r}\``).join(', ').slice(0, 1024)
+                : 'None',
+            inline: false
+        }
+    );
+
+// ==================================================
+// PERMISSION RISK CHECK
+// ==================================================
+const dangerousPerms = [];
+if (target.permissions.has('Administrator')) dangerousPerms.push('Administrator');
+if (target.permissions.has('ManageGuild')) dangerousPerms.push('Manage Server');
+if (target.permissions.has('ManageRoles')) dangerousPerms.push('Manage Roles');
+if (target.permissions.has('ManageChannels')) dangerousPerms.push('Manage Channels');
+if (target.permissions.has('KickMembers')) dangerousPerms.push('Kick');
+if (target.permissions.has('BanMembers')) dangerousPerms.push('Ban');
+if (target.permissions.has('ManageMessages')) dangerousPerms.push('Manage Messages');
+if (target.permissions.has('MentionEveryone')) dangerousPerms.push('Mention Everyone');
+
+if (dangerousPerms.length > 0) {
+    embed3.addFields({
+        name: '⚠️ Elevated Permissions',
+        value: dangerousPerms.map(p => `\`${p}\``).join(', '),
+        inline: false
     });
+}
     
-    const embed4 = new EmbedBuilder()
-        .setColor(0xF1C40F)
-        .setTitle('💰 SECTION 3: FINANCIAL INVESTIGATION')
-        .setDescription(
-            '```ansi\n' +
-            '\u001b[33m┌─────────────────────────────────────────────────────────────┐\n' +
-            '│  💰 FINANCIAL INVESTIGATION                                 │\n' +
-            '├─────────────────────────────────────────────────────────────┤\n' +
-            '│                                                             │\n' +
-            '│  💵 WALLET BALANCE: ' + String(balance.toLocaleString()).padEnd(30, ' ') + '│\n' +
-            '│  💎 GLOBAL RANK: #' + String(globalRank || 'N/A').padEnd(32, ' ') + '│\n' +
-            '│                                                             │\n' +
-            '│  📈 TOTAL EARNED: +' + String(totalEarned.toLocaleString()).padEnd(31, ' ') + '│\n' +
-            '│  📉 TOTAL SPENT: -' + String(totalSpent.toLocaleString()).padEnd(32, ' ') + '│\n' +
-            '│  💹 NET PROFIT: ' + String((totalEarned - totalSpent).toLocaleString()).padEnd(34, ' ') + '│\n' +
-            '│                                                             │\n' +
-            '└─────────────────────────────────────────────────────────────┘\u001b[0m\n' +
-            '```'
-        )
-        .addFields(
-            { name: '💵 Balance', value: `\`${balance.toLocaleString()}\``, inline: true },
-            { name: '🌍 Global Rank', value: `\`#${globalRank || 'N/A'}\``, inline: true },
-            { name: '📊 Transactions', value: `\`${transactions.length}\``, inline: true },
-            { name: '🔄 Recent Transactions (Last 10)', value: transactionLog.slice(0, 1024) || 'None', inline: false }
-        );
+// ==================================================
+// EMBED 4: FINANCIAL INVESTIGATION
+// ==================================================
+
+// Calculate wealth rankings
+const allBalances = Object.entries(botData.economyData || {})
+    .map(([id, data]) => ({ id, balance: data.balance || 0 }))
+    .sort((a, b) => b.balance - a.balance);
+const globalRank = allBalances.findIndex(u => u.id === odId) + 1;
+
+// Get recent transactions
+const recentTrans = transactions.slice(-10).reverse();
+let transactionLog = '';
+if (recentTrans.length > 0) {
+    transactionLog = recentTrans.map(t => {
+        const timeAgo = formatTimeAgo(t.timestamp);
+        const sign = t.amount >= 0 ? '+' : '';
+        return `\`${timeAgo}\` ${sign}${t.amount.toLocaleString()} (${t.type})`;
+    }).join('\n');
+} else {
+    transactionLog = 'No transactions recorded';
+}
+
+// Calculate total earned / spent
+let totalEarned = 0;
+let totalSpent = 0;
+transactions.forEach(t => {
+    if (t.amount > 0) totalEarned += t.amount;
+    else totalSpent += Math.abs(t.amount);
+});
+
+const embed4 = new EmbedBuilder()
+    .setColor(0xF1C40F)
+    .setTitle('💰 FINANCIAL INVESTIGATION')
+    .setDescription(
+        `💵 **Wallet:** ${balance.toLocaleString()}\n` +
+        `🌍 **Global Rank:** #${globalRank || 'N/A'}\n` +
+        `📈 **Earned:** +${totalEarned.toLocaleString()}\n` +
+        `📉 **Spent:** -${totalSpent.toLocaleString()}\n` +
+        `💹 **Net:** ${(totalEarned - totalSpent).toLocaleString()}`
+    )
+    .addFields(
+        { name: '💵 Balance', value: `\`${balance.toLocaleString()}\``, inline: true },
+        { name: '🌍 Rank', value: `\`#${globalRank || 'N/A'}\``, inline: true },
+        { name: '📊 Transactions', value: `\`${transactions.length}\``, inline: true },
+        {
+            name: '🔄 Recent Transactions (Last 10)',
+            value: transactionLog.slice(0, 1024) || 'None',
+            inline: false
+        }
+    );
       // ==================================================
     // EMBED 5: GAMBLING ANALYTICS
     // ==================================================
@@ -3884,32 +3851,23 @@ else if (command === 'investigate' || command === 'inv' || command === 'profile'
         else gamblingGrade = 'F (TERRIBLE)';
     }
     
-    const embed5 = new EmbedBuilder()
-        .setColor(0xE74C3C)
-        .setTitle('🎰 SECTION 4: GAMBLING ANALYTICS')
-        .setDescription(
-            '```ansi\n' +
-            '\u001b[31m┌─────────────────────────────────────────────────────────────┐\n' +
-            '│  🎰 GAMBLING PROFILE - DEEP ANALYSIS                        │\n' +
-            '├─────────────────────────────────────────────────────────────┤\n' +
-            '│                                                             │\n' +
-            '│  📊 OVERALL GAMBLING STATS:                                 │\n' +
-            '│  ├─ Total Games Played: ' + String(totalGames).padEnd(30, ' ') + '│\n' +
-            '│  ├─ Total Wins: ' + String(totalWins).padEnd(38, ' ') + '│\n' +
-            '│  ├─ Win Rate: ' + String(winRate + '%').padEnd(40, ' ') + '│\n' +
-            '│  ├─ Total Wagered: ' + String(totalWagered.toLocaleString()).padEnd(35, ' ') + '│\n' +
-            '│  ├─ Total Won: ' + String(totalWon.toLocaleString()).padEnd(39, ' ') + '│\n' +
-            '│  ├─ NET PROFIT: ' + String(netProfit.toLocaleString()).padEnd(38, ' ') + '│\n' +
-            '│  └─ ROI: ' + String(roi + '%').padEnd(45, ' ') + '│\n' +
-            '│                                                             │\n' +
-            '│  📈 GAMBLING GRADE: ' + gamblingGrade.padEnd(34, ' ') + '│\n' +
-            '│                                                             │\n' +
-            '└─────────────────────────────────────────────────────────────┘\u001b[0m\n' +
-            '```'
-        )
-        .addFields(
-            { name: '🎮 Per-Game Breakdown', value: gamblingBreakdown.slice(0, 1024), inline: false }
-        );
+const embed5 = new EmbedBuilder()
+    .setColor(0xE74C3C)
+    .setTitle('🎰 GAMBLING ANALYTICS')
+    .setDescription(
+        `📊 **Games:** ${totalGames} · **Wins:** ${totalWins} · **Win Rate:** ${winRate}%\n` +
+        `💰 **Wagered:** ${totalWagered.toLocaleString()}\n` +
+        `🏆 **Won:** ${totalWon.toLocaleString()}\n` +
+        `📉 **Net Profit:** ${netProfit.toLocaleString()}\n` +
+        `📈 **ROI:** ${roi}% · 🎖️ **Grade:** ${gamblingGrade}`
+    )
+    .addFields(
+        {
+            name: '🎮 Per-Game Breakdown',
+            value: gamblingBreakdown.slice(0, 1024) || 'None',
+            inline: false
+        }
+    );
     
     // Add biggest win/loss
     if (userStats.biggestWin && userStats.biggestWin.amount > 0) {
@@ -3978,28 +3936,27 @@ else if (command === 'investigate' || command === 'inv' || command === 'profile'
         else grinderGrade = 'C (CASUAL)';
     }
     
-    const embed6 = new EmbedBuilder()
-        .setColor(0x2ECC71)
-        .setTitle('⛏️ SECTION 5: GRINDING ANALYTICS')
-        .setDescription(
-            '```ansi\n' +
-            '\u001b[32m┌─────────────────────────────────────────────────────────────┐\n' +
-            '│  ⛏️ GRINDING PROFILE - MINECRAFT STATS                       │\n' +
-            '├─────────────────────────────────────────────────────────────┤\n' +
-            '│                                                             │\n' +
-            '│  📊 OVERALL GRINDING STATS:                                 │\n' +
-            '│  ├─ Total Grinds: ' + String(totalGrinds).padEnd(36, ' ') + '│\n' +
-            '│  ├─ Total Earned: ' + String(totalGrindingEarned.toLocaleString()).padEnd(36, ' ') + '│\n' +
-            '│  └─ Avg Per Grind: ' + String(totalGrinds > 0 ? Math.floor(totalGrindingEarned / totalGrinds) : 0).padEnd(35, ' ') + '│\n' +
-            '│                                                             │\n' +
-            '│  📈 GRINDER GRADE: ' + grinderGrade.padEnd(35, ' ') + '│\n' +
-            '│                                                             │\n' +
-            '└─────────────────────────────────────────────────────────────┘\u001b[0m\n' +
-            '```'
-        )
-        .addFields(
-            { name: '🎮 Per-Activity Breakdown', value: grindingBreakdown.slice(0, 1024), inline: false }
-        );
+
+const embed6 = new EmbedBuilder()
+    .setColor(0x2ECC71)
+    .setTitle('⛏️ GRINDING ANALYTICS')
+    .setDescription(
+        `📊 **Total Grinds:** ${totalGrinds}\n` +
+        `💰 **Total Earned:** ${totalGrindingEarned.toLocaleString()}\n` +
+        `📈 **Avg / Grind:** ${
+            totalGrinds > 0
+                ? Math.floor(totalGrindingEarned / totalGrinds).toLocaleString()
+                : '0'
+        }\n` +
+        `🎖️ **Grinder Grade:** ${grinderGrade}`
+    )
+    .addFields(
+        {
+            name: '🎮 Per-Activity Breakdown',
+            value: grindingBreakdown.slice(0, 1024) || 'None',
+            inline: false
+        }
+    );
     
     // ==================================================
     // EMBED 7: CRIMINAL RECORD
@@ -4033,43 +3990,32 @@ else if (command === 'investigate' || command === 'inv' || command === 'profile'
     }
     
     // Check current jail status
-    const currentJail = botData.crimeData?.[odId]?.jailedUntil;
-    const isJailed = currentJail && currentJail > Date.now();
-    
-    const embed7 = new EmbedBuilder()
-        .setColor(0x8B0000)
-        .setTitle('🔫 SECTION 6: CRIMINAL RECORD')
-        .setDescription(
-            '```ansi\n' +
-            '\u001b[31m┌─────────────────────────────────────────────────────────────┐\n' +
-            '│  🔫 CRIMINAL INVESTIGATION REPORT                           │\n' +
-            '├─────────────────────────────────────────────────────────────┤\n' +
-            '│                                                             │\n' +
-            '│  ⚠️ CRIMINAL CLASSIFICATION: ' + criminalRank.padEnd(25, ' ') + '│\n' +
-            '│                                                             │\n' +
-            '│  📊 CRIME STATISTICS:                                       │\n' +
-            '│  ├─ Total Robbery Attempts: ' + String(totalRobberies).padEnd(26, ' ') + '│\n' +
-            '│  ├─ Successful: ' + String(successfulRobs).padEnd(37, ' ') + '│\n' +
-            '│  ├─ Failed: ' + String(failedRobs).padEnd(41, ' ') + '│\n' +
-            '│  └─ Success Rate: ' + String(robSuccessRate + '%').padEnd(35, ' ') + '│\n' +
-            '│                                                             │\n' +
-            '│  💰 FINANCIAL IMPACT:                                       │\n' +
-            '│  ├─ Total Stolen: +' + String(totalStolen.toLocaleString()).padEnd(34, ' ') + '│\n' +
-            '│  ├─ Total Fines: -' + String(totalFines.toLocaleString()).padEnd(35, ' ') + '│\n' +
-            '│  └─ Net Crime Profit: ' + String(netCrime.toLocaleString()).padEnd(32, ' ') + '│\n' +
-            '│                                                             │\n' +
-            '│  🔒 JAIL RECORD:                                            │\n' +
-            '│  ├─ Times Jailed: ' + String(jailStats.times || 0).padEnd(36, ' ') + '│\n' +
-            '│  ├─ Times Bailed: ' + String(jailStats.bails || 0).padEnd(36, ' ') + '│\n' +
-            '│  ├─ Bail Paid: ' + String((jailStats.bailPaid || 0).toLocaleString()).padEnd(38, ' ') + '│\n' +
-            '│  └─ Currently Jailed: ' + (isJailed ? '✅ YES' : '❌ NO').padEnd(32, ' ') + '│\n' +
-            '│                                                             │\n' +
-            '└─────────────────────────────────────────────────────────────┘\u001b[0m\n' +
-            '```'
-        )
-        .addFields(
-            { name: '🎯 Top Victims', value: victimsText, inline: false }
-        );
+   
+const currentJail = botData.crimeData?.[odId]?.jailedUntil;
+const isJailed = currentJail && currentJail > Date.now();
+
+const embed7 = new EmbedBuilder()
+    .setColor(0x8B0000)
+    .setTitle('🔫 CRIMINAL RECORD')
+    .setDescription(
+        `⚠️ **Classification:** ${criminalRank}\n` +
+        `📊 **Robberies:** ${totalRobberies} · ` +
+        `✅ ${successfulRobs} · ❌ ${failedRobs} · ` +
+        `📈 ${robSuccessRate}%\n` +
+        `💰 **Stolen:** +${totalStolen.toLocaleString()} · ` +
+        `💸 **Fines:** -${totalFines.toLocaleString()}\n` +
+        `💹 **Net Crime:** ${netCrime.toLocaleString()}\n` +
+        `🔒 **Jail:** ${isJailed ? 'Yes' : 'No'} · ` +
+        `⛓️ **Times:** ${jailStats.times || 0} · ` +
+        `💳 **Bailed:** ${jailStats.bails || 0}`
+    )
+    .addFields(
+        {
+            name: '🎯 Top Victims',
+            value: victimsText || 'None',
+            inline: false
+        }
+    );
       // ==================================================
     // EMBED 8: XP & PROGRESSION
     // ==================================================
@@ -4092,35 +4038,26 @@ else if (command === 'investigate' || command === 'inv' || command === 'profile'
     const progressBar = '█'.repeat(Math.min(filledLength, progressBarLength)) + '░'.repeat(Math.max(progressBarLength - filledLength, 0));
     
     // Prestige stars
-    const prestigeStars = prestige > 0 ? '⭐'.repeat(Math.min(prestige, 10)) : 'None';
-    
-    const embed8 = new EmbedBuilder()
-        .setColor(0x3498DB)
-        .setTitle('📊 SECTION 7: XP & PROGRESSION')
-        .setDescription(
-            '```ansi\n' +
-            '\u001b[36m┌─────────────────────────────────────────────────────────────┐\n' +
-            '│  📊 XP & LEVELING ANALYSIS                                  │\n' +
-            '├─────────────────────────────────────────────────────────────┤\n' +
-            '│                                                             │\n' +
-            '│  ⭐ CURRENT STATUS:                                         │\n' +
-            '│  ├─ Level: ' + String(level).padEnd(43, ' ') + '│\n' +
-            '│  ├─ XP: ' + String(`${xp.toLocaleString()} / ${xpNeeded.toLocaleString()}`).padEnd(45, ' ') + '│\n' +
-            '│  ├─ Progress: [' + progressBar + '] ' + String(xpProgress + '%').padEnd(6, ' ') + '│\n' +
-            '│  ├─ Prestige: ' + String(prestige).padEnd(39, ' ') + '│\n' +
-            '│  └─ Server Rank: #' + String(xpRank || 'N/A').padEnd(35, ' ') + '│\n' +
-            '│                                                             │\n' +
-            '└─────────────────────────────────────────────────────────────┘\u001b[0m\n' +
-            '```'
-        )
-        .addFields(
-            { name: '📈 Level', value: `\`${level}\``, inline: true },
-            { name: '✨ XP', value: `\`${xp.toLocaleString()} / ${xpNeeded.toLocaleString()}\``, inline: true },
-            { name: '🏆 Rank', value: `\`#${xpRank || 'N/A'}\``, inline: true },
-            { name: '⭐ Prestige', value: prestigeStars, inline: true },
-            { name: '📊 Progress', value: `\`${xpProgress}%\``, inline: true },
-            { name: '🎯 XP to Next', value: `\`${(xpNeeded - xp).toLocaleString()}\``, inline: true }
-        );
+const prestigeStars = prestige > 0 ? '⭐'.repeat(Math.min(prestige, 10)) : 'None';
+
+const embed8 = new EmbedBuilder()
+    .setColor(0x3498DB)
+    .setTitle('📊 XP & PROGRESSION')
+    .setDescription(
+        `⭐ **Level:** ${level}\n` +
+        `✨ **XP:** ${xp.toLocaleString()} / ${xpNeeded.toLocaleString()}\n` +
+        `📊 **Progress:** [${progressBar}] ${xpProgress}%\n` +
+        `⭐ **Prestige:** ${prestigeStars}\n` +
+        `🏆 **Server Rank:** #${xpRank || 'N/A'}`
+    )
+    .addFields(
+        { name: '📈 Level', value: `\`${level}\``, inline: true },
+        { name: '✨ XP', value: `\`${xp.toLocaleString()} / ${xpNeeded.toLocaleString()}\``, inline: true },
+        { name: '🏆 Rank', value: `\`#${xpRank || 'N/A'}\``, inline: true },
+        { name: '⭐ Prestige', value: prestigeStars, inline: true },
+        { name: '📊 Progress', value: `\`${xpProgress}%\``, inline: true },
+        { name: '🎯 XP to Next', value: `\`${(xpNeeded - xp).toLocaleString()}\``, inline: true }
+    );
     
     // ==================================================
     // EMBED 9: MODERATION HISTORY
@@ -4170,31 +4107,31 @@ else if (command === 'investigate' || command === 'inv' || command === 'profile'
         behaviorTrend = '⭐ EXCELLENT';
     }
     
-    const embed9 = new EmbedBuilder()
-        .setColor(warnCount >= 3 ? 0xFF0000 : warnCount >= 1 ? 0xFFA500 : 0x00FF00)
-        .setTitle('⚠️ SECTION 8: MODERATION HISTORY')
-        .setDescription(
-            '```ansi\n' +
-            (warnCount >= 3 ? '\u001b[31m' : warnCount >= 1 ? '\u001b[33m' : '\u001b[32m') +
-            '┌─────────────────────────────────────────────────────────────┐\n' +
-            '│  ⚠️ MODERATION FILE                                         │\n' +
-            '├─────────────────────────────────────────────────────────────┤\n' +
-            '│                                                             │\n' +
-            '│  📊 INFRACTION SUMMARY:                                     │\n' +
-            '│  ├─ ⚠️ Warnings: ' + String(warnCount).padEnd(37, ' ') + '│\n' +
-            '│  ├─ 📝 Staff Notes: ' + String(staffNotes.length).padEnd(34, ' ') + '│\n' +
-            '│  ├─ 🚩 Flagged: ' + (flagStatus ? '✅ YES' : '❌ NO').padEnd(37, ' ') + '│\n' +
-            '│  └─ 👁️ Watch List: ' + (watchStatus ? '✅ YES' : '❌ NO').padEnd(35, ' ') + '│\n' +
-            '│                                                             │\n' +
-            '│  📊 BEHAVIOR TREND: ' + behaviorTrend.padEnd(34, ' ') + '│\n' +
-            '│                                                             │\n' +
-            '└─────────────────────────────────────────────────────────────┘\u001b[0m\n' +
-            '```'
-        )
-        .addFields(
-            { name: '⚠️ Recent Warnings (Last 5)', value: warningsLog.slice(0, 1024), inline: false },
-            { name: '📝 Staff Notes (Last 5)', value: notesLog.slice(0, 1024), inline: false }
-        );
+const embed9 = new EmbedBuilder()
+    .setColor(
+        warnCount >= 3 ? 0xFF0000 : warnCount >= 1 ? 0xFFA500 : 0x00FF00
+    )
+    .setTitle('⚠️ MODERATION HISTORY')
+    .setDescription(
+        `📊 **Infractions:**\n` +
+        `⚠️ Warnings: ${warnCount}\n` +
+        `📝 Staff Notes: ${staffNotes.length}\n` +
+        `🚩 Flagged: ${flagStatus ? 'Yes' : 'No'}\n` +
+        `👁️ Watch List: ${watchStatus ? 'Yes' : 'No'}\n` +
+        `📊 Behavior Trend: ${behaviorTrend}`
+    )
+    .addFields(
+        {
+            name: '⚠️ Recent Warnings (Last 5)',
+            value: warningsLog.slice(0, 1024) || 'None',
+            inline: false
+        },
+        {
+            name: '📝 Staff Notes (Last 5)',
+            value: notesLog.slice(0, 1024) || 'None',
+            inline: false
+        }
+    );
     
     // Add flag/watch info if present
     if (flagStatus) {
@@ -4255,39 +4192,26 @@ else if (command === 'investigate' || command === 'inv' || command === 'profile'
     }
     
     // Format voice time
-    const voiceHours = Math.floor(voiceTime / (1000 * 60 * 60));
-    const voiceMins = Math.floor((voiceTime % (1000 * 60 * 60)) / (1000 * 60));
-    const voiceTimeStr = `${voiceHours}h ${voiceMins}m`;
-    
-    const embed10 = new EmbedBuilder()
-        .setColor(0x1ABC9C)
-        .setTitle('💬 SECTION 9: ACTIVITY INTELLIGENCE')
-        .setDescription(
-            '```ansi\n' +
-            '\u001b[36m┌─────────────────────────────────────────────────────────────┐\n' +
-            '│  💬 ACTIVITY SURVEILLANCE                                   │\n' +
-            '├─────────────────────────────────────────────────────────────┤\n' +
-            '│                                                             │\n' +
-            '│  📊 MESSAGE STATISTICS:                                     │\n' +
-            '│  ├─ Total Messages: ' + String(msgCount.toLocaleString()).padEnd(33, ' ') + '│\n' +
-            '│  ├─ Avg/Day: ' + String(msgsPerDay).padEnd(40, ' ') + '│\n' +
-            '│  └─ Commands Used: ' + String(cmdCount.toLocaleString()).padEnd(34, ' ') + '│\n' +
-            '│                                                             │\n' +
-            '│  🔊 VOICE STATISTICS:                                       │\n' +
-            '│  └─ Total Voice Time: ' + voiceTimeStr.padEnd(32, ' ') + '│\n' +
-            '│                                                             │\n' +
-            '│  ⏰ LAST SEEN:                                              │\n' +
-            '│  ├─ Last Message: ' + formatTimeAgo(lastMsg).padEnd(36, ' ') + '│\n' +
-            '│  ├─ Last Command: ' + (lastCmd ? `$${lastCmd.name} (${formatTimeAgo(lastCmd.timestamp)})` : 'Never').slice(0, 30).padEnd(35, ' ') + '│\n' +
-            '│  └─ Last Active: ' + formatTimeAgo(lastSeen).padEnd(36, ' ') + '│\n' +
-            '│                                                             │\n' +
-            '└─────────────────────────────────────────────────────────────┘\u001b[0m\n' +
-            '```'
-        )
-        .addFields(
-            { name: '📍 Top Channels', value: topChannelsText, inline: true },
-            { name: '⌨️ Top Commands', value: topCmdsText, inline: true }
-        );
+const voiceHours = Math.floor(voiceTime / (1000 * 60 * 60));
+const voiceMins = Math.floor((voiceTime % (1000 * 60 * 60)) / (1000 * 60));
+const voiceTimeStr = `${voiceHours}h ${voiceMins}m`;
+
+const embed10 = new EmbedBuilder()
+    .setColor(0x1ABC9C)
+    .setTitle('💬 ACTIVITY INTELLIGENCE')
+    .setDescription(
+        `📊 **Messages:**\n` +
+        `Total: ${msgCount.toLocaleString()} · Avg/Day: ${msgsPerDay} · Commands: ${cmdCount.toLocaleString()}\n` +
+        `🔊 **Voice:** Total Time: ${voiceTimeStr}\n` +
+        `⏰ **Last Seen:**\n` +
+        `Last Message: ${formatTimeAgo(lastMsg)}\n` +
+        `Last Command: ${lastCmd ? `$${lastCmd.name} (${formatTimeAgo(lastCmd.timestamp)})` : 'Never'}\n` +
+        `Last Active: ${formatTimeAgo(lastSeen)}`
+    )
+    .addFields(
+        { name: '📍 Top Channels', value: topChannelsText || 'None', inline: true },
+        { name: '⌨️ Top Commands', value: topCmdsText || 'None', inline: true }
+    );
     
     // Calculate activity grade
     let activityGrade = 'N/A';
@@ -4412,121 +4336,96 @@ else if (command === 'investigate' || command === 'inv' || command === 'profile'
         recommendation = '🟢 LOW PRIORITY';
     }
     
-    const embed11 = new EmbedBuilder()
-        .setColor(riskColor)
-        .setTitle('🛡️ SECTION 10: SECURITY & RISK ASSESSMENT')
-        .setDescription(
-            '```ansi\n' +
-            (riskScore >= 60 ? '\u001b[31m' : riskScore >= 40 ? '\u001b[33m' : '\u001b[32m') +
-            '┌─────────────────────────────────────────────────────────────┐\n' +
-            '│  🛡️ SECURITY RISK ASSESSMENT                                │\n' +
-            '├─────────────────────────────────────────────────────────────┤\n' +
-            '│                                                             │\n' +
-            '│  🔒 RISK FACTOR ANALYSIS:                                   │\n' +
-            '│  ├─ Account Age: ' + accountAgeStatus.padEnd(37, ' ') + '│\n' +
-            '│  ├─ Server Tenure: ' + serverAgeStatus.padEnd(35, ' ') + '│\n' +
-            '│  ├─ Warning Count: ' + warningStatus.padEnd(35, ' ') + '│\n' +
-            '│  ├─ Flag Status: ' + flagRiskStatus.padEnd(37, ' ') + '│\n' +
-            '│  ├─ Watch Status: ' + watchRiskStatus.padEnd(36, ' ') + '│\n' +
-            '│  └─ Permission Risk: ' + permissionStatus.padEnd(33, ' ') + '│\n' +
-            '│                                                             │\n' +
-            '└─────────────────────────────────────────────────────────────┘\u001b[0m\n' +
-            '```'
-        )
-        .addFields(
-            { name: '📊 Risk Breakdown', value: 
+const embed11 = new EmbedBuilder()
+    .setColor(riskColor)
+    .setTitle('🛡️ SECURITY & RISK ASSESSMENT')
+    .setDescription(
+        `🔒 **Risk Factor Analysis:**\n` +
+        `Account Age: ${accountAgeStatus}\n` +
+        `Server Tenure: ${serverAgeStatus}\n` +
+        `Warning Count: ${warningStatus}\n` +
+        `Flag Status: ${flagRiskStatus}\n` +
+        `Watch Status: ${watchRiskStatus}\n` +
+        `Permission Risk: ${permissionStatus}`
+    )
+    .addFields(
+        {
+            name: '📊 Risk Breakdown',
+            value:
                 `Account Age: \`${accountAgeRisk}/30\`\n` +
                 `Server Tenure: \`${serverAgeRisk}/20\`\n` +
                 `Warnings: \`${warningRisk}/25\`\n` +
                 `Flag Status: \`${flagRisk}/20\`\n` +
                 `Watch Status: \`${watchRisk}/10\`\n` +
                 `Permissions: \`${permissionRisk}/15\``,
-                inline: true
-            },
-            { name: '🎯 Overall Assessment', value:
+            inline: true
+        },
+        {
+            name: '🎯 Overall Assessment',
+            value:
                 `**Risk Score:** \`${riskScore}/100\`\n` +
                 `**Risk Level:** ${riskEmoji} \`${riskLevel}\`\n` +
                 `**Recommendation:**\n${recommendation}`,
-                inline: true
-            }
-        );
+            inline: true
+        }
+    );
     
     // ==================================================
     // EMBED 12: FINAL SUMMARY & CONTROLS
     // ==================================================
-    const embed12 = new EmbedBuilder()
-        .setColor(riskColor)
-        .setTitle('📄 INVESTIGATION SUMMARY')
-        .setDescription(
-            '```ansi\n' +
-            '\u001b[36m╔══════════════════════════════════════════════════════════════╗\n' +
-            '║                                                              ║\n' +
-            '║                 🎯 OVERALL THREAT ASSESSMENT 🎯              ║\n' +
-            '║                                                              ║\n' +
-            '║      ┌────────────────────────────────────────────┐          ║\n' +
-            '║      │                                            │          ║\n' +
-            '║      │     ' + riskEmoji + ' ' + riskLevel.padEnd(10, ' ') + ' - RISK SCORE: ' + String(riskScore).padStart(3, ' ') + '/100     │          ║\n' +
-            '║      │                                            │          ║\n' +
-            '║      └────────────────────────────────────────────┘          ║\n' +
-            '║                                                              ║\n' +
-            '╚══════════════════════════════════════════════════════════════╝\u001b[0m\n' +
-            '```'
-        )
-        .addFields(
-            { name: '👤 Subject', value: `${user.tag} (\`${odId}\`)`, inline: true },
-            { name: '🛡️ Risk Level', value: `${riskEmoji} ${riskLevel}`, inline: true },
-            { name: '📊 Risk Score', value: `\`${riskScore}/100\``, inline: true },
-            { name: '💰 Net Worth', value: `\`${balance.toLocaleString()}\``, inline: true },
-            { name: '📈 Level', value: `\`${level}\` (P${prestige})`, inline: true },
-            { name: '⚠️ Warnings', value: `\`${warnCount}\``, inline: true },
-            { name: '🏷️ Tags', value: tagsString.slice(0, 1024), inline: false }
-        )
-        .setFooter({ text: `Investigation requested by ${message.author.tag} • Report generated in ${((Date.now() - loadingMsg.createdTimestamp) / 1000).toFixed(2)}s` })
-        .setTimestamp();
+const embed12 = new EmbedBuilder()
+    .setColor(riskColor)
+    .setTitle('📄 INVESTIGATION SUMMARY')
+    .setDescription(
+        `🎯 **Overall Threat Assessment** 🎯\n` +
+        `${riskEmoji} ${riskLevel} - Risk Score: ${riskScore}/100`
+    )
+    .addFields(
+        { name: '👤 Subject', value: `${user.tag} (\`${odId}\`)`, inline: true },
+        { name: '🛡️ Risk Level', value: `${riskEmoji} ${riskLevel}`, inline: true },
+        { name: '📊 Risk Score', value: `\`${riskScore}/100\``, inline: true },
+        { name: '💰 Net Worth', value: `\`${balance.toLocaleString()}\``, inline: true },
+        { name: '📈 Level', value: `\`${level}\` (P${prestige})`, inline: true },
+        { name: '⚠️ Warnings', value: `\`${warnCount}\``, inline: true },
+        { name: '🏷️ Tags', value: tagsString.slice(0, 1024) || 'None', inline: false }
+    )
+    .setFooter({
+        text: `Investigation requested by ${message.author.tag} • Report generated in ${((Date.now() - loadingMsg.createdTimestamp) / 1000).toFixed(2)}s`
+    })
+    .setTimestamp();
     
     // ==================================================
-    // EMBED 13: QUICK ACTIONS
-    // ==================================================
-    const embed13 = new EmbedBuilder()
-        .setColor(0x2C3E50)
-        .setTitle('⚡ QUICK ACTIONS & CONTROLS')
-        .setDescription(
-            '```\n' +
-            '┌─────────────────────────────────────────────────────────────┐\n' +
-            '│  ⚡ AVAILABLE COMMANDS                                      │\n' +
-            '├─────────────────────────────────────────────────────────────┤\n' +
-            '│                                                             │\n' +
-            '│  📝 $note @user <text>    - Add staff note                  │\n' +
-            '│  📋 $notes @user          - View all notes                  │\n' +
-            '│  🗑️ $delnote @user <id>   - Delete a note                   │\n' +
-            '│                                                             │\n' +
-            '│  🚩 $flag @user [reason]  - Flag as suspicious              │\n' +
-            '│  ✅ $unflag @user         - Remove flag                     │\n' +
-            '│                                                             │\n' +
-            '│  👁️ $watch @user [reason] - Add to watch list               │\n' +
-            '│  ✅ $unwatch @user        - Remove from watch list          │\n' +
-            '│                                                             │\n' +
-            '│  📊 $watchlist            - View all watched users          │\n' +
-            '│  🚩 $flaglist             - View all flagged users          │\n' +
-            '│                                                             │\n' +
-            '│  💰 $transactions @user   - Full transaction log            │\n' +
-            '│  📜 $history @user        - Username/avatar history         │\n' +
-            '│                                                             │\n' +
-            '└─────────────────────────────────────────────────────────────┘\n' +
-            '```'
-        )
-        .setFooter({ text: '⚔️ SOLDIER¹ INVESTIGATION SYSTEM • Classification: AUTHORIZED' });
-    
-    // ==================================================
-    // DELETE LOADING & SEND ALL EMBEDS
-    // ==================================================
-    await loadingMsg.delete().catch(() => {});
-    
-    // Send embeds in batches (Discord limit is 10 embeds per message)
-    await message.channel.send({ embeds: [embed1, embed2, embed3, embed4, embed5] });
-    await message.channel.send({ embeds: [embed6, embed7, embed8, embed9, embed10] });
-    await message.channel.send({ embeds: [embed11, embed12, embed13] });
-}
+// EMBED 13: QUICK ACTIONS
+// ==================================================
+const embed13 = new EmbedBuilder()
+    .setColor(0x2C3E50)
+    .setTitle('⚡ QUICK ACTIONS & CONTROLS')
+    .setDescription(
+        `📝 **$note @user <text>**    - Add staff note\n` +
+        `📋 **$notes @user**          - View all notes\n` +
+        `🗑️ **$delnote @user <id>**   - Delete a note\n\n` +
+        `🚩 **$flag @user [reason]**  - Flag as suspicious\n` +
+        `✅ **$unflag @user**         - Remove flag\n\n` +
+        `👁️ **$watch @user [reason]** - Add to watch list\n` +
+        `✅ **$unwatch @user**        - Remove from watch list\n\n` +
+        `📊 **$watchlist**            - View all watched users\n` +
+        `🚩 **$flaglist**             - View all flagged users\n\n` +
+        `💰 **$transactions @user**   - Full transaction log\n` +
+        `📜 **$history @user**        - Username/avatar history`
+    )
+    .setFooter({
+        text: '⚔️ SOLDIER¹ INVESTIGATION SYSTEM • Classification: AUTHORIZED'
+    });
+
+// ==================================================
+// DELETE LOADING & SEND ALL EMBEDS
+// ==================================================
+await loadingMsg.delete().catch(() => {});
+
+// Send embeds in batches (Discord limit is 10 embeds per message)
+await message.channel.send({ embeds: [embed1, embed2, embed3, embed4, embed5] });
+await message.channel.send({ embeds: [embed6, embed7, embed8, embed9, embed10] });
+await message.channel.send({ embeds: [embed11, embed12, embed13] });
 // ==================================================
 // COMMAND: NOTE (Add Staff Note)
 // ==================================================
