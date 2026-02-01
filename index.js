@@ -12463,11 +12463,11 @@ else if (command === 'crclan') {
     try {
         await message.channel.sendTyping();
         
-        const response = await fetch(`https://api.clashroyale.com/v1/clans/%23${formattedTag}`, {
-            headers: {
-                'Authorization': `Bearer ${process.env.CLASH_ROYALE_API_KEY}`
-            }
-        });
+        const response = await fetch(`https://api.clashroyale.com/v1/...`, {
+    headers: {
+        'Authorization': `Bearer ${process.env.CLASH_ROYALE_API_KEY}`
+    }
+});
         
         if (!response.ok) {
             if (response.status === 404) {
