@@ -10225,32 +10225,40 @@ RULES:
 usedModel = AI_MODELS[i].name;
 success = true;
 
-// Remove ALL thinking/reasoning (everything before the actual response)
+// NUCLEAR CLEANUP - Remove ALL thinking no matter what
 let cleanedResponse = data.choices[0].message.content;
 
-// Split by double newline and find the actual response
-const parts = cleanedResponse.split(/\n\n+/);
+// Pattern: Find the LAST sentence that looks like an actual response
+// Thinking usually ends with phrases like "Got it.", "Alright.", "response:", etc.
 
-// Find the first part that looks like an actual response (not thinking)
-const thinkingWords = /^(okay|alright|let me|first|i need|i should|i'll|let's|hmm|so,|well,|the user|according|make sure|my |since |also|now )/i;
+// Method: Split into sentences and keep only ones that don't sound like thinking
+const allSentences = cleanedResponse.split(/(?<=[.!?~])\s+/);
 
-let foundResponse = '';
-for (let j = parts.length - 1; j >= 0; j--) {
-    const part = parts[j].trim();
-    if (part && !thinkingWords.test(part) && part.length > 5) {
-        foundResponse = part;
-        break;
+const thinkingPatterns = [
+    /^(okay|alright|let me|first|i need|i should|i'll|i will|let's|hmm|so,|well,)/i,
+    /^(the user|according|make sure|my personality|since it|also,|now i|got it)/i,
+    /^(don't show|keep it|i should respond|check my|it says|that's|maybe add)/i,
+    /(system prompt|personality traits|internal thoughts|respond with|concise and)/i,
+];
+
+const cleanSentences = allSentences.filter(sentence => {
+    const trimmed = sentence.trim();
+    if (trimmed.length < 3) return false;
+    for (const pattern of thinkingPatterns) {
+        if (pattern.test(trimmed)) return false;
     }
-}
+    return true;
+});
 
-// If we found a clean response, use it; otherwise take the last part
-if (foundResponse) {
-    cleanedResponse = foundResponse;
+// Use clean sentences if we found any, otherwise take last 2 sentences
+if (cleanSentences.length > 0) {
+    cleanedResponse = cleanSentences.join(' ');
 } else {
-    cleanedResponse = parts[parts.length - 1];
+    // Fallback: just take the last 2 sentences
+    cleanedResponse = allSentences.slice(-2).join(' ');
 }
 
-// Final cleanup - remove markdown
+// Remove markdown
 cleanedResponse = cleanedResponse
     .replace(/\*\*/g, '')
     .replace(/\*/g, '')
@@ -10260,11 +10268,17 @@ cleanedResponse = cleanedResponse
     .replace(/>\s?/g, '')
     .trim();
 
-// Last resort: if it STILL starts with thinking words, remove first sentence
-if (thinkingWords.test(cleanedResponse)) {
-    const sentences = cleanedResponse.split(/(?<=[.!?])\s+/);
-    if (sentences.length > 1) {
-        cleanedResponse = sentences.slice(1).join(' ');
+// FINAL CHECK: If still starts with thinking word, remove everything before the emoji or actual content
+if (/^(let|i need|i should|okay|alright|first|the user|check|according)/i.test(cleanedResponse)) {
+    // Find first emoji or exclamation as start of real response
+    const emojiMatch = cleanedResponse.match(/[\u{1F300}-\u{1F9FF}]|[!]/u);
+    if (emojiMatch && emojiMatch.index) {
+        // Go back to find the start of that sentence
+        const beforeEmoji = cleanedResponse.substring(0, emojiMatch.index);
+        const lastPeriod = beforeEmoji.lastIndexOf('. ');
+        if (lastPeriod > -1) {
+            cleanedResponse = cleanedResponse.substring(lastPeriod + 2);
+        }
     }
 }
 
