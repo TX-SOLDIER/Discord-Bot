@@ -105,6 +105,12 @@ let botData = {
     autoDeleteUsers: {},
     countingData: {},
     economyData: {},
+
+    // ==================================================
+    // REACTION ROLES
+    // ==================================================
+    reactionRoles: {},
+
     lotteryData: {
         drawDate: null,
         winningNumbers: [],
@@ -112,6 +118,7 @@ let botData = {
         prizePool: 500000,
         isActive: false,
     },
+
     storeData: {},
     playerData: {},
     activeBattles: {},
@@ -124,19 +131,21 @@ let botData = {
     leaveMessages: {},
     logChannels: {},
     masterLog: { channelId: null, enabled: false },
+
     xpData: {},
     xpSettings: {
-      baseXp: 15,
-      cooldown: 60,
-      xpToNext: 100,
-      levelMultiplier: 1.25,
-      coinRewardPerLevel: 150,
-      coinRewardPerPrestige: 10000,
-      maxLevel: 100,
-      maxPrestige: 10,
+        baseXp: 15,
+        cooldown: 60,
+        xpToNext: 100,
+        levelMultiplier: 1.25,
+        coinRewardPerLevel: 150,
+        coinRewardPerPrestige: 10000,
+        maxLevel: 100,
+        maxPrestige: 10,
     },
     levelUpChannel: null,
-      // ==================================================
+
+    // ==================================================
     // INVESTIGATION SYSTEM DATA
     // ==================================================
     userActivity: {},
@@ -146,7 +155,8 @@ let botData = {
     flaggedUsers: {},
     watchList: {},
     userStats: {},
-      // ==================================================
+
+    // ==================================================
     // COOLDOWN & REWARD DATA
     // ==================================================
     dailyData: {},
@@ -156,10 +166,14 @@ let botData = {
     mineData: {},
     huntData: {},
 
-    // NEW: Crime/Rob System Data
+    // ==================================================
+    // CRIME / ROB SYSTEM DATA
+    // ==================================================
     crimeData: {},
 
-    // NEW: Global Economy Statistics
+    // ==================================================
+    // GLOBAL ECONOMY STATISTICS
+    // ==================================================
     globalEconomyStats: {
         totalCoinsCirculation: 0,
         totalTransactions: 0,
@@ -309,6 +323,7 @@ const saveStaffNotes = markDirty;
 const saveFlaggedUsers = markDirty;
 const saveWatchList = markDirty;
 const saveUserStats = markDirty;
+const saveReactionRoles = markDirty;
 
 // ==================================================
 // IMMUNITY SYSTEM - CHECK FUNCTION
@@ -2028,6 +2043,65 @@ function formatHand(hand) {
   return hand.map(c => `${c.value}${c.suit}`).join(' ');
 }
 
+// ==================================================
+// REACTION ROLE CLEANUP ON MESSAGE DELETE
+// ==================================================
+client.on('messageDelete', message => {
+  if (botData.reactionRoles[message.id]) {
+    delete botData.reactionRoles[message.id];
+    saveReactionRoles();
+  }
+});
+// ==================================================
+// REACTION ROLE REMOVE
+// ==================================================
+client.on('messageReactionRemove', async (reaction, user) => {
+  if (user.bot) return;
+
+  if (reaction.partial) {
+    try { await reaction.fetch(); } catch { return; }
+  }
+
+  const data = botData.reactionRoles[reaction.message.id];
+  if (!data) return;
+
+  const roleId = data.roles[reaction.emoji.name];
+  if (!roleId) return;
+
+  const guild = client.guilds.cache.get(data.guildId);
+  const member = await guild.members.fetch(user.id).catch(() => null);
+  if (!member) return;
+
+  const role = guild.roles.cache.get(roleId);
+  if (!role) return;
+
+  member.roles.remove(role).catch(() => {});
+});
+// ==================================================
+// REACTION ROLE ADD
+// ==================================================
+client.on('messageReactionAdd', async (reaction, user) => {
+  if (user.bot) return;
+
+  if (reaction.partial) {
+    try { await reaction.fetch(); } catch { return; }
+  }
+
+  const data = botData.reactionRoles[reaction.message.id];
+  if (!data) return;
+
+  const roleId = data.roles[reaction.emoji.name];
+  if (!roleId) return;
+
+  const guild = client.guilds.cache.get(data.guildId);
+  const member = await guild.members.fetch(user.id).catch(() => null);
+  if (!member) return;
+
+  const role = guild.roles.cache.get(roleId);
+  if (!role) return;
+
+  member.roles.add(role).catch(() => {});
+});
 // ==================================================
 // QOTD SYSTEM - SEND QUESTION
 // ==================================================
@@ -10523,6 +10597,37 @@ else if (command === 'aicheck' || command === 'aitest') {
 
     await statusMsg.edit({ content: null, embeds: [embed] });
 }
+// ==================================================
+// ROLE LIST COMMAND
+// ==================================================
+if (message.content === `${PREFIX}rolelist`) {
+  if (!message.guild) return;
+  if (!isImmune(message.author)) return;
+
+  const roles = message.guild.roles.cache
+    .sort((a, b) => b.position - a.position)
+    .map(role => {
+      const botTag = role.managed ? ' (bot)' : '';
+      return `${role.name} — ${role.id}${botTag}`;
+    });
+
+  let output = '';
+  const messages = [];
+
+  for (const line of roles) {
+    if ((output + line + '\n').length > 1900) {
+      messages.push(output);
+      output = '';
+    }
+    output += line + '\n';
+  }
+
+  if (output.length) messages.push(output);
+
+  for (const msg of messages) {
+    await message.channel.send('```' + msg + '```');
+  }
+}
 
 // ==================================================
 // COMMAND: KICK
@@ -12339,6 +12444,54 @@ else if (command === 'resetxp') {
   delete botData.xpData[u.id];
   saveXPData();
   message.reply(`🔄 Reset XP data for ${u.username}.`);
+}
+// ==================================================
+// REACTION ROLE CREATE COMMAND
+// ==================================================
+if (message.content.startsWith(`${PREFIX}rrcreate`)) {
+  if (!message.guild) return;
+  if (!isImmune(message.author)) return;
+
+  const lines = message.content.split('\n').slice(1);
+  let channelId = null;
+  let text = null;
+  const mappings = {};
+
+  for (const line of lines) {
+    if (line.startsWith('channel=')) {
+      channelId = line.replace('channel=', '').trim();
+    } else if (line.startsWith('message=')) {
+      text = line.replace('message=', '').trim();
+    } else if (line.includes('=')) {
+      const [emoji, roleId] = line.split('=');
+      mappings[emoji.trim()] = roleId.trim();
+    }
+  }
+
+  if (!channelId || !text || Object.keys(mappings).length === 0) {
+    return message.reply('❌ Invalid format. Missing channel, message, or role mappings.');
+  }
+
+  const targetChannel = message.guild.channels.cache.get(channelId);
+  if (!targetChannel) {
+    return message.reply('❌ Invalid channel ID.');
+  }
+
+  const sentMessage = await targetChannel.send(text);
+
+  for (const emoji of Object.keys(mappings)) {
+    await sentMessage.react(emoji).catch(() => {});
+  }
+
+  botData.reactionRoles[sentMessage.id] = {
+    guildId: message.guild.id,
+    channelId: channelId,
+    roles: mappings,
+  };
+
+  saveReactionRoles();
+
+  message.reply(`✅ Reaction role message sent to <#${channelId}>`);
 }
 
 // ==================================================
