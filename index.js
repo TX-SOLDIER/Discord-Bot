@@ -8916,10 +8916,35 @@ else if (command === 'dw' || command === 'deadliestwarrior') {
 else if (command === 'birthday') {
 
   // --------------------------
+  // TEST BIRTHDAY MESSAGE
+  // --------------------------
+  if (args[0] === 'test') {
+    // Only owner or immune
+    if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
+      return message.reply('❌ Not authorized.');
+    }
+
+    if (!botData.birthdayChannel) {
+      return message.reply('❌ Birthday channel is not set.');
+    }
+
+    const channel = client.channels.cache.get(botData.birthdayChannel);
+    if (!channel) return message.reply('❌ Invalid birthday channel.');
+
+    const testUserId = message.author.id; // change this if you want to ping another user
+
+    channel.send({
+      content: `🎉🎂 **HAPPY BIRTHDAY!** 🎂🎉\n<@${testUserId}>\n\n🎁 You received **10,000 gold coins!**`,
+      embeds: [{ image: { url: botData.birthdayGiftGif }, color: 0xffc0cb }],
+    });
+
+    return message.reply('✅ Birthday test message sent!');
+  }
+
+  // --------------------------
   // ADD BIRTHDAY (USER ONCE)
   // --------------------------
   if (args[0] === 'add') {
-    // Check if user already registered
     if (botData.birthdays[message.author.id]) {
       message.delete().catch(() => {});
       return message.channel.send('🎂 You already registered your birthday.');
@@ -8947,11 +8972,11 @@ else if (command === 'birthday') {
       ? `${String(m).padStart(2, '0')}/${String(d).padStart(2, '0')}/${y}`
       : `${String(m).padStart(2, '0')}/${String(d).padStart(2, '0')}`;
 
-    // Save the birthday
     botData.birthdays[message.author.id] = {
       date: storedDate,
       addedBy: message.author.id,
     };
+
     saveBirthdays();
 
     // Delete the user's command instantly
@@ -9055,38 +9080,8 @@ else if (command === 'birthday') {
 
     return message.reply('🎁 Birthday GIF updated.');
   }
-
-  // ==================================================
-// COMMAND: BIRTHDAY TEST
-// ==================================================
-else if (command === 'birthdaytest') {
-  // Only owner or immune can test
-  if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
-    return message.reply('❌ Not authorized.');
-  }
-
-  // Make sure a birthday channel is set
-  if (!botData.birthdayChannel) {
-    return message.reply('❌ Birthday channel is not set.');
-  }
-
-  const channel = client.channels.cache.get(botData.birthdayChannel);
-  if (!channel) return message.reply('❌ Invalid birthday channel.');
-
-  // Optional: you can ping yourself or another user for testing
-  const testUserId = message.author.id;
-
-  // Send test birthday message
-  channel.send({
-    content: `🎉🎂 **HAPPY BIRTHDAY!** 🎂🎉\n<@${testUserId}>\n\n🎁 You received **10,000 gold coins!**`,
-    embeds: [{
-      image: { url: botData.birthdayGiftGif },
-      color: 0xffc0cb,
-    }],
-  });
-
-  return message.reply('✅ Birthday test message sent!');
 }
+
                                                                                                                                                                                                                               }
 
 // ==================================================
