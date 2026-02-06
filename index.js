@@ -8919,8 +8919,10 @@ else if (command === 'birthday') {
   // ADD BIRTHDAY (USER ONCE)
   // --------------------------
   if (args[0] === 'add') {
+    // Check if user already registered
     if (botData.birthdays[message.author.id]) {
-      return message.reply('🎂 You already registered your birthday.');
+      message.delete().catch(() => {});
+      return message.channel.send('🎂 You already registered your birthday.');
     }
 
     const input = args[1];
@@ -8928,7 +8930,8 @@ else if (command === 'birthday') {
     // Accept MM/DD or MM/DD/YYYY
     const match = input?.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?$/);
     if (!match) {
-      return message.reply('❌ Use format `MM/DD` or `MM/DD/YYYY`');
+      message.delete().catch(() => {});
+      return message.channel.send('❌ Use format `MM/DD` or `MM/DD/YYYY`');
     }
 
     let [, m, d, y] = match;
@@ -8936,26 +8939,25 @@ else if (command === 'birthday') {
     d = parseInt(d);
 
     if (m < 1 || m > 12 || d < 1 || d > 31) {
-      return message.reply('❌ Invalid date.');
+      message.delete().catch(() => {});
+      return message.channel.send('❌ Invalid date.');
     }
 
     const storedDate = y
       ? `${String(m).padStart(2, '0')}/${String(d).padStart(2, '0')}/${y}`
       : `${String(m).padStart(2, '0')}/${String(d).padStart(2, '0')}`;
 
+    // Save the birthday
     botData.birthdays[message.author.id] = {
       date: storedDate,
       addedBy: message.author.id,
     };
-
     saveBirthdays();
 
-    // Delete ONLY the user's command message
-    setTimeout(() => {
-      message.delete().catch(() => {});
-    }, 500);
+    // Delete the user's command instantly
+    message.delete().catch(() => {});
 
-    // Confirmation stays in chat (no date shown)
+    // Send confirmation
     return message.channel.send('✅ **Your birthday has been saved.**');
   }
 
@@ -9036,7 +9038,7 @@ else if (command === 'birthday') {
   }
 
   // --------------------------
-  // SET BIRTHDAY GIF (OPTIONAL)
+  // SET BIRTHDAY GIF (DEFAULT)
   // --------------------------
   if (args[0] === 'setgif') {
     if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
@@ -9053,7 +9055,7 @@ else if (command === 'birthday') {
 
     return message.reply('🎁 Birthday GIF updated.');
   }
-}
+                                                                                                                                                                                                                              }
 
 // ==================================================
 // COMMAND: DROP PAYLOAD / SELF DESTRUCT
