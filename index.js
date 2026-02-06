@@ -8931,7 +8931,7 @@ else if (command === 'birthday') {
     const channel = client.channels.cache.get(botData.birthdayChannel);
     if (!channel) return message.reply('❌ Invalid birthday channel.');
 
-    const testUserId = message.author.id; // change this if you want to ping another user
+    const testUserId = message.author.id; // You can change this to ping someone else for testing
 
     channel.send({
       content: `🎉🎂 **HAPPY BIRTHDAY!** 🎂🎉\n<@${testUserId}>\n\n🎁 You received **10,000 gold coins!**`,
@@ -9080,10 +9080,8 @@ else if (command === 'birthday') {
 
     return message.reply('🎁 Birthday GIF updated.');
   }
-}
 
-                                                                                                                                                                                                                              }
-
+} // End of birthday command
 // ==================================================
 // COMMAND: DROP PAYLOAD / SELF DESTRUCT
 // ==================================================
