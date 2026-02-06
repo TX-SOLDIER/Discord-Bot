@@ -165,9 +165,12 @@ let botData = {
 
     crimeData: {},
 
-    birthdays: {},                // userId -> { date: "MM/DD/YYYY", addedBy }
-    birthdayChannel: null,        // channel ID for announcements
-    birthdayGiftGif: 'https://media.giphy.com/media/SwIMZUJE3ZPpHAfTC4/giphy.gif',
+    // ==============================
+    // BIRTHDAY SYSTEM (SERVER-SPECIFIC)
+    // ==============================
+    birthdays: {},                // userId -> { date: "MM/DD/YYYY", addedBy, guildId }
+    birthdayChannels: {},         // serverId -> channelId for announcements
+    birthdayGiftGif: 'https://media.giphy.com/media/SwIMZUJE3ZPpHAfTC4/giphy.gif', // default GIF
     lastBirthdayCheck: null,      // MM/DD (Central Time)
 
     globalEconomyStats: {
@@ -351,52 +354,58 @@ function parseDuration(str) {
 // BIRTHDAY MIDNIGHT CHECK (CENTRAL TIME)
 // ==================================================
 setInterval(async () => {
-  if (!botData.birthdayChannel) return;
 
   const now = getCentralDate();
   const today = `${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')}`;
 
   if (botData.lastBirthdayCheck === today) return;
+  botData.lastBirthdayCheck = today;
+  saveBirthdaySettings();
 
+  // Filter birthdays that match today
   const birthdayUsers = Object.entries(botData.birthdays)
     .filter(([_, data]) => {
       const [m, d] = data.date.split('/');
       return `${m.padStart(2, '0')}/${d.padStart(2, '0')}` === today;
     });
 
-  botData.lastBirthdayCheck = today;
-  saveBirthdaySettings();
-
   if (!birthdayUsers.length) return;
 
-  const channel = client.channels.cache.get(botData.birthdayChannel);
-  if (!channel) return;
-
-  const mentions = [];
-
-  for (const [userId] of birthdayUsers) {
-    mentions.push(`<@${userId}>`);
-
-    // 🎁 GIVE 10,000 GOLD
-    botData.economyData[userId] ??= { coins: 0 };
-    botData.economyData[userId].coins += 10000;
+  // Group by server
+  const birthdaysByGuild = {};
+  for (const [userId, data] of birthdayUsers) {
+    if (!data.guildId) continue;
+    birthdaysByGuild[data.guildId] ??= [];
+    birthdaysByGuild[data.guildId].push(userId);
   }
 
-  saveEconomyData();
+  // Send messages per server
+  for (const [guildId, users] of Object.entries(birthdaysByGuild)) {
+    const channelId = botData.birthdayChannels[guildId];
+    if (!channelId) continue;
 
-  await channel.send({
-    content:
-      `🎉🎂 **HAPPY BIRTHDAY!** 🎂🎉\n\n` +
-      `${mentions.join(' ')}\n\n` +
-      `🎁 You received **10,000 gold coins!**`,
-    embeds: [{
-      image: { url: botData.birthdayGiftGif },
-      color: 0xffc0cb,
-    }],
-  });
+    const channel = client.channels.cache.get(channelId);
+    if (!channel) continue;
+
+    const mentions = [];
+    for (const userId of users) {
+      mentions.push(`<@${userId}>`);
+      botData.economyData[userId] ??= { coins: 0 };
+      botData.economyData[userId].coins += 10000;
+    }
+
+    saveEconomyData();
+
+    await channel.send({
+      content: `🎉🎂 **HAPPY BIRTHDAY!** 🎂🎉\n\n${mentions.join(' ')}\n\n🎁 You received **10,000 gold coins!**`,
+      embeds: [{ image: { url: botData.birthdayGiftGif }, color: 0xffc0cb }],
+    });
+  }
+
 }, 60 * 1000);
+
 // ==================================================
-// CENTRAL TIME DATE HELPER
+// CENTRAL TIME HELPER
 // ==================================================
 function getCentralDate() {
   return new Date(
@@ -8915,23 +8924,26 @@ else if (command === 'dw' || command === 'deadliestwarrior') {
 // ==================================================
 else if (command === 'birthday') {
 
+  const guildId = message.guild.id; // Current server
+
+  // Ensure per-server channel object exists
+  botData.birthdayChannels ??= {}; // { guildId: channelId }
+
   // --------------------------
   // TEST BIRTHDAY MESSAGE
   // --------------------------
   if (args[0] === 'test') {
-    // Only owner or immune
     if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
       return message.reply('❌ Not authorized.');
     }
 
-    if (!botData.birthdayChannel) {
-      return message.reply('❌ Birthday channel is not set.');
-    }
+    const channelId = botData.birthdayChannels[guildId];
+    if (!channelId) return message.reply('❌ Birthday channel is not set for this server.');
 
-    const channel = client.channels.cache.get(botData.birthdayChannel);
+    const channel = message.guild.channels.cache.get(channelId);
     if (!channel) return message.reply('❌ Invalid birthday channel.');
 
-    const testUserId = message.author.id; // You can change this to ping someone else for testing
+    const testUserId = message.author.id; // Can change to another user if desired
 
     channel.send({
       content: `🎉🎂 **HAPPY BIRTHDAY!** 🎂🎉\n<@${testUserId}>\n\n🎁 You received **10,000 gold coins!**`,
@@ -8951,8 +8963,6 @@ else if (command === 'birthday') {
     }
 
     const input = args[1];
-
-    // Accept MM/DD or MM/DD/YYYY
     const match = input?.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?$/);
     if (!match) {
       message.delete().catch(() => {});
@@ -8975,14 +8985,12 @@ else if (command === 'birthday') {
     botData.birthdays[message.author.id] = {
       date: storedDate,
       addedBy: message.author.id,
+      guildId: guildId, // Track which server this birthday belongs to
     };
 
     saveBirthdays();
 
-    // Delete the user's command instantly
     message.delete().catch(() => {});
-
-    // Send confirmation
     return message.channel.send('✅ **Your birthday has been saved.**');
   }
 
@@ -9018,8 +9026,11 @@ else if (command === 'birthday') {
       return message.reply('❌ Not authorized.');
     }
 
-    const entries = Object.entries(botData.birthdays);
-    if (!entries.length) return message.reply('📋 No birthdays registered.');
+    const entries = Object.entries(botData.birthdays).filter(
+      ([_, data]) => data.guildId === guildId
+    );
+
+    if (!entries.length) return message.reply('📋 No birthdays registered in this server.');
 
     const lines = [];
     for (const [id, data] of entries) {
@@ -9056,10 +9067,10 @@ else if (command === 'birthday') {
     const channel = message.guild.channels.cache.get(args[1]);
     if (!channel) return message.reply('❌ Invalid channel ID.');
 
-    botData.birthdayChannel = channel.id;
+    botData.birthdayChannels[guildId] = channel.id;
     saveBirthdaySettings();
 
-    return message.reply(`🎉 Birthday channel set to <#${channel.id}>`);
+    return message.reply(`🎉 Birthday channel set to <#${channel.id}> for this server.`);
   }
 
   // --------------------------
@@ -9082,6 +9093,7 @@ else if (command === 'birthday') {
   }
 
 } // End of birthday command
+
 // ==================================================
 // COMMAND: DROP PAYLOAD / SELF DESTRUCT
 // ==================================================
