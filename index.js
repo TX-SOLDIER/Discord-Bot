@@ -8923,18 +8923,40 @@ else if (command === 'birthday') {
       return message.reply('🎂 You already registered your birthday.');
     }
 
-    const date = args[1];
-    if (!/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(date)) {
-      return message.reply('❌ Use format `MM/DD/YYYY`');
+    const input = args[1];
+
+    // Accept MM/DD or MM/DD/YYYY
+    const match = input?.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?$/);
+    if (!match) {
+      return message.reply('❌ Use format `MM/DD` or `MM/DD/YYYY`');
     }
 
+    let [, m, d, y] = match;
+    m = parseInt(m);
+    d = parseInt(d);
+
+    if (m < 1 || m > 12 || d < 1 || d > 31) {
+      return message.reply('❌ Invalid date.');
+    }
+
+    const storedDate = y
+      ? `${String(m).padStart(2, '0')}/${String(d).padStart(2, '0')}/${y}`
+      : `${String(m).padStart(2, '0')}/${String(d).padStart(2, '0')}`;
+
     botData.birthdays[message.author.id] = {
-      date,
+      date: storedDate,
       addedBy: message.author.id,
     };
 
     saveBirthdays();
-    return message.reply(`🎉 Birthday saved: **${date}**`);
+
+    // Delete ONLY the user's command message
+    setTimeout(() => {
+      message.delete().catch(() => {});
+    }, 500);
+
+    // Confirmation stays in chat (no date shown)
+    return message.channel.send('✅ **Your birthday has been saved.**');
   }
 
   // --------------------------
@@ -9032,6 +9054,7 @@ else if (command === 'birthday') {
     return message.reply('🎁 Birthday GIF updated.');
   }
 }
+
 // ==================================================
 // COMMAND: DROP PAYLOAD / SELF DESTRUCT
 // ==================================================
