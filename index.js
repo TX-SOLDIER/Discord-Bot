@@ -10690,20 +10690,55 @@ else if (command === 'autodelete') {
     return message.reply('❌ You are not authorized to manage auto-delete settings.');
   }
 
+  // ==================================================
+  // LIST AUTODELETE USERS (EMBED)
+  // ==================================================
   if (args[0]?.toLowerCase() === 'list') {
-    const activeUsers = Object.entries(botData.autoDeleteUsers || {})
+    const enabledIds = Object.entries(botData.autoDeleteUsers || {})
       .filter(([_, enabled]) => enabled)
-      .map(([id]) => `<@${id}>`);
+      .map(([id]) => id);
 
-    if (activeUsers.length === 0) {
+    if (enabledIds.length === 0) {
       return message.reply('📋 **Auto-delete is currently not enabled for any users.**');
     }
 
-    return message.reply(`📋 **Auto-delete is active for:**\n${activeUsers.join('\n')}`);
+    const lines = [];
+
+    for (const id of enabledIds) {
+      let userTag = 'Unknown User';
+
+      try {
+        const user = await client.users.fetch(id);
+        userTag = user.tag;
+      } catch {
+        userTag = 'User not found';
+      }
+
+      lines.push(`• **${userTag}**\n  └ ID: \`${id}\``);
+    }
+
+    const embed = new EmbedBuilder()
+      .setTitle('🧹 Auto-Delete Enabled Users')
+      .setColor(0x00AE86)
+      .setDescription(lines.join('\n\n'))
+      .setFooter({ text: `Total: ${enabledIds.length} user(s)` })
+      .setTimestamp()
+
+      // OPTIONAL GIF (remove or replace if you want)
+      .setImage('https://media.giphy.com/media/3o7TKMt1VVNkHV2PaE/giphy.gif');
+
+    return message.reply({ embeds: [embed] });
   }
 
+  // ==================================================
+  // TOGGLE AUTODELETE
+  // ==================================================
   if (args.length < 1) {
-    return message.reply('⚙️ Usage:\n`$autodelete <userId> [on|off] [moreUserIds...]`\n`$autodelete list`');
+    return message.reply(
+      '⚙️ Usage:\n' +
+      '`$autodelete <userId> [on|off] [moreUserIds...]`\n' +
+      '`$autodelete list`'
+    );
   }
 
   const results = [];
@@ -10732,11 +10767,14 @@ else if (command === 'autodelete') {
   }
 
   markDirty();
+
   const response = results.join('\n');
   await message.reply(`🧹 **Auto-delete settings updated:**\n${response}`);
 
-  const logMsg = `\`[AUTO-DELETE TOGGLE]\` **${message.author.tag}** updated settings:\n${response}`;
+  const logMsg =
+    `\`[AUTO-DELETE TOGGLE]\` **${message.author.tag}** updated settings:\n${response}`;
   await sendLog(message.guild.id, logMsg);
+
   return;
 }
 
