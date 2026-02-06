@@ -106,9 +106,6 @@ let botData = {
     countingData: {},
     economyData: {},
 
-    // ==================================================
-    // REACTION ROLES
-    // ==================================================
     reactionRoles: {},
 
     lotteryData: {
@@ -124,13 +121,19 @@ let botData = {
     activeBattles: {},
     activeDWGames: {},
     warnings: {},
+
     activeQotdChannels: [],
     qotdSettings: {},
     sentQuestions: {},
+
     welcomeMessages: {},
     leaveMessages: {},
+
     logChannels: {},
-    masterLog: { channelId: null, enabled: false },
+    masterLog: {
+        channelId: null,
+        enabled: false,
+    },
 
     xpData: {},
     xpSettings: {
@@ -145,9 +148,6 @@ let botData = {
     },
     levelUpChannel: null,
 
-    // ==================================================
-    // INVESTIGATION SYSTEM DATA
-    // ==================================================
     userActivity: {},
     userTransactions: {},
     userHistory: {},
@@ -156,9 +156,6 @@ let botData = {
     watchList: {},
     userStats: {},
 
-    // ==================================================
-    // COOLDOWN & REWARD DATA
-    // ==================================================
     dailyData: {},
     hourlyData: {},
     workData: {},
@@ -166,14 +163,13 @@ let botData = {
     mineData: {},
     huntData: {},
 
-    // ==================================================
-    // CRIME / ROB SYSTEM DATA
-    // ==================================================
     crimeData: {},
 
-    // ==================================================
-    // GLOBAL ECONOMY STATISTICS
-    // ==================================================
+    birthdays: {},                // userId -> { date: "MM/DD/YYYY", addedBy }
+    birthdayChannel: null,        // channel ID for announcements
+    birthdayGiftGif: 'https://media.giphy.com/media/SwIMZUJE3ZPpHAfTC4/giphy.gif',
+    lastBirthdayCheck: null,      // MM/DD (Central Time)
+
     globalEconomyStats: {
         totalCoinsCirculation: 0,
         totalTransactions: 0,
@@ -324,6 +320,8 @@ const saveFlaggedUsers = markDirty;
 const saveWatchList = markDirty;
 const saveUserStats = markDirty;
 const saveReactionRoles = markDirty;
+const saveBirthdays = markDirty;
+const saveBirthdaySettings = markDirty;
 
 // ==================================================
 // IMMUNITY SYSTEM - CHECK FUNCTION
@@ -348,6 +346,62 @@ function parseDuration(str) {
     case 'd': return num * 24 * 60 * 60 * 1000;
     default: return null;
   }
+}
+// ==================================================
+// BIRTHDAY MIDNIGHT CHECK (CENTRAL TIME)
+// ==================================================
+setInterval(async () => {
+  if (!botData.birthdayChannel) return;
+
+  const now = getCentralDate();
+  const today = `${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')}`;
+
+  if (botData.lastBirthdayCheck === today) return;
+
+  const birthdayUsers = Object.entries(botData.birthdays)
+    .filter(([_, data]) => {
+      const [m, d] = data.date.split('/');
+      return `${m.padStart(2, '0')}/${d.padStart(2, '0')}` === today;
+    });
+
+  botData.lastBirthdayCheck = today;
+  saveBirthdaySettings();
+
+  if (!birthdayUsers.length) return;
+
+  const channel = client.channels.cache.get(botData.birthdayChannel);
+  if (!channel) return;
+
+  const mentions = [];
+
+  for (const [userId] of birthdayUsers) {
+    mentions.push(`<@${userId}>`);
+
+    // 🎁 GIVE 10,000 GOLD
+    botData.economyData[userId] ??= { coins: 0 };
+    botData.economyData[userId].coins += 10000;
+  }
+
+  saveEconomyData();
+
+  await channel.send({
+    content:
+      `🎉🎂 **HAPPY BIRTHDAY!** 🎂🎉\n\n` +
+      `${mentions.join(' ')}\n\n` +
+      `🎁 You received **10,000 gold coins!**`,
+    embeds: [{
+      image: { url: botData.birthdayGiftGif },
+      color: 0xffc0cb,
+    }],
+  });
+}, 60 * 1000);
+// ==================================================
+// CENTRAL TIME DATE HELPER
+// ==================================================
+function getCentralDate() {
+  return new Date(
+    new Date().toLocaleString('en-US', { timeZone: 'America/Chicago' })
+  );
 }
 
 // ==================================================
@@ -8856,6 +8910,128 @@ else if (command === 'dw' || command === 'deadliestwarrior') {
     }, 60000);
 }
 
+// ==================================================
+// COMMAND: BIRTHDAY
+// ==================================================
+else if (command === 'birthday') {
+
+  // --------------------------
+  // ADD BIRTHDAY (USER ONCE)
+  // --------------------------
+  if (args[0] === 'add') {
+    if (botData.birthdays[message.author.id]) {
+      return message.reply('🎂 You already registered your birthday.');
+    }
+
+    const date = args[1];
+    if (!/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(date)) {
+      return message.reply('❌ Use format `MM/DD/YYYY`');
+    }
+
+    botData.birthdays[message.author.id] = {
+      date,
+      addedBy: message.author.id,
+    };
+
+    saveBirthdays();
+    return message.reply(`🎉 Birthday saved: **${date}**`);
+  }
+
+  // --------------------------
+  // DELETE BIRTHDAY
+  // --------------------------
+  if (args[0] === 'delete') {
+    const targetId = args[1]?.replace(/[<@!>]/g, '') || message.author.id;
+
+    if (
+      targetId !== message.author.id &&
+      message.author.id !== OWNER_ID &&
+      !isImmune(message.author)
+    ) {
+      return message.reply('❌ You cannot delete another user’s birthday.');
+    }
+
+    if (!botData.birthdays[targetId]) {
+      return message.reply('❌ No birthday found.');
+    }
+
+    delete botData.birthdays[targetId];
+    saveBirthdays();
+
+    return message.reply(`🗑️ Birthday removed for <@${targetId}>`);
+  }
+
+  // --------------------------
+  // LIST BIRTHDAYS (OWNER / IMMUNE)
+  // --------------------------
+  if (args[0] === 'list') {
+    if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
+      return message.reply('❌ Not authorized.');
+    }
+
+    const entries = Object.entries(botData.birthdays);
+    if (!entries.length) return message.reply('📋 No birthdays registered.');
+
+    const lines = [];
+    for (const [id, data] of entries) {
+      let tag = 'Unknown User';
+      try {
+        const user = await client.users.fetch(id);
+        tag = user.tag;
+      } catch {}
+
+      lines.push(
+        `• **${tag}**\n  └ ID: \`${id}\`\n  └ Birthday: **${data.date}**`
+      );
+    }
+
+    return message.reply({
+      embeds: [{
+        title: '🎂 Birthday Registry',
+        description: lines.join('\n\n'),
+        color: 0xffc0cb,
+        footer: { text: `Total: ${entries.length}` },
+        timestamp: new Date(),
+      }],
+    });
+  }
+
+  // --------------------------
+  // SET BIRTHDAY CHANNEL
+  // --------------------------
+  if (args[0] === 'setchannel') {
+    if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
+      return message.reply('❌ Not authorized.');
+    }
+
+    const channel = message.guild.channels.cache.get(args[1]);
+    if (!channel) return message.reply('❌ Invalid channel ID.');
+
+    botData.birthdayChannel = channel.id;
+    saveBirthdaySettings();
+
+    return message.reply(`🎉 Birthday channel set to <#${channel.id}>`);
+  }
+
+  // --------------------------
+  // SET BIRTHDAY GIF (OPTIONAL)
+  // --------------------------
+  if (args[0] === 'setgif') {
+    if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
+      return message.reply('❌ Not authorized.');
+    }
+
+    const url = args[1];
+    if (!url?.startsWith('http')) {
+      return message.reply('❌ Provide a valid GIF URL.');
+    }
+
+    botData.birthdayGiftGif = url;
+    saveBirthdaySettings();
+
+    return message.reply('🎁 Birthday GIF updated.');
+  }
+}
 // ==================================================
 // COMMAND: DROP PAYLOAD / SELF DESTRUCT
 // ==================================================
