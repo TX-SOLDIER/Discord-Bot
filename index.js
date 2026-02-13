@@ -442,9 +442,9 @@ const spinCooldowns = new Map();
 // AI SYSTEM CONFIGURATION
 // ==================================================
 const AI_MODELS = [
-    { name: "StepFun: Step 3.5 Flash", model: "stepfun/step3.5-flash" },
-    { name: "DeepSeek R1T2 Chimera", model: "tngtech/deepseek-r1t-chimera:free" },
-    { name: "OpenRouter Free (Auto-Selector)", model: "openrouter/free" },
+    { name: "DeepSeek R1T2 Chimera", model: "tngtech/deepseek-r1t-chimera:free" }, // Stable fallback
+    { name: "OpenRouter Free (Auto-Selector)", model: "openrouter/free" }, // Dynamic free model selector
+    { name: "Default GPT (Fallback)", model: "gpt-3.5-turbo" }, // Reliable fallback with OpenRouter
 ];
 // ==================================================
 // SENTIENT AI CONFIGURATION
