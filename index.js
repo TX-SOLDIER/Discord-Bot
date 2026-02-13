@@ -10654,17 +10654,34 @@ RULES:
 }
 
 // ==================================================
-// COMMAND: AI (GEMINI)
+// COMMAND: AI (GEMINI) — DIAGNOSTIC SAFE
 // ==================================================
 else if (command === 'ai') {
   const prompt = args.join(' ');
   if (!prompt) return message.reply('❓ What would you like to ask?');
 
+  await message.channel.sendTyping();
+
+  const startTime = Date.now();
+
   try {
-    await message.channel.sendTyping();
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+
     const result = await model.generateContent(prompt);
-    const reply = result.response.text();
+
+    // 🔍 HARD VALIDATION
+    if (!result || !result.response) {
+      throw new Error("Gemini returned no response object");
+    }
+
+    const reply = result.response.text?.();
+
+    if (!reply || reply.trim().length === 0) {
+      throw new Error("Gemini returned empty text output");
+    }
+
+    const duration = Date.now() - startTime;
+    console.log(`[AI] Gemini success in ${duration}ms`);
 
     if (reply.length > 2000) {
       const chunks = reply.match(/[\s\S]{1,1990}/g);
@@ -10674,9 +10691,24 @@ else if (command === 'ai') {
     } else {
       await message.reply(reply);
     }
+
   } catch (err) {
-    console.error("Gemini AI error:", err);
-    message.reply("❌ Something went wrong while contacting the AI.");
+    const duration = Date.now() - startTime;
+
+    console.error("========== GEMINI FAILURE ==========");
+    console.error("Message:", err.message);
+    console.error("Status:", err.status || "N/A");
+    console.error("StatusText:", err.statusText || "N/A");
+    console.error("Duration:", `${duration}ms`);
+    console.error("Stack:", err.stack);
+    console.error("===================================");
+
+    // User-safe message
+    if (err.message.includes("location")) {
+      message.reply("❌ Gemini blocked this server’s location. Switching providers soon.");
+    } else {
+      message.reply("❌ Gemini failed to respond. Please try again later.");
+    }
   }
 }
 // ==================================================
