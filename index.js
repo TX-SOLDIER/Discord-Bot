@@ -442,11 +442,10 @@ const spinCooldowns = new Map();
 // AI SYSTEM CONFIGURATION
 // ==================================================
 const AI_MODELS = [
-    { name: "Google Gemini Free", model: "google/gemini-free" },
-    { name: "DeepSeek R1T Chimera", model: "tngtech/deepseek-r1t-chimera:free" },
-    { name: "OpenRouter Auto (Free)", model: "openrouter/auto" },
+    { name: "StepFun: Step 3.5 Flash", model: "stepfun/step3.5-flash" },
+    { name: "DeepSeek R1T2 Chimera", model: "tngtech/deepseek-r1t-chimera:free" },
+    { name: "OpenRouter Free (Auto-Selector)", model: "openrouter/free" },
 ];
-
 // ==================================================
 // SENTIENT AI CONFIGURATION
 // ==================================================
@@ -10451,7 +10450,6 @@ RULES:
         };
 
         const messagesPayload = [systemPrompt, ...history];
-
         let data;
         let usedModel;
         let success = false;
@@ -10488,7 +10486,7 @@ RULES:
                     const errorMsg =
                         data?.error?.message || response.statusText || "Unknown error";
                     failureReasons.push({ model: model.name, reason: errorMsg });
-                    console.log(`[AI] ${model.name} error: ${errorMsg}`);
+                    console.error(`[AI] ${model.name} error: ${errorMsg}`);
                 }
             } catch (err) {
                 failureReasons.push({ model: model.name, reason: err.message || "Connection failed" });
