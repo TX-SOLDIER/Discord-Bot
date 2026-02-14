@@ -3651,6 +3651,7 @@ if (command === 'help') {
       `• \`${PREFIX}setxpsetting <key> <val>\` – Update XP (Immune)\n` +
       `• \`${PREFIX}addxp/removexp/setlevel/setprestige\` (Immune)\n` +
       `• \`${PREFIX}resetxp @user\` – Reset XP (Immune)\n\n` +
+      
       `**━━━ ECONOMY ━━**\n` +
       `• \`${PREFIX}balance [@user]\` / \`${PREFIX}bal\` – Check balance\n` +
       `• \`${PREFIX}pay @user <amount>\` – Pay someone\n` +
@@ -3666,7 +3667,8 @@ if (command === 'help') {
       `• \`${PREFIX}bailout\` / \`${PREFIX}bail\` – Escape jail\n` +
       `• \`${PREFIX}jail [@user]\` – Check jail status\n` +
       `• \`${PREFIX}crimestats [@user]\` – Crime statistics` +
-      `**━━━ 🔍 INVESTIGATION SYSTEM ━━━**\n` +
+      
+      `**━━━ 🔍 INVESTIGATION SYSTEM ━━━**\n` + 
       `• \`${PREFIX}investigate @user\` / \`${PREFIX}inv\` – Full investigation report (Immune)\n` +
       `• \`${PREFIX}quickscan @user\` / \`${PREFIX}qs\` – Quick summary scan (Immune)\n` +
       `• \`${PREFIX}note @user <text>\` – Add staff note (Immune)\n` +
@@ -3774,12 +3776,12 @@ if (command === 'help') {
       `• \`${PREFIX}nuke delete/rename\` – Bulk channel ops\n` +
       `• \`${PREFIX}tagspam @user <count>\` – Tag spam (Immune)\n` +
       `• \`${PREFIX}autodelete <userId>\` – Auto-delete (Immune)\n\n` +
-      `• \`${PREFIX}autodeletelist\` – Auto-delete list (Immune)\n\n` +
+      `• \`${PREFIX}autodeletelist\` – Auto-delete list\n\n` +
       `• \`${PREFIX}vcmute @user\` – Voice mute (Immune)\n` +
       `• \`${PREFIX}vcunmute @user\` – Voice unmute (Immune)\n` +
       `• \`${PREFIX}vckick @user\` – Voice kick (Immune)\n` +
       `• \`${PREFIX}moveall #channel\` – Move all VC (Immune)` +
-      `• \`${PREFIX}rolelist <role_id>\` – List users with a role\n` +
+      `• \`${PREFIX}rolelist <role_id>\` – List roles\n` +
       `• \`${PREFIX}rrcreate\` – Create reaction role message\n\n`
     );
 
@@ -3799,6 +3801,7 @@ if (command === 'help') {
       `• \`${PREFIX}qotd on|off\` – Question of the Day\n` +
       `• \`${PREFIX}counting set/off/leaderboard\` – Counting game\n\n` +
       `• \`${PREFIX}citycam [city]\` – Live city webcams` +
+      
       `**━━━ LOGGING ━━━**\n` +
       `• \`${PREFIX}logmode on [#channel]\` – Enable logging\n` +
       `• \`${PREFIX}logmode off\` – Disable logging\n` +
