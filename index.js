@@ -10788,6 +10788,165 @@ if (message.content === `${PREFIX}rolelist`) {
     await message.channel.send('```' + msg + '```');
   }
 }
+// ==================================================
+// COMMAND: PREVIEWCOLOR (PUBLIC)
+// ==================================================
+if (command === 'previewcolor') {
+
+  if (!args[0]) {
+    return message.reply('❌ Please provide a hex color. Example: `$previewcolor #5865F2`');
+  }
+
+  const hex = args[0].replace('#', '');
+
+  if (!/^[0-9A-Fa-f]{6}$/.test(hex)) {
+    return message.reply('❌ Invalid hex color. Use format `#RRGGBB`.');
+  }
+
+  const color = parseInt(hex, 16);
+
+  const embed = new EmbedBuilder()
+    .setColor(color)
+    .setTitle('🎨 Color Preview')
+    .setDescription(
+      `**Hex Code:** \`#${hex.toUpperCase()}\`\n\n` +
+      'If this looks right, you can safely use it in embed commands.'
+    )
+    .setFooter({ text: 'Preview only — this does not change anything' });
+
+  message.channel.send({ embeds: [embed] });
+}
+// ==================================================
+// COMMAND: COLORS (PUBLIC, PROFESSIONAL)
+// ==================================================
+if (command === 'colors') {
+
+  const embed = new EmbedBuilder()
+    .setColor(0x5865F2)
+    .setTitle('🎨 Discord Color Guide (Hex Codes)')
+    .setDescription(
+      '**Discord supports ALL valid hex colors.**\n\n' +
+
+      '**HEX FORMAT:**\n' +
+      '`#RRGGBB`\n' +
+      '`R = Red | G = Green | B = Blue`\n\n' +
+
+      '**VALUE RANGE:**\n' +
+      'Each color channel ranges from `00` to `FF`\n' +
+      'This allows **16,777,216 total colors**\n\n' +
+
+      '**COMMON COLORS:**\n' +
+      '🔵 Discord Blue → `#5865F2`\n' +
+      '🟢 Green → `#57F287`\n' +
+      '🔴 Red → `#ED4245`\n' +
+      '🟡 Yellow → `#FEE75C`\n' +
+      '🟣 Purple → `#9B59B6`\n' +
+      '⚫ Dark Gray → `#2C2F33`\n' +
+      '⚪ Light Gray → `#99AAB5`\n\n' +
+
+      '**HOW TO CHOOSE YOUR OWN COLOR:**\n' +
+      '1️⃣ Use any color picker website\n' +
+      '2️⃣ Pick a color you like\n' +
+      '3️⃣ Copy the hex code (starts with `#`)\n' +
+      '4️⃣ Paste it into commands like `$previewcolor`\n\n' +
+
+      '**EXAMPLES:**\n' +
+      '`#ff0000` → Red\n' +
+      '`#00ff00` → Green\n' +
+      '`#0000ff` → Blue\n' +
+      '`#abcdef` → Custom\n\n' +
+
+      '💡 **Tip:** If the hex code is valid, Discord will accept it use google color picker.'
+    )
+    .setFooter({ text: 'Use $previewcolor <hex> to see a live preview' });
+
+  message.channel.send({ embeds: [embed] });
+}
+// ==================================================
+// COMMAND: INFO (DYNAMIC SECTIONS + PER-SECTION COLORS)
+// PREFIX: $
+// ==================================================
+if (command === 'info') {
+
+  // ------------------------------
+  // PERMISSION CHECK (USING YOUR IMMUNITY SYSTEM)
+  // ------------------------------
+  if (!isImmune(message.author)) {
+    return message.reply('❌ You are not allowed to use this command.');
+  }
+
+  // ------------------------------
+  // SHOW TUTORIAL IF NO ARGUMENTS
+  // ------------------------------
+  if (!args.length) {
+    return message.channel.send({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0x5865F2)
+          .setTitle('📘 $info Command Tutorial')
+          .setDescription(
+            '**Post multiple GIF + embed sections without editing code.**\n\n' +
+
+            '**SYNTAX:**\n' +
+            '`$info | <color> | <gif> | <title> | <text> || <color> | <gif> | <title> | <text>`\n\n' +
+
+            '**SEPARATORS:**\n' +
+            '`||` → New section\n' +
+            '`|` → Field separator\n' +
+            '`\\n` → New line inside text\n\n' +
+
+            '**EACH SECTION SUPPORTS:**\n' +
+            '• Its own embed color\n' +
+            '• One GIF\n' +
+            '• Title & description\n\n' +
+
+            '**EXAMPLE (COPY & EDIT):**\n' +
+            '```' +
+            '$info |\n' +
+            '#ff5555 | https://media.giphy.com/media/rules.gif | 📜 Rules | Be respectful\\nNo spam\\nFollow TOS ||\n' +
+            '#5865F2 | https://media.giphy.com/media/info.gif | ℹ️ Info | Welcome to the server\\nUse correct channels ||\n' +
+            '#57F287 | https://media.giphy.com/media/support.gif | 🆘 Support | Open a ticket\\nPing staff\n' +
+            '```'
+          )
+          .setFooter({ text: 'Delete the command message after posting for a clean channel' })
+      ]
+    });
+  }
+
+  // ------------------------------
+  // PARSE AND SEND SECTIONS
+  // ------------------------------
+  const rawInput = args.join(' ');
+  const sectionBlocks = rawInput.split('||');
+
+  for (const block of sectionBlocks) {
+    const parts = block
+      .split('|')
+      .map(p => p.trim())
+      .filter(Boolean);
+
+    if (parts.length < 4) continue;
+
+    const colorHex = parts[0];
+    const gif = parts[1];
+    const title = parts[2];
+    const text = parts.slice(3).join('|').replace(/\\n/g, '\n');
+
+    const embedColor = parseInt(colorHex.replace('#', ''), 16);
+    if (isNaN(embedColor)) continue;
+
+    // 1️⃣ Send GIF
+    await message.channel.send(gif);
+
+    // 2️⃣ Send embed
+    const embed = new EmbedBuilder()
+      .setColor(embedColor)
+      .setTitle(title)
+      .setDescription(text);
+
+    await message.channel.send({ embeds: [embed] });
+  }
+}
 
 // ==================================================
 // COMMAND: KICK
