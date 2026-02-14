@@ -3666,7 +3666,7 @@ if (command === 'help') {
       `• \`${PREFIX}rob @user\` / \`${PREFIX}steal\` – Rob someone\n` +
       `• \`${PREFIX}bailout\` / \`${PREFIX}bail\` – Escape jail\n` +
       `• \`${PREFIX}jail [@user]\` – Check jail status\n` +
-      `• \`${PREFIX}crimestats [@user]\` – Crime statistics` +
+      `• \`${PREFIX}crimestats [@user]\` – Crime statistics\n` +
       
       `**━━━ 🔍 INVESTIGATION SYSTEM ━━━**\n` + 
       `• \`${PREFIX}investigate @user\` / \`${PREFIX}inv\` – Full investigation report (Immune)\n` +
@@ -3683,7 +3683,7 @@ if (command === 'help') {
       `• \`${PREFIX}transactions @user\` – View transaction log (Immune)\n` +
       `• \`${PREFIX}userinfo [@user]\` – User info\n` +
       `• \`${PREFIX}avatar [@user]\` – View avatar\n` +
-      `• \`${PREFIX}history @user\` – View name/avatar history (Immune)\n` 
+      `• \`${PREFIX}history @user\` – View name/avatar history (Immune)\n`
     );
 
   const embed3 = new EmbedBuilder()
@@ -3721,30 +3721,30 @@ if (command === 'help') {
       `• \`${PREFIX}compliment @user\` – Compliment\n` +
       `• \`${PREFIX}meme\` / \`${PREFIX}nsfw-meme\` – Random memes\n` +
       `• \`${PREFIX}haunt\` / \`${PREFIX}unhaunt\` – Haunting\n` +
-      `• \`${PREFIX}rr\` – Russian Roulette` +
+      `• \`${PREFIX}rr\` – Russian Roulette\n` +
       `• \`${PREFIX}battle @user\` / \`${PREFIX}1v1\` – Auto battle\n` +
       `• \`${PREFIX}dw @user\` – Deadliest Warrior\n\n`
     );
 
   const embed4 = new EmbedBuilder()
-  .setColor(0x39FF14)
-  .setTitle('📖 SOLDIER¹ Bot Commands (4/6)')
-  .setDescription(
-    `**━━━ STORE & INVENTORY ━━━**\n` +
-    `• \`${PREFIX}store\` – View the shop\n` +
-    `• \`${PREFIX}store buy <id>\` – Purchase item\n` +
-    `• \`${PREFIX}store add/remove\` – Manage shop (Immune)\n` +
-    `• \`${PREFIX}inventory\` / \`${PREFIX}inv\` – View inventory\n` +
-    `• \`${PREFIX}loadout\` – View/equip/unequip items\n\n` +
+    .setColor(0x39FF14)
+    .setTitle('📖 SOLDIER¹ Bot Commands (4/6)')
+    .setDescription(
+      `**━━━ STORE & INVENTORY ━━━**\n` +
+      `• \`${PREFIX}store\` – View the shop\n` +
+      `• \`${PREFIX}store buy <id>\` – Purchase item\n` +
+      `• \`${PREFIX}store add/remove\` – Manage shop (Immune)\n` +
+      `• \`${PREFIX}inventory\` / \`${PREFIX}inv\` – View inventory\n` +
+      `• \`${PREFIX}loadout\` – View/equip/unequip items\n\n` +
 
-    `**━━━ BIRTHDAYS ━━━**\n` +
-    `• \`${PREFIX}birthday add <MM/DD/YYYY | MM/DD>\` – Save your birthday\n` +
-    `• \`${PREFIX}birthday delete\` – Delete your saved birthday\n` +
-    `• \`${PREFIX}birthday delete @user\` – Delete a user's birthday\n` +
-    `• \`${PREFIX}birthday list\` – List registered birthdays\n` +
-    `• \`${PREFIX}birthday setchannel <channel_id>\` – Set birthday channel\n` +
-    `• \`${PREFIX}birthday setgif <gif_url>\` – Set birthday GIF\n`
-  );
+      `**━━━ BIRTHDAYS ━━━**\n` +
+      `• \`${PREFIX}birthday add <MM/DD/YYYY | MM/DD>\` – Save your birthday\n` +
+      `• \`${PREFIX}birthday delete\` – Delete your saved birthday\n` +
+      `• \`${PREFIX}birthday delete @user\` – Delete a user's birthday\n` +
+      `• \`${PREFIX}birthday list\` – List registered birthdays\n` +
+      `• \`${PREFIX}birthday setchannel <channel_id>\` – Set birthday channel\n` +
+      `• \`${PREFIX}birthday setgif <gif_url>\` – Set birthday GIF\n`
+    );
 
   const embed5 = new EmbedBuilder()
     .setColor(0x39FF14)
@@ -3780,7 +3780,7 @@ if (command === 'help') {
       `• \`${PREFIX}vcmute @user\` – Voice mute (Immune)\n` +
       `• \`${PREFIX}vcunmute @user\` – Voice unmute (Immune)\n` +
       `• \`${PREFIX}vckick @user\` – Voice kick (Immune)\n` +
-      `• \`${PREFIX}moveall #channel\` – Move all VC (Immune)` +
+      `• \`${PREFIX}moveall #channel\` – Move all VC (Immune)\n` +
       `• \`${PREFIX}rolelist <role_id>\` – List roles\n` +
       `• \`${PREFIX}rrcreate\` – Create reaction role message\n\n`
     );
@@ -3800,7 +3800,7 @@ if (command === 'help') {
       `• \`${PREFIX}endgiveaway <msgId>\` – End giveaway\n` +
       `• \`${PREFIX}qotd on|off\` – Question of the Day\n` +
       `• \`${PREFIX}counting set/off/leaderboard\` – Counting game\n\n` +
-      `• \`${PREFIX}citycam [city]\` – Live city webcams` +
+      `• \`${PREFIX}citycam [city]\` – Live city webcams\n` +
       
       `**━━━ LOGGING ━━━**\n` +
       `• \`${PREFIX}logmode on [#channel]\` – Enable logging\n` +
@@ -3834,6 +3834,8 @@ if (command === 'help') {
   await message.channel.send({ embeds: [embed5] });
   await message.channel.send({ embeds: [embed6] });
 }
+
+  
 // ==================================================
 // COMMAND: SENTIENT (Toggle On/Off) - OWNER ONLY
 // ==================================================
