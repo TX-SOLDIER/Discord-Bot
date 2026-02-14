@@ -3616,8 +3616,9 @@ if (command === 'help') {
       `• \`${PREFIX}uptime\` – Bot active time\n` +
       `• \`${PREFIX}botinfo\` – Info about the bot\n` +
       `• \`${PREFIX}invite\` – Get bot invite link\n` +
-      `• \`${PREFIX}userinfo [@user]\` – User info\n` +
-      `• \`${PREFIX}avatar [@user]\` – View avatar\n` +
+      `• \`${PREFIX}say [msg]\` – Echo message\n` +
+      `• \`${PREFIX}shout [msg]\` – Shout a message\n` +
+      `• \`${PREFIX}spoiler [msg]\` – Send spoiler message\n` +
       `• \`${PREFIX}serverinfo\` – Server info\n` +
       `• \`${PREFIX}serverlist\` – List all servers (Immune)\n\n` +
       `\n**━━━ SENTIENT AI ━━━**\n` +
@@ -3625,9 +3626,6 @@ if (command === 'help') {
      `• \`${PREFIX}sentient on\` – Wake up the AI (Owner)\n` +
      `• \`${PREFIX}sentient off\` – Put AI to sleep (Owner)\n` +
       `**━━━ MESSAGES & EMBEDS ━━━**\n` +
-      `• \`${PREFIX}say [msg]\` – Echo message\n` +
-      `• \`${PREFIX}shout [msg]\` – Shout a message\n` +
-      `• \`${PREFIX}spoiler [msg]\` – Send spoiler message\n` +
       `• \`${PREFIX}send <channelID> <message>\` – Send to channel\n` +
       `• \`${PREFIX}embed create/send/delete/list\` – Manage embeds\n` +
       `• \`${PREFIX}setgif <URL>\` – Set persistent GIF\n` +
@@ -3661,6 +3659,13 @@ if (command === 'help') {
       `• \`${PREFIX}rich\` / \`${PREFIX}baltop\` – Server leaderboard\n` +
       `• \`${PREFIX}globalrich\` – Global leaderboard\n` +
       `• \`${PREFIX}economy\` / \`${PREFIX}econstats\` – Economy stats\n\n` +
+      `• \`${PREFIX}daily\` – Daily reward (24h cooldown)\n` +
+      `• \`${PREFIX}hourly\` – Hourly reward (1h cooldown)\n` +
+      `• \`${PREFIX}work\` – Work for coins (30m cooldown)\n\n` +
+      `• \`${PREFIX}rob @user\` / \`${PREFIX}steal\` – Rob someone\n` +
+      `• \`${PREFIX}bailout\` / \`${PREFIX}bail\` – Escape jail\n` +
+      `• \`${PREFIX}jail [@user]\` – Check jail status\n` +
+      `• \`${PREFIX}crimestats [@user]\` – Crime statistics` +
       `**━━━ 🔍 INVESTIGATION SYSTEM ━━━**\n` +
       `• \`${PREFIX}investigate @user\` / \`${PREFIX}inv\` – Full investigation report (Immune)\n` +
       `• \`${PREFIX}quickscan @user\` / \`${PREFIX}qs\` – Quick summary scan (Immune)\n` +
@@ -3674,27 +3679,19 @@ if (command === 'help') {
       `• \`${PREFIX}unwatch @user\` – Remove from watch list (Immune)\n` +
       `• \`${PREFIX}watchlist\` – View watch list (Immune)\n` +
       `• \`${PREFIX}transactions @user\` – View transaction log (Immune)\n` +
-      `• \`${PREFIX}history @user\` – View name/avatar history (Immune)\n` +
-      `**━━━ CRIME SYSTEM ━━━**\n` +
-      `• \`${PREFIX}rob @user\` / \`${PREFIX}steal\` – Rob someone\n` +
-      `• \`${PREFIX}bailout\` / \`${PREFIX}bail\` – Escape jail\n` +
-      `• \`${PREFIX}jail [@user]\` – Check jail status\n` +
-      `• \`${PREFIX}crimestats [@user]\` – Crime statistics`
+      `• \`${PREFIX}userinfo [@user]\` – User info\n` +
+      `• \`${PREFIX}avatar [@user]\` – View avatar\n` +
+      `• \`${PREFIX}history @user\` – View name/avatar history (Immune)\n` 
     );
 
   const embed3 = new EmbedBuilder()
     .setColor(0x39FF14)
     .setTitle('📖 SOLDIER¹ Bot Commands (3/6)')
-    .setDescription(
-      `**━━━ 💰 EARNING GAMES ━━━**\n` +
-      `• \`${PREFIX}daily\` – Daily reward (24h cooldown)\n` +
-      `• \`${PREFIX}hourly\` – Hourly reward (1h cooldown)\n` +
-      `• \`${PREFIX}work\` – Work for coins (30m cooldown)\n\n` +
-      `**━━━ ⛏️ MINECRAFT GRINDING ━━━**\n` +
+    .setDescription( 
+      `**━━━ GAMES ━━━**\n` +
       `• \`${PREFIX}fish\` – Go fishing (45s cooldown)\n` +
       `• \`${PREFIX}mine\` – Mine for ores (60s cooldown)\n` +
       `• \`${PREFIX}hunt\` – Hunt Minecraft mobs (50s cooldown)\n\n` +
-      `**━━━ 🎰 GAMBLING GAMES ━━━**\n` +
       `• \`${PREFIX}rps <r/p/s> <bet>\` – Rock Paper Scissors\n` +
       `• \`${PREFIX}diceduel @user <bet>\` – PvP dice battle\n` +
       `• \`${PREFIX}war <bet>\` – Card war vs bot\n` +
@@ -3705,30 +3702,12 @@ if (command === 'help') {
       `• \`${PREFIX}continue\` – Continue heist to next stage\n` +
       `• \`${PREFIX}escape\` – Escape heist with winnings\n` +
       `• \`${PREFIX}bomb\` – Number bomb game (find the bomb!)\n\n` +
-      `**━━━ 🎲 MORE GAMBLING ━━━**\n` +
       `• \`${PREFIX}flipbet <heads/tails> <bet>\` – Coin flip\n` +
       `• \`${PREFIX}challengeflip @user <bet>\` – PvP flip\n` +
       `• \`${PREFIX}slots <bet>\` – Slot machine\n` +
       `• \`${PREFIX}roulette <type> <bet>\` – Roulette\n` +
       `• \`${PREFIX}blackjack\` / \`${PREFIX}hit\` / \`${PREFIX}stand\` – Blackjack\n` +
       `• \`${PREFIX}lottery\` / \`${PREFIX}buyticket\` – Lottery\n` +
-      `• \`${PREFIX}rr\` – Russian Roulette`
-    );
-
-  const embed4 = new EmbedBuilder()
-    .setColor(0x39FF14)
-    .setTitle('📖 SOLDIER¹ Bot Commands (4/6)')
-    .setDescription(
-      `**━━━ STORE & INVENTORY ━━━**\n` +
-      `• \`${PREFIX}store\` – View the shop\n` +
-      `• \`${PREFIX}store buy <id>\` – Purchase item\n` +
-      `• \`${PREFIX}store add/remove\` – Manage shop (Immune)\n` +
-      `• \`${PREFIX}inventory\` / \`${PREFIX}inv\` – View inventory\n` +
-      `• \`${PREFIX}loadout\` – View/equip/unequip items\n\n` +
-      `**━━━ BATTLE SYSTEMS ━━━**\n` +
-      `• \`${PREFIX}battle @user\` / \`${PREFIX}1v1\` – Auto battle\n` +
-      `• \`${PREFIX}dw @user\` – Deadliest Warrior\n\n` +
-      `**━━━ FUN & GAMES ━━━**\n` +
       `• \`${PREFIX}flip\` – Flip a coin\n` +
       `• \`${PREFIX}8ball [question]\` – Magic 8-ball\n` +
       `• \`${PREFIX}dice\` – Roll a die\n` +
@@ -3740,14 +3719,36 @@ if (command === 'help') {
       `• \`${PREFIX}compliment @user\` – Compliment\n` +
       `• \`${PREFIX}meme\` / \`${PREFIX}nsfw-meme\` – Random memes\n` +
       `• \`${PREFIX}haunt\` / \`${PREFIX}unhaunt\` – Haunting\n` +
-      `• \`${PREFIX}citycam [city]\` – Live city webcams`
+      `• \`${PREFIX}rr\` – Russian Roulette` +
+      `• \`${PREFIX}battle @user\` / \`${PREFIX}1v1\` – Auto battle\n` +
+      `• \`${PREFIX}dw @user\` – Deadliest Warrior\n\n` +
     );
+
+  const embed4 = new EmbedBuilder()
+  .setColor(0x39FF14)
+  .setTitle('📖 SOLDIER¹ Bot Commands (4/6)')
+  .setDescription(
+    `**━━━ STORE & INVENTORY ━━━**\n` +
+    `• \`${PREFIX}store\` – View the shop\n` +
+    `• \`${PREFIX}store buy <id>\` – Purchase item\n` +
+    `• \`${PREFIX}store add/remove\` – Manage shop (Immune)\n` +
+    `• \`${PREFIX}inventory\` / \`${PREFIX}inv\` – View inventory\n` +
+    `• \`${PREFIX}loadout\` – View/equip/unequip items\n\n` +
+
+    `**━━━ BIRTHDAYS ━━━**\n` +
+    `• \`${PREFIX}birthday add <MM/DD/YYYY | MM/DD>\` – Save your birthday\n` +
+    `• \`${PREFIX}birthday delete\` – Delete your saved birthday\n` +
+    `• \`${PREFIX}birthday delete @user\` – Delete a user's birthday\n` +
+    `• \`${PREFIX}birthday list\` – List registered birthdays\n` +
+    `• \`${PREFIX}birthday setchannel <channel_id>\` – Set birthday channel\n` +
+    `• \`${PREFIX}birthday setgif <gif_url>\` – Set birthday GIF\n`
+  );
 
   const embed5 = new EmbedBuilder()
     .setColor(0x39FF14)
     .setTitle('📖 SOLDIER¹ Bot Commands (5/6)')
     .setDescription(
-      `**━━━ MODERATION (Basic) ━━━**\n` +
+      `**━━━ MODERATION ━━━**\n` +
       `• \`${PREFIX}kick @user [reason]\` – Kick user\n` +
       `• \`${PREFIX}ban @user [reason]\` – Ban user\n` +
       `• \`${PREFIX}unban <userId>\` – Unban user (Immune)\n` +
@@ -3761,7 +3762,6 @@ if (command === 'help') {
       `• \`${PREFIX}purgeuser @user [amt]\` – Purge user msgs (Immune)\n` +
       `• \`${PREFIX}snipe\` – Last deleted msg (Immune)\n` +
       `• \`${PREFIX}editsnipe\` – Last edited msg (Immune)\n\n` +
-      `**━━━ MODERATION (Advanced) ━━━**\n` +
       `• \`${PREFIX}massban @user1 @user2...\` – Mass ban (Immune)\n` +
       `• \`${PREFIX}masskick @user1 @user2...\` – Mass kick (Immune)\n` +
       `• \`${PREFIX}lock\` / \`${PREFIX}unlock\` – Lock/unlock channel\n` +
@@ -3774,11 +3774,13 @@ if (command === 'help') {
       `• \`${PREFIX}nuke delete/rename\` – Bulk channel ops\n` +
       `• \`${PREFIX}tagspam @user <count>\` – Tag spam (Immune)\n` +
       `• \`${PREFIX}autodelete <userId>\` – Auto-delete (Immune)\n\n` +
-      `**━━━ VOICE MODERATION ━━━**\n` +
+      `• \`${PREFIX}autodeletelist\` – Auto-delete list (Immune)\n\n` +
       `• \`${PREFIX}vcmute @user\` – Voice mute (Immune)\n` +
       `• \`${PREFIX}vcunmute @user\` – Voice unmute (Immune)\n` +
       `• \`${PREFIX}vckick @user\` – Voice kick (Immune)\n` +
-      `• \`${PREFIX}moveall #channel\` – Move all VC (Immune)`
+      `• \`${PREFIX}moveall #channel\` – Move all VC (Immune)` +
+      `• \`${PREFIX}rolelist <role_id>\` – List users with a role\n` +
+      `• \`${PREFIX}rrcreate\` – Create reaction role message\n\n`
     );
 
   const embed6 = new EmbedBuilder()
@@ -3794,9 +3796,9 @@ if (command === 'help') {
       `• \`${PREFIX}giveaway <duration> <prize>\` – Start giveaway\n` +
       `• \`${PREFIX}continue <msgId>\` – Continue giveaway\n` +
       `• \`${PREFIX}endgiveaway <msgId>\` – End giveaway\n` +
-      `• \`${PREFIX}debate <topic>\` – AI debate\n` +
       `• \`${PREFIX}qotd on|off\` – Question of the Day\n` +
       `• \`${PREFIX}counting set/off/leaderboard\` – Counting game\n\n` +
+      `• \`${PREFIX}citycam [city]\` – Live city webcams` +
       `**━━━ LOGGING ━━━**\n` +
       `• \`${PREFIX}logmode on [#channel]\` – Enable logging\n` +
       `• \`${PREFIX}logmode off\` – Disable logging\n` +
@@ -3807,16 +3809,15 @@ if (command === 'help') {
       `• \`${PREFIX}clearai\` – Reset your AI memory\n` +
       `• \`${PREFIX}aistat\` – View AI status (Owner)\n` +
       `• \`${PREFIX}aicheck\` – Test all AI models (Owner)\n` +
-      `**━━━ AI ━━━**\n` +
+      `• \`${PREFIX}debate <topic>\` – AI debate\n` +
       `• \`${PREFIX}ai <prompt>\` – Google Gemini AI\n` +
-      `• \`@bot <prompt>\` – OpenRouter AI\n\n` +
       `**━━━ ADMIN (Owner/Immune) ━━━**\n` +
       `• \`${PREFIX}promote @user <rank>\` – Grant immunity\n` +
       `• \`${PREFIX}demote @user\` – Revoke immunity\n` +
       `• \`${PREFIX}immunelist\` – List immune (Owner)\n` +
       `• \`${PREFIX}forcesave\` – Force save data\n` +
       `• \`${PREFIX}drop payload\` – Classified\n` +
-      `• \`${PREFIX}payload self destruct\` – Classified (Owner)\n\n` +
+      `• \`${PREFIX}payload self destruct\` – Classified\n\n` +
       `**━━━ IMMUNITY RANKS ━━━**\n` +
       `\`2LT\` • \`1LT\` • \`CPT\` • \`MAJ\` • \`LTC\` • \`COL\` • \`BG\` • \`MG\` • \`LTG\` • \`GEN\``
     )
