@@ -8920,6 +8920,52 @@ else if (command === 'dw' || command === 'deadliestwarrior') {
         }
     }, 60000);
 }
+// ==================================================
+// COMMAND: LOGINHELP
+// ==================================================
+if (command === 'loginhelp') {
+  const embed = new EmbedBuilder()
+    .setColor(0x5865F2)
+    .setTitle('🔐 Trouble Logging Into Discord?')
+    .setDescription(
+      `Below are the **most common reasons** users can’t log in, what they mean, and **how to fix them**:\n\n` +
+
+      `**❌ Wrong Email or Password**\n` +
+      `• Cause: Email or password was typed incorrectly\n` +
+      `• Effect: Discord refuses login\n` +
+      `• Fix: Reset your password and try again\n\n` +
+
+      `**🔑 Two-Factor Authentication (2FA) Issues**\n` +
+      `• Cause: Authenticator app code is missing or incorrect\n` +
+      `• Effect: Login blocked\n` +
+      `• Fix: Check your authenticator app or use backup codes\n\n` +
+
+      `**🚫 Account Locked, Disabled, or Suspended**\n` +
+      `• Cause: Suspicious activity or ToS violation\n` +
+      `• Effect: Account access denied\n` +
+      `• Fix: Check your email from Discord and submit an appeal\n\n` +
+
+      `**🌐 VPN / IP / Network Problems**\n` +
+      `• Cause: VPN or unstable network\n` +
+      `• Effect: Captcha loops or login errors\n` +
+      `• Fix: Turn off VPN, restart router, try another network\n\n` +
+
+      `**🖥 App or Browser Issues**\n` +
+      `• Cause: Corrupted cache or outdated app\n` +
+      `• Effect: Infinite loading or blank screen\n` +
+      `• Fix: Clear cache, update, or reinstall Discord\n\n` +
+
+      `**🛠 Still Can’t Log In?**\n` +
+      `• Login page: https://discord.com/login\n` +
+      `• Support: https://support.discord.com/hc/en-us\n` +
+      `• Appeal form: https://support.discord.com/hc/en-us/requests/new\n\n` +
+
+      `⚠️ This bot **cannot access or unlock Discord accounts** — this is guidance only.`
+    )
+    .setFooter({ text: 'Discord Login Help • Official guidance only' });
+
+  message.channel.send({ embeds: [embed] });
+}
 
 // ==================================================
 // COMMAND: BIRTHDAY
