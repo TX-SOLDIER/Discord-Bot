@@ -3721,7 +3721,7 @@ if (command === 'help') {
       `• \`${PREFIX}haunt\` / \`${PREFIX}unhaunt\` – Haunting\n` +
       `• \`${PREFIX}rr\` – Russian Roulette` +
       `• \`${PREFIX}battle @user\` / \`${PREFIX}1v1\` – Auto battle\n` +
-      `• \`${PREFIX}dw @user\` – Deadliest Warrior\n\n` +
+      `• \`${PREFIX}dw @user\` – Deadliest Warrior\n\n`
     );
 
   const embed4 = new EmbedBuilder()
