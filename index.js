@@ -3669,8 +3669,7 @@ if (command === 'help') {
       `• \`${PREFIX}colors <HEX>\` – Choose a color by HEX code\n` +
       `• \`${PREFIX}previewcolor\` – Preview the chosen HEX color`
     );
-}
-
+  
   const embed2 = new EmbedBuilder()
     .setColor(0x39FF14)
     .setTitle('📖 SOLDIER¹ Bot Commands (2/6)')
