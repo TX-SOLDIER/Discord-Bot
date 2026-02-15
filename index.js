@@ -3650,10 +3650,10 @@ if (command === 'help') {
       `• \`${PREFIX}spoiler [msg]\` – Send spoiler message\n` +
       `• \`${PREFIX}serverinfo\` – Server info\n` +
       `• \`${PREFIX}serverlist\` – List all servers (Immune)\n\n` +
-      `\n**━━━ SENTIENT AI ━━━**\n` +
-     `• \`${PREFIX}sentient\` – Check AI awareness status\n` +
-     `• \`${PREFIX}sentient on\` – Wake up the AI (Owner)\n` +
-     `• \`${PREFIX}sentient off\` – Put AI to sleep (Owner)\n` +
+      `**━━━ SENTIENT AI ━━━**\n` +
+      `• \`${PREFIX}sentient\` – Check AI awareness status\n` +
+      `• \`${PREFIX}sentient on\` – Wake up the AI (Owner)\n` +
+      `• \`${PREFIX}sentient off\` – Put AI to sleep (Owner)\n` +
       `**━━━ MESSAGES & EMBEDS ━━━**\n` +
       `• \`${PREFIX}send <channelID> <message>\` – Send to channel\n` +
       `• \`${PREFIX}embed create/send/delete/list\` – Manage embeds\n` +
@@ -3663,8 +3663,13 @@ if (command === 'help') {
       `• \`${PREFIX}setwelcome [#channel] <msg> | [gif]\` – Set welcome\n` +
       `• \`${PREFIX}clearwelcome\` – Clear welcome message\n` +
       `• \`${PREFIX}setleave [#channel] <msg> | [gif]\` – Set leave\n` +
-      `• \`${PREFIX}clearleave\` – Clear leave message`
+      `• \`${PREFIX}clearleave\` – Clear leave message\n\n` +
+      `**━━━ CUSTOM TOOLS ━━━**\n` +
+      `• \`${PREFIX}Info <message>\` – Sends a custom message\n` +
+      `• \`${PREFIX}colors <HEX>\` – Choose a color by HEX code\n` +
+      `• \`${PREFIX}previewcolor\` – Preview the chosen HEX color`
     );
+}
 
   const embed2 = new EmbedBuilder()
     .setColor(0x39FF14)
