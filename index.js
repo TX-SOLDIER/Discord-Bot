@@ -63,8 +63,8 @@ const client = new Client({
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildMessageReactions,
   ],
+  partials: ['GUILD_MEMBER', 'USER']
 });
-
 // ==================================================
 // GLOBAL ERROR HANDLERS
 // ==================================================
@@ -2535,27 +2535,56 @@ client.on('guildMemberAdd', async member => {
 // EVENT HANDLER - GUILD MEMBER REMOVE (LEAVE)
 // ==================================================
 client.on('guildMemberRemove', async member => {
-  const leaveData = botData.leaveMessages[member.guild.id];
-  if (leaveData) {
-    const channel = member.guild.channels.cache.get(leaveData.channelId);
-    if (channel) {
-      const message = leaveData.message
-        .replace(/{user}/g, member.user.tag)
-        .replace(/{server}/g, member.guild.name)
-        .replace(/{membercount}/g, member.guild.memberCount);
+  console.log("Leave event triggered for:", member.guild.id);
 
-      if (leaveData.gifUrl) {
-          const leaveEmbed = new EmbedBuilder()
-              .setColor(0xFF0000)
-              .setImage(leaveData.gifUrl);
+  try {
+    const leaveData = botData.leaveMessages?.[member.guild.id];
 
-          channel.send({ content: message, embeds: [leaveEmbed] });
-      } else {
-          channel.send(message);
-      }
+    if (!leaveData) {
+      console.log("No leave data found for this guild.");
+      return;
     }
+
+    const channel = member.guild.channels.cache.get(leaveData.channelId);
+
+    if (!channel) {
+      console.log("Leave channel not found:", leaveData.channelId);
+      return;
+    }
+
+    const message = (leaveData.message || '{user} left {server}.')
+      .replace(/{user}/g, member.user.tag)
+      .replace(/{server}/g, member.guild.name)
+      .replace(/{membercount}/g, member.guild.memberCount);
+
+    if (leaveData.gifUrl) {
+      const leaveEmbed = new EmbedBuilder()
+        .setColor(0xFF0000)
+        .setImage(leaveData.gifUrl);
+
+      await channel.send({
+        content: message,
+        embeds: [leaveEmbed]
+      });
+    } else {
+      await channel.send({ content: message });
+    }
+
+    console.log("Leave message sent successfully.");
+
+  } catch (err) {
+    console.error("Error in leave handler:", err);
   }
-  await sendLog(member.guild.id, `\`[LEAVE]\` **${member.user.tag}** (${member.user.id}) left the server.`);
+
+  // Safe logging wrapper
+  try {
+    await sendLog(
+      member.guild.id,
+      `\`[LEAVE]\` **${member.user.tag}** (${member.user.id}) left the server.`
+    );
+  } catch (err) {
+    console.error("sendLog failed:", err);
+  }
 });
 
 // ==================================================
@@ -13617,8 +13646,12 @@ else if (command === 'forcesave') {
 // END OF MESSAGE HANDLER
 // ==================================================
 });
-
 // ==================================================
-// BOT LOGIN
+// BOT STARTUP SEQUENCE
 // ==================================================
-client.login(process.env.BOT_TOKEN);
+(async () => {
+  console.log("Loading persistent data...");
+  await loadData(); // WAIT for JSONBin to finish
+  console.log("Starting bot login...");
+  await client.login(process.env.BOT_TOKEN);
+})();
