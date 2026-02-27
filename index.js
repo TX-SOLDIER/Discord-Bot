@@ -3656,7 +3656,6 @@ if (command === 'help') {
       `• \`${PREFIX}sentient off\` – Put AI to sleep (Owner)\n` +
       `**━━━ MESSAGES & EMBEDS ━━━**\n` +
       `• \`${PREFIX}send <channelID> <message>\` – Send to channel\n` +
-      `• \`${PREFIX}embed create/send/delete/list\` – Manage embeds\n` +
       `• \`${PREFIX}setgif <URL>\` – Set persistent GIF\n` +
       `• \`${PREFIX}showgif\` – Display saved GIF\n\n` +
       `**━━━ WELCOME & LEAVE ━━━**\n` +
@@ -9581,37 +9580,6 @@ if (command === 'embed') {
     const name = args[1];
     const channelMention = message.mentions.channels.first();
 
-    if (!name || !botData.customEmbeds[name]) {
-      return message.reply('❌ Embed not found. Use `$embed list` to see available ones.');
-    }
-
-    const embedData = botData.customEmbeds[name];
-    const embed = new EmbedBuilder()
-      .setColor(embedData.color || 0x00AEFF)
-      .setTimestamp();
-
-    if (embedData.title) embed.setTitle(embedData.title);
-    if (embedData.description) embed.setDescription(embedData.description);
-
-    if (embedData.imageUrl && /^https?:\/\/\S+\.\S+/.test(embedData.imageUrl)) {
-      embed.setImage(embedData.imageUrl);
-    } else if (embedData.imageUrl) {
-      message.reply('⚠️ Invalid image URL detected — image skipped.');
-    }
-
-    const targetChannel = channelMention || message.channel;
-    targetChannel.send({ embeds: [embed] });
-    message.reply(`✅ Embed **${name}** sent to ${targetChannel}.`);
-
-  } else {
-    message.reply('🧾 Usage:\n```' +
-      '$embed create <name> ~ <title> ~ <description> ~ [image/gif URL] ~ [color]\n' +
-      '$embed edit <name> / [title] / [description] / [image/gif URL] / [color]\n' +
-      '$embed delete <name>\n' +
-      '$embed list\n' +
-      '$embed send <name> [#channel]\n```');
-  }
-}
 
 // ==================================================
 // COMMAND: SERVERLIST
