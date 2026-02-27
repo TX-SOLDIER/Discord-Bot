@@ -9489,9 +9489,9 @@ else if (command === 'demote') {
     }
 }
 
-// ==================================================
+// =================================================
 // COMMAND: EMBED SYSTEM
-// ==================================================
+// =================================================
 if (command === 'embed') {
   if (!isImmune(message.author)) {
     return message.reply('❌ You do not have permission to use this command.');
