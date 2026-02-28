@@ -1883,7 +1883,7 @@ const compliments = [
 // ==================================================
 // STATIC DATA ARRAYS - QOTD QUESTIONS (NEW)
 // ==================================================
-const qotdQuestionsNew = [
+const qotdQuestions = [
   // --- FUNNY & RANDOM ---
   "If you were a villain in a kids' cartoon, what would your evil plan be?",
   "What’s the most ridiculous thing you believed as a child?",
