@@ -9792,12 +9792,46 @@ if (command === 'tagspam') {
 }
 
 // ==================================================
-// COMMAND: PING
+// COMMAND: PING (UPGRADED)
 // ==================================================
 else if (command === 'ping') {
-    const sent = await message.channel.send({ content: "🏓 Pinging..." });
-    const pingEmbed = { color: 0x39FF14, title: "🏓 Pong!", description: `Latency is **${sent.createdTimestamp - message.createdTimestamp}ms**\nAPI Latency is **${Math.round(client.ws.ping)}ms**` };
+
+    const { EmbedBuilder } = require('discord.js');
+
+    const sent = await message.channel.send("🏓 Pinging...");
+
+    const latency = sent.createdTimestamp - message.createdTimestamp;
+    const apiLatency = Math.round(client.ws.ping);
+
+    // Dynamic color based on latency
+    let color = 0x39FF14; // green
+    if (latency > 150) color = 0xFFFF00; // yellow
+    if (latency > 300) color = 0xFF0000; // red
+
+    const pingEmbed = new EmbedBuilder()
+        .setColor(color)
+        .setTitle("🏓 Pong!")
+        .setThumbnail("https://media0.giphy.com/media/v1.Y2lkPTZjMDliOTUyODR3cm1oNW5sNXZ0bmp6ZTN3ODduczA2azB0cjNvYm1xenVvejByeCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/oG8tmBYHQQnidfKPZY/giphy.gif")
+        .addFields(
+            { name: "📡 Bot Latency", value: `**${latency}ms**`, inline: true },
+            { name: "🌐 API Latency", value: `**${apiLatency}ms**`, inline: true },
+            { name: "⏳ Uptime", value: `**${formatUptime(client.uptime)}**`, inline: false }
+        )
+        .setFooter({ text: `${client.user.username} Status Check` })
+        .setTimestamp();
+
     await sent.edit({ content: "", embeds: [pingEmbed] });
+}
+
+// Helper function for uptime formatting
+function formatUptime(ms) {
+    const totalSeconds = Math.floor(ms / 1000);
+    const days = Math.floor(totalSeconds / 86400);
+    const hours = Math.floor((totalSeconds % 86400) / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    return `${days}d ${hours}h ${minutes}m ${seconds}s`;
 }
 
 // ==================================================
@@ -11001,7 +11035,7 @@ else if (command === 'autodelete') {
       .setTimestamp()
 
       // OPTIONAL GIF (remove or replace if you want)
-      .setImage('https://media.giphy.com/media/3o7TKMt1VVNkHV2PaE/giphy.gif');
+      .setImage('https://media4.giphy.com/media/v1.Y2lkPTZjMDliOTUybTFwOHlob2hwYnZhdjV3MTAxMGJka3AweDIzZmU1aGoxcHlzY25qOCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/4AoU8U5hfS2meEXc3q/giphy.gif');
 
     return message.reply({ embeds: [embed] });
   }
