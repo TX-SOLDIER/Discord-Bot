@@ -456,6 +456,19 @@ function getCentralDate() {
   );
 }
 // ==================================================
+// HELPER FUNCTION: formatUptime
+// ==================================================
+// Converts milliseconds into a human-readable uptime format (days, hours, minutes, seconds).
+function formatUptime(ms) {
+    const totalSeconds = Math.floor(ms / 1000);
+    const days = Math.floor(totalSeconds / 86400);
+    const hours = Math.floor((totalSeconds % 86400) / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    return `${days}d ${hours}h ${minutes}m ${seconds}s`;
+}
+// ==================================================
 // IN-MEMORY DATA STORES (NON-PERSISTENT)
 // ==================================================
 const hauntedChannels = new Set();
@@ -9792,22 +9805,26 @@ else if (command === 'tagspam') {
 }
 
 // ==================================================
-// COMMAND: PING (UPGRADED)
+// COMMAND: PING
 // ==================================================
+// Sends a pong response with bot latency, API latency, and uptime.
+// Includes a fun GIF in the embed and dynamic color based on latency.
 else if (command === 'ping') {
-
     const { EmbedBuilder } = require('discord.js');
 
+    // Send initial message
     const sent = await message.channel.send("🏓 Pinging...");
 
+    // Calculate latencies
     const latency = sent.createdTimestamp - message.createdTimestamp;
     const apiLatency = Math.round(client.ws.ping);
 
-    // Dynamic color based on latency
+    // Dynamic color based on bot latency
     let color = 0x39FF14; // green
     if (latency > 150) color = 0xFFFF00; // yellow
     if (latency > 300) color = 0xFF0000; // red
 
+    // Create embed
     const pingEmbed = new EmbedBuilder()
         .setColor(color)
         .setTitle("🏓 Pong!")
@@ -9820,18 +9837,8 @@ else if (command === 'ping') {
         .setFooter({ text: `${client.user.username} Status Check` })
         .setTimestamp();
 
+    // Edit the original message with embed
     await sent.edit({ content: "", embeds: [pingEmbed] });
-}
-
-// Helper function for uptime formatting
-function formatUptime(ms) {
-    const totalSeconds = Math.floor(ms / 1000);
-    const days = Math.floor(totalSeconds / 86400);
-    const hours = Math.floor((totalSeconds % 86400) / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = totalSeconds % 60;
-
-    return `${days}d ${hours}h ${minutes}m ${seconds}s`;
 }
 
 // ==================================================
