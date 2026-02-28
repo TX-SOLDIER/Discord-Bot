@@ -196,9 +196,49 @@ let activeQotdChannels = new Set();
 let dirty = false;
 let saveCount = 0;
 let lastSaveTime = null;
+let saving = false;
+let saveTimeout = null;
 
 function markDirty() {
   dirty = true;
+}
+
+// ==================================================
+// SAVE DEBOUNCE (Upgrade #1)
+// Groups rapid changes into one save
+// ==================================================
+function scheduleSave(delay = 5000) {
+  clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(() => safeSave(), delay);
+}
+
+// ==================================================
+// PREVENT OVERLAPPING SAVES (Upgrade #3)
+// ==================================================
+async function safeSave() {
+  if (saving) return;
+  saving = true;
+  try {
+    await saveWithRetry();
+  } finally {
+    saving = false;
+  }
+}
+
+// ==================================================
+// RETRY LOGIC (Upgrade #2)
+// ==================================================
+async function saveWithRetry(retries = 3) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      await saveData();
+      return;
+    } catch (err) {
+      console.warn(`[DATA] Retry ${i + 1} failed. Retrying in 2s...`);
+      await new Promise(r => setTimeout(r, 2000));
+    }
+  }
+  console.error("🚨 All save retries failed.");
 }
 
 // ==================================================
@@ -228,24 +268,28 @@ async function saveData() {
       throw new Error(`JSONBin API Error: ${result.message || response.statusText}`);
     }
 
-    console.log(`[DATA] ✅ Hourly save to JSONBin at ${new Date().toLocaleTimeString()}`);
+    saveCount++;
+    lastSaveTime = Date.now();
     dirty = false;
+
+    console.log(`[DATA] ✅ Saved (#${saveCount}) at ${new Date(lastSaveTime).toLocaleTimeString()}`);
   } catch (e) {
     console.error('[DATA] ❌ Failed to save data to JSONBin:', e);
+    throw e; // allows retry logic to catch failure
   }
 }
 
 // ==================================================
-// JSONBIN DATA PERSISTENCE - AUTO-SAVE INTERVAL
+// JSONBIN DATA PERSISTENCE - AUTO-SAVE EVERY 24 HOURS
 // ==================================================
-setInterval(saveData, 60 * 60 * 1000);
+setInterval(safeSave, 24 * 60 * 60 * 1000);
 
 // ==================================================
 // JSONBIN DATA PERSISTENCE - SHUTDOWN HOOK
 // ==================================================
 process.on("SIGINT", async () => {
   console.log("💾 Saving data before shutdown...");
-  await saveData();
+  await safeSave();
   process.exit();
 });
 
@@ -266,7 +310,8 @@ async function loadData() {
 
     if (response.status === 404) {
         console.warn("⚠️ Bin not found or empty. Initializing with default data and performing first save.");
-        saveData();
+        markDirty();
+        await safeSave();
         return;
     }
 
