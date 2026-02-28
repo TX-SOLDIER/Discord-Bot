@@ -13580,6 +13580,41 @@ else if (command === 'forcesave') {
 (async () => {
   console.log("Loading persistent data...");
   await loadData(); // WAIT for JSONBin to finish
+
+  // ==================================================
+  // 🧹 ONE-TIME DATA CLEANUP + ZERO BALANCE PRUNE
+  // ==================================================
+  console.log("🧹 Performing one-time JSON cleanup...");
+
+  // Clear heavy historical data
+  botData.userTransactions = {};
+  botData.userHistory = {};
+  botData.userActivity = {};
+  botData.dailyData = {};
+  botData.hourlyData = {};
+  botData.sentQuestions = {};
+  botData.activeBattles = {};
+  botData.activeDWGames = {};
+
+  // Prune zero-balance economy users
+  for (const userId in botData.economyData) {
+    const balance = botData.economyData[userId];
+
+    if (
+      balance === 0 ||
+      balance === null ||
+      balance === undefined ||
+      (typeof balance === "object" && balance.coins <= 0)
+    ) {
+      delete botData.economyData[userId];
+    }
+  }
+
+  markDirty();
+  await safeSave();
+
+  console.log("✅ Cleanup complete.");
+
   console.log("Starting bot login...");
   await client.login(process.env.BOT_TOKEN);
 })();
