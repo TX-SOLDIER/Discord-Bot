@@ -13534,6 +13534,100 @@ else if (command === 'crhelp') {
 
     return message.channel.send({ embeds: [embed] });
       }
+// ==================================================
+// COMMAND: CLEANUP (OWNER + IMMUNE ONLY + LOGGED)
+// ==================================================
+if (command === 'cleanup') {
+
+  if (!isImmune(message.author)) {
+    return message.reply("❌ You do not have permission to use this command.");
+  }
+
+  if (args[0] !== 'confirm') {
+    return message.reply(
+      "⚠️ This will wipe heavy stored data and prune zero-balance users.\n\n" +
+      "Type:\n`$cleanup confirm`\n\nto proceed."
+    );
+  }
+
+  await message.reply("🧹 Running manual cleanup...");
+
+  try {
+
+    const beforeEconomySize = Object.keys(botData.economyData).length;
+
+    // ==============================
+    // WIPE HEAVY DATA
+    // ==============================
+    botData.userTransactions = {};
+    botData.userHistory = {};
+    botData.userActivity = {};
+    botData.dailyData = {};
+    botData.hourlyData = {};
+    botData.sentQuestions = {};
+    botData.activeBattles = {};
+    botData.activeDWGames = {};
+    botData.workData = {};
+    botData.fishData = {};
+    botData.mineData = {};
+    botData.huntData = {};
+
+    // ==============================
+    // PRUNE ZERO BALANCE USERS
+    // ==============================
+    let pruned = 0;
+
+    for (const userId in botData.economyData) {
+      const balance = botData.economyData[userId];
+
+      if (
+        balance === 0 ||
+        balance === null ||
+        balance === undefined ||
+        (typeof balance === "object" && balance.coins <= 0)
+      ) {
+        delete botData.economyData[userId];
+        pruned++;
+      }
+    }
+
+    const afterEconomySize = Object.keys(botData.economyData).length;
+
+    markDirty();
+    await safeSave();
+
+    await message.channel.send(
+      `✅ Cleanup complete.\n` +
+      `🗑 Cleared heavy data.\n` +
+      `💰 Removed ${pruned} zero-balance users.\n` +
+      `💾 Saved to JSONBin.`
+    );
+
+    // ==============================
+    // LOG TO PERMANENT LOG CHANNEL
+    // ==============================
+    const logChannel = client.channels.cache.get(PERMANENT_LOG_CHANNEL_ID);
+
+    if (logChannel) {
+      const embed = new EmbedBuilder()
+        .setColor(0xFF0000)
+        .setTitle("🧹 SYSTEM CLEANUP EXECUTED")
+        .addFields(
+          { name: "Executed By", value: `${message.author.tag} (${message.author.id})` },
+          { name: "Users Before", value: `${beforeEconomySize}`, inline: true },
+          { name: "Users After", value: `${afterEconomySize}`, inline: true },
+          { name: "Pruned", value: `${pruned}`, inline: true }
+        )
+        .setTimestamp();
+
+      logChannel.send({ embeds: [embed] });
+    }
+
+  } catch (err) {
+    console.error("Cleanup failed:", err);
+    message.channel.send("🚨 Cleanup failed. Check console.");
+  }
+}
 
 // ==================================================
 // COMMAND: FORCESAVE
@@ -13580,41 +13674,6 @@ else if (command === 'forcesave') {
 (async () => {
   console.log("Loading persistent data...");
   await loadData(); // WAIT for JSONBin to finish
-
-  // ==================================================
-  // 🧹 ONE-TIME DATA CLEANUP + ZERO BALANCE PRUNE
-  // ==================================================
-  console.log("🧹 Performing one-time JSON cleanup...");
-
-  // Clear heavy historical data
-  botData.userTransactions = {};
-  botData.userHistory = {};
-  botData.userActivity = {};
-  botData.dailyData = {};
-  botData.hourlyData = {};
-  botData.sentQuestions = {};
-  botData.activeBattles = {};
-  botData.activeDWGames = {};
-
-  // Prune zero-balance economy users
-  for (const userId in botData.economyData) {
-    const balance = botData.economyData[userId];
-
-    if (
-      balance === 0 ||
-      balance === null ||
-      balance === undefined ||
-      (typeof balance === "object" && balance.coins <= 0)
-    ) {
-      delete botData.economyData[userId];
-    }
-  }
-
-  markDirty();
-  await safeSave();
-
-  console.log("✅ Cleanup complete.");
-
   console.log("Starting bot login...");
   await client.login(process.env.BOT_TOKEN);
 })();
