@@ -10480,7 +10480,7 @@ RULES:
                     body: JSON.stringify({
                         model: model.model,
                         messages: messagesPayload,
-                        max_tokens: 300,
+                        max_tokens: 245,
                         temperature: 0.8,
                         top_p: 0.9,
                         frequency_penalty: 0.5,
