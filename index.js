@@ -9736,7 +9736,7 @@ else if (command === 'endgiveaway') {
 // ==================================================
 // COMMAND: TAGSPAM
 // ==================================================
-if (command === 'tagspam') {
+else if (command === 'tagspam') {
 
   if (!isImmune(message.author)) {
     return message.reply('❌ You are not allowed to use this command.');
