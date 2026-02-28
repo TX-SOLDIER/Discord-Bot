@@ -13630,39 +13630,81 @@ if (command === 'cleanup') {
 }
 
 // ==================================================
-// COMMAND: FORCESAVE
+// COMMAND: FORCESAVE (ECONOMY MONITORING ONLY)
 // ==================================================
 else if (command === 'forcesave') {
-    if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
-      return message.reply("❌ You don't have permission to force save.");
-    }
 
-    try {
-      const before = Date.now();
-      dirty = true;
-      await saveData();
-      const duration = ((Date.now() - before) / 1000).toFixed(2);
-
-      saveCount++;
-      lastSaveTime = new Date().toLocaleTimeString();
-
-      const infoEmbed = new EmbedBuilder()
-        .setColor(0x00FF00)
-        .setTitle('💾 Force Save Complete')
-        .addFields(
-          { name: '⏱️ Duration', value: `${duration}s`, inline: true },
-          { name: '🔢 Save Count', value: `${saveCount}`, inline: true },
-          { name: '🕐 Last Save', value: lastSaveTime, inline: true }
-        )
-        .setTimestamp();
-
-      message.reply({ embeds: [infoEmbed] });
-    } catch (err) {
-      console.error('[FORCESAVE ERROR]', err);
-      message.reply('❌ Failed to save data. Check console for errors.');
-    }
-    return;
+  if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
+    return message.reply("❌ You don't have permission to force save.");
   }
+
+  try {
+    const before = Date.now();
+
+    const dataToSave = {
+      ...botData,
+      activeQotdChannels: Array.from(activeQotdChannels)
+    };
+
+    const jsonString = JSON.stringify(dataToSave);
+    const sizeBytes = Buffer.byteLength(jsonString, 'utf8');
+    const sizeKB = (sizeBytes / 1024).toFixed(2);
+    const sizeMB = (sizeBytes / 1024 / 1024).toFixed(3);
+
+    // Force save directly
+    const response = await fetch(JSONBIN_URL, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Master-Key': JSONBIN_API_KEY,
+      },
+      body: jsonString,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`JSONBin Error: ${errorText}`);
+    }
+
+    const duration = ((Date.now() - before) / 1000).toFixed(2);
+
+    saveCount++;
+    lastSaveTime = new Date().toLocaleTimeString();
+    dirty = false;
+
+    // ECONOMY ONLY
+    const economyUsers = Object.keys(botData.economyData).length;
+
+    // JSONBin free tier warning (approx 100KB limit)
+    let sizeWarning = "🟢 Safe";
+    if (sizeBytes > 80000) sizeWarning = "🟡 Approaching Limit";
+    if (sizeBytes > 95000) sizeWarning = "🔴 VERY CLOSE TO LIMIT";
+
+    const infoEmbed = new EmbedBuilder()
+      .setColor(0x00FF00)
+      .setTitle('💾 Force Save + JSONBin Status')
+      .addFields(
+        { name: '⏱️ Duration', value: `${duration}s`, inline: true },
+        { name: '🔢 Save Count', value: `${saveCount}`, inline: true },
+        { name: '🕐 Last Save', value: lastSaveTime, inline: true },
+
+        { name: '📦 JSON Size', value: `${sizeKB} KB (${sizeMB} MB)`, inline: true },
+        { name: '📊 Size Status', value: sizeWarning, inline: true },
+        { name: '🌐 API Status', value: `${response.status} OK`, inline: true },
+
+        { name: '💰 Economy Users Stored', value: `${economyUsers}`, inline: false },
+      )
+      .setTimestamp();
+
+    message.reply({ embeds: [infoEmbed] });
+
+  } catch (err) {
+    console.error('[FORCESAVE ERROR]', err);
+    message.reply('❌ Failed to save data. Check console for errors.');
+  }
+
+  return;
+}
 
 // ==================================================
 // END OF MESSAGE HANDLER
