@@ -5121,54 +5121,51 @@ else if (command === 'delnote' || command === 'deletenote' || command === 'remno
 // COMMAND: FLAG (Flag User as Suspicious)
 // ==================================================
 else if (command === 'flag' || command === 'flaguser') {
-    if (!isImmune(message.author) && message.author.id !== OWNER_ID) {
-        return message.reply('❌ Only immune users can flag users.');
+    if (message.author.id !== OWNER_ID && !isImmune(message.author) && !isServerAdmin(message.member)) {
+        const deniedEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('🚫 Access Denied')
+            .setDescription('You do not have clearance for this command.')
+            .setFooter({ text: '🔒 Moderation Command • Owner/Immune/Admin Only' })
+            .setTimestamp();
+        return message.channel.send({ embeds: [deniedEmbed] });
     }
-    
+
     const target = message.mentions.users.first();
     if (!target) {
         return message.reply('❌ Please mention a user.\n**Usage:** `$flag @user [reason]`');
     }
-    
+
     if (target.id === message.author.id) {
         return message.reply('❌ You cannot flag yourself.');
     }
-    
+
     if (target.id === OWNER_ID) {
         return message.reply('❌ You cannot flag the bot owner.');
     }
-    
+
     const reason = args.slice(1).join(' ') || 'No reason provided';
-    
-    // Check if already flagged
+
     const existingFlag = isUserFlagged(message.guild.id, target.id);
     if (existingFlag) {
         return message.reply(`⚠️ **${target.tag}** is already flagged.\nReason: ${existingFlag.reason}\nFlagged by: <@${existingFlag.flaggedBy}>`);
     }
-    
+
     flagUser(message.guild.id, target.id, message.author.id, message.author.tag, reason);
-    
+
     const flagEmbed = new EmbedBuilder()
         .setColor(0xFF0000)
-        .setTitle('🚩 USER FLAGGED')
-        .setDescription(
-            '```ansi\n' +
-            '\u001b[31m╔═══════════════════════════════════════════╗\n' +
-            '║                                           ║\n' +
-            '║     🚩 USER FLAGGED AS SUSPICIOUS 🚩     ║\n' +
-            '║                                           ║\n' +
-            '╚═══════════════════════════════════════════╝\u001b[0m\n' +
-            '```'
-        )
+        .setTitle('🚩 User Flagged')
         .setThumbnail(target.displayAvatarURL({ dynamic: true }))
         .addFields(
             { name: '👤 Flagged User', value: `${target.tag} (\`${target.id}\`)`, inline: true },
             { name: '👮 Flagged By', value: message.author.tag, inline: true },
+            { name: '🏠 Server', value: `${message.guild.name} (\`${message.guild.id}\`)`, inline: false },
             { name: '📝 Reason', value: reason, inline: false }
         )
         .setFooter({ text: 'Use $unflag @user to remove the flag • $flaglist to view all' })
         .setTimestamp();
-    
+
     message.channel.send({ embeds: [flagEmbed] });
 }
 
@@ -5176,22 +5173,31 @@ else if (command === 'flag' || command === 'flaguser') {
 // COMMAND: UNFLAG (Remove Flag)
 // ==================================================
 else if (command === 'unflag' || command === 'unflaguser') {
-    if (!isImmune(message.author) && message.author.id !== OWNER_ID) {
-        return message.reply('❌ Only immune users can unflag users.');
+    if (message.author.id !== OWNER_ID && !isImmune(message.author) && !isServerAdmin(message.member)) {
+        const deniedEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('🚫 Access Denied')
+            .setDescription('You do not have clearance for this command.')
+            .setFooter({ text: '🔒 Moderation Command • Owner/Immune/Admin Only' })
+            .setTimestamp();
+        return message.channel.send({ embeds: [deniedEmbed] });
     }
-    
+
     const target = message.mentions.users.first();
     if (!target) {
         return message.reply('❌ Please mention a user.\n**Usage:** `$unflag @user`');
     }
-    
+
     const removed = unflagUser(message.guild.id, target.id);
-    
+
     if (removed) {
         const unflagEmbed = new EmbedBuilder()
             .setColor(0x00FF00)
-            .setTitle('✅ FLAG REMOVED')
+            .setTitle('✅ Flag Removed')
             .setDescription(`Successfully removed flag from **${target.tag}**.`)
+            .addFields(
+                { name: '🏠 Server', value: `${message.guild.name} (\`${message.guild.id}\`)`, inline: false }
+            )
             .setTimestamp();
         message.channel.send({ embeds: [unflagEmbed] });
     } else {
@@ -5203,45 +5209,67 @@ else if (command === 'unflag' || command === 'unflaguser') {
 // COMMAND: FLAGLIST (View All Flagged Users)
 // ==================================================
 else if (command === 'flaglist' || command === 'flagged' || command === 'flags') {
-    if (!isImmune(message.author) && message.author.id !== OWNER_ID) {
-        return message.reply('❌ Only immune users can view the flag list.');
+    if (message.author.id !== OWNER_ID && !isImmune(message.author) && !isServerAdmin(message.member)) {
+        const deniedEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('🚫 Access Denied')
+            .setDescription('You do not have clearance for this command.')
+            .setFooter({ text: '🔒 Moderation Command • Owner/Immune/Admin Only' })
+            .setTimestamp();
+        return message.channel.send({ embeds: [deniedEmbed] });
     }
-    
-    const flaggedUsers = botData.flaggedUsers?.[message.guild.id] || {};
-    const entries = Object.entries(flaggedUsers);
-    
-    if (entries.length === 0) {
+
+    const isPrivileged = message.author.id === OWNER_ID || isImmune(message.author);
+    let flagList = '';
+    let totalCount = 0;
+
+    if (isPrivileged) {
+        // Owner/Immune — show all servers
+        for (const [guildId, users] of Object.entries(botData.flaggedUsers || {})) {
+            const entries = Object.entries(users);
+            if (entries.length === 0) continue;
+            const serverName = client.guilds.cache.get(guildId)?.name || 'Unknown Server';
+            flagList += `**🏠 ${serverName}** (\`${guildId}\`)\n`;
+            entries.forEach(([userId, data], i) => {
+                const date = new Date(data.timestamp).toLocaleDateString();
+                flagList += `  **${i + 1}.** <@${userId}> (\`${userId}\`)\n`;
+                flagList += `     📝 Reason: ${data.reason || 'None'}\n`;
+                flagList += `     👮 By: ${data.flaggedByTag} | 📅 ${date}\n`;
+                totalCount++;
+            });
+            flagList += '\n';
+        }
+    } else {
+        // Server Admin — current server only
+        const flaggedUsers = botData.flaggedUsers?.[message.guild.id] || {};
+        const entries = Object.entries(flaggedUsers);
+        flagList += `**🏠 ${message.guild.name}** (\`${message.guild.id}\`)\n`;
+        entries.forEach(([userId, data], i) => {
+            const date = new Date(data.timestamp).toLocaleDateString();
+            flagList += `  **${i + 1}.** <@${userId}> (\`${userId}\`)\n`;
+            flagList += `     📝 Reason: ${data.reason || 'None'}\n`;
+            flagList += `     👮 By: ${data.flaggedByTag} | 📅 ${date}\n`;
+            totalCount++;
+        });
+    }
+
+    if (totalCount === 0) {
         const emptyEmbed = new EmbedBuilder()
             .setColor(0x00FF00)
-            .setTitle('🚩 FLAGGED USERS')
-            .setDescription('✅ No users are currently flagged in this server.')
+            .setTitle('🚩 Flagged Users')
+            .setDescription('✅ No users are currently flagged.')
             .setTimestamp();
         return message.channel.send({ embeds: [emptyEmbed] });
     }
-    
-    let flagList = '';
-    entries.forEach(([odId, data], i) => {
-        const date = new Date(data.timestamp).toLocaleDateString();
-        flagList += `**${i + 1}.** <@${odId}> (\`${odId}\`)\n`;
-        flagList += `   📝 Reason: ${data.reason || 'None'}\n`;
-        flagList += `   👮 By: ${data.flaggedByTag} | 📅 ${date}\n\n`;
-    });
-    
+
     const flagListEmbed = new EmbedBuilder()
         .setColor(0xFF0000)
-        .setTitle('🚩 FLAGGED USERS LIST')
-        .setDescription(
-            '```ansi\n' +
-            '\u001b[31m┌─────────────────────────────────────────┐\n' +
-            '│  🚩 SUSPICIOUS USERS DATABASE           ���\n' +
-            '└─────────────────────────────────────────┘\u001b[0m\n' +
-            '```\n' +
-            flagList.slice(0, 3800)
-        )
-        .addFields({ name: '📊 Total Flagged', value: `\`${entries.length}\``, inline: true })
+        .setTitle('🚩 Flagged Users List')
+        .setDescription(flagList.slice(0, 3800))
+        .addFields({ name: '📊 Total Flagged', value: `\`${totalCount}\``, inline: true })
         .setFooter({ text: 'Use $unflag @user to remove a flag' })
         .setTimestamp();
-    
+
     message.channel.send({ embeds: [flagListEmbed] });
 }
 
@@ -5249,50 +5277,47 @@ else if (command === 'flaglist' || command === 'flagged' || command === 'flags')
 // COMMAND: WATCH (Add to Watch List)
 // ==================================================
 else if (command === 'watch' || command === 'watchuser') {
-    if (!isImmune(message.author) && message.author.id !== OWNER_ID) {
-        return message.reply('❌ Only immune users can add users to the watch list.');
+    if (message.author.id !== OWNER_ID && !isImmune(message.author) && !isServerAdmin(message.member)) {
+        const deniedEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('🚫 Access Denied')
+            .setDescription('You do not have clearance for this command.')
+            .setFooter({ text: '🔒 Moderation Command • Owner/Immune/Admin Only' })
+            .setTimestamp();
+        return message.channel.send({ embeds: [deniedEmbed] });
     }
-    
+
     const target = message.mentions.users.first();
     if (!target) {
         return message.reply('❌ Please mention a user.\n**Usage:** `$watch @user [reason]`');
     }
-    
+
     if (target.id === message.author.id) {
         return message.reply('❌ You cannot watch yourself.');
     }
-    
+
     const reason = args.slice(1).join(' ') || 'No reason provided';
-    
-    // Check if already on watch list
+
     const existingWatch = isOnWatchList(message.guild.id, target.id);
     if (existingWatch) {
         return message.reply(`⚠️ **${target.tag}** is already on the watch list.\nReason: ${existingWatch.reason}\nAdded by: <@${existingWatch.addedBy}>`);
     }
-    
+
     addToWatchList(message.guild.id, target.id, message.author.id, message.author.tag, reason);
-    
+
     const watchEmbed = new EmbedBuilder()
         .setColor(0xFFA500)
-        .setTitle('👁️ USER ADDED TO WATCH LIST')
-        .setDescription(
-            '```ansi\n' +
-            '\u001b[33m╔═══════════════════════════════════════════╗\n' +
-            '║                                           ║\n' +
-            '║    👁️ USER NOW UNDER SURVEILLANCE 👁️     ║\n' +
-            '║                                           ║\n' +
-            '╚═══════════════════════════════════════════╝\u001b[0m\n' +
-            '```'
-        )
+        .setTitle('👁️ User Added to Watch List')
         .setThumbnail(target.displayAvatarURL({ dynamic: true }))
         .addFields(
             { name: '👤 Watched User', value: `${target.tag} (\`${target.id}\`)`, inline: true },
             { name: '👮 Added By', value: message.author.tag, inline: true },
+            { name: '🏠 Server', value: `${message.guild.name} (\`${message.guild.id}\`)`, inline: false },
             { name: '📝 Reason', value: reason, inline: false }
         )
         .setFooter({ text: 'Use $unwatch @user to remove • $watchlist to view all' })
         .setTimestamp();
-    
+
     message.channel.send({ embeds: [watchEmbed] });
 }
 
@@ -5300,22 +5325,31 @@ else if (command === 'watch' || command === 'watchuser') {
 // COMMAND: UNWATCH (Remove from Watch List)
 // ==================================================
 else if (command === 'unwatch' || command === 'unwatchuser') {
-    if (!isImmune(message.author) && message.author.id !== OWNER_ID) {
-        return message.reply('❌ Only immune users can remove users from the watch list.');
+    if (message.author.id !== OWNER_ID && !isImmune(message.author) && !isServerAdmin(message.member)) {
+        const deniedEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('🚫 Access Denied')
+            .setDescription('You do not have clearance for this command.')
+            .setFooter({ text: '🔒 Moderation Command • Owner/Immune/Admin Only' })
+            .setTimestamp();
+        return message.channel.send({ embeds: [deniedEmbed] });
     }
-    
+
     const target = message.mentions.users.first();
     if (!target) {
         return message.reply('❌ Please mention a user.\n**Usage:** `$unwatch @user`');
     }
-    
+
     const removed = removeFromWatchList(message.guild.id, target.id);
-    
+
     if (removed) {
         const unwatchEmbed = new EmbedBuilder()
             .setColor(0x00FF00)
-            .setTitle('✅ REMOVED FROM WATCH LIST')
+            .setTitle('✅ Removed from Watch List')
             .setDescription(`Successfully removed **${target.tag}** from the watch list.`)
+            .addFields(
+                { name: '🏠 Server', value: `${message.guild.name} (\`${message.guild.id}\`)`, inline: false }
+            )
             .setTimestamp();
         message.channel.send({ embeds: [unwatchEmbed] });
     } else {
@@ -5327,47 +5361,69 @@ else if (command === 'unwatch' || command === 'unwatchuser') {
 // COMMAND: WATCHLIST (View Watch List)
 // ==================================================
 else if (command === 'watchlist' || command === 'watched' || command === 'watching') {
-    if (!isImmune(message.author) && message.author.id !== OWNER_ID) {
-        return message.reply('❌ Only immune users can view the watch list.');
+    if (message.author.id !== OWNER_ID && !isImmune(message.author) && !isServerAdmin(message.member)) {
+        const deniedEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('🚫 Access Denied')
+            .setDescription('You do not have clearance for this command.')
+            .setFooter({ text: '🔒 Moderation Command • Owner/Immune/Admin Only' })
+            .setTimestamp();
+        return message.channel.send({ embeds: [deniedEmbed] });
     }
-    
-    const watchedUsers = botData.watchList?.[message.guild.id] || {};
-    const entries = Object.entries(watchedUsers);
-    
-    if (entries.length === 0) {
+
+    const isPrivileged = message.author.id === OWNER_ID || isImmune(message.author);
+    let watchList = '';
+    let totalCount = 0;
+
+    if (isPrivileged) {
+        // Owner/Immune — show all servers
+        for (const [guildId, users] of Object.entries(botData.watchList || {})) {
+            const entries = Object.entries(users);
+            if (entries.length === 0) continue;
+            const serverName = client.guilds.cache.get(guildId)?.name || 'Unknown Server';
+            watchList += `**🏠 ${serverName}** (\`${guildId}\`)\n`;
+            entries.forEach(([userId, data], i) => {
+                const date = new Date(data.timestamp).toLocaleDateString();
+                watchList += `  **${i + 1}.** <@${userId}> (\`${userId}\`)\n`;
+                watchList += `     📝 Reason: ${data.reason || 'None'}\n`;
+                watchList += `     👮 By: ${data.addedByTag} | 📅 ${date}\n`;
+                totalCount++;
+            });
+            watchList += '\n';
+        }
+    } else {
+        // Server Admin — current server only
+        const watchedUsers = botData.watchList?.[message.guild.id] || {};
+        const entries = Object.entries(watchedUsers);
+        watchList += `**🏠 ${message.guild.name}** (\`${message.guild.id}\`)\n`;
+        entries.forEach(([userId, data], i) => {
+            const date = new Date(data.timestamp).toLocaleDateString();
+            watchList += `  **${i + 1}.** <@${userId}> (\`${userId}\`)\n`;
+            watchList += `     📝 Reason: ${data.reason || 'None'}\n`;
+            watchList += `     👮 By: ${data.addedByTag} | 📅 ${date}\n`;
+            totalCount++;
+        });
+    }
+
+    if (totalCount === 0) {
         const emptyEmbed = new EmbedBuilder()
             .setColor(0x00FF00)
-            .setTitle('👁️ WATCH LIST')
-            .setDescription('✅ No users are currently on the watch list in this server.')
+            .setTitle('👁️ Watch List')
+            .setDescription('✅ No users are currently on the watch list.')
             .setTimestamp();
         return message.channel.send({ embeds: [emptyEmbed] });
     }
-    
-    let watchList = '';
-    entries.forEach(([odId, data], i) => {
-        const date = new Date(data.timestamp).toLocaleDateString();
-        watchList += `**${i + 1}.** <@${odId}> (\`${odId}\`)\n`;
-        watchList += `   📝 Reason: ${data.reason || 'None'}\n`;
-        watchList += `   👮 By: ${data.addedByTag} | 📅 ${date}\n\n`;
-    });
-    
+
     const watchListEmbed = new EmbedBuilder()
         .setColor(0xFFA500)
-        .setTitle('👁️ WATCH LIST')
-        .setDescription(
-            '```ansi\n' +
-            '\u001b[33m┌─────────────────────────────────────────┐\n' +
-            '│  👁️ USERS UNDER SURVEILLANCE            │\n' +
-            '└─────────────────────────────────────────┘\u001b[0m\n' +
-            '```\n' +
-            watchList.slice(0, 3800)
-        )
-        .addFields({ name: '📊 Total Watched', value: `\`${entries.length}\``, inline: true })
+        .setTitle('👁️ Watch List')
+        .setDescription(watchList.slice(0, 3800))
+        .addFields({ name: '📊 Total Watched', value: `\`${totalCount}\``, inline: true })
         .setFooter({ text: 'Use $unwatch @user to remove from list' })
         .setTimestamp();
-    
+
     message.channel.send({ embeds: [watchListEmbed] });
-}
+          }
 
 // ==================================================
 // COMMAND: TRANSACTIONS (View Transaction Log)
