@@ -10151,17 +10151,29 @@ else if (command === 'getinvite') {
 // COMMAND: SERVERLIST
 // ==================================================
 else if (command === 'serverlist') {
-    if (!isImmune(message.author)) {
-        return message.reply('❌ You do not have permission to use this command.');
+    if (message.author.id !== OWNER_ID && !isImmune(message.author) && !isServerAdmin(message.member)) {
+        const deniedEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('🚫 Access Denied')
+            .setDescription('You do not have clearance for this command.')
+            .setFooter({ text: '🔒 Utility Command • Owner/Immune/Admin Only' })
+            .setTimestamp();
+        return message.channel.send({ embeds: [deniedEmbed] });
     }
-    let serverList = '📜 **Server List**\n\n';
+
+    let serverList = '📜 **Server List**\n';
+    serverList += '🛡️ *All servers listed below are protected against raids.*\n\n';
+
     client.guilds.cache.forEach(guild => {
-        serverList += `**${guild.name}** - ${guild.memberCount} members (ID: ${guild.id})\n`;
+        serverList += `**${guild.name}**\n`;
+        serverList += `  └ Members: ${guild.memberCount}\n`;
+        serverList += `  └ Server ID: \`${guild.id}\`\n\n`;
     });
+
     if (serverList.length > 2000) {
         const chunks = serverList.match(/[\s\S]{1,1990}/g) || [];
         for (const chunk of chunks) {
-            message.channel.send(chunk);
+            await message.channel.send(chunk);
         }
     } else {
         message.channel.send(serverList);
@@ -10351,57 +10363,63 @@ else if (command === 'endgiveaway') {
 // ==================================================
 else if (command === 'tagspam') {
 
-  if (!isImmune(message.author)) {
-    return message.reply('❌ You are not allowed to use this command.');
-  }
-
-  const target = message.mentions.users.first();
-  const count = parseInt(args[1]);
-
-  if (!target) {
-    return message.reply('❌ You must mention a user.\nExample: `$tagspam @user 10`');
-  }
-
-  if (isImmune(target)) {
-    return message.reply('❌ You cannot tag spam an immune user or the owner.');
-  }
-
-  if (isNaN(count) || count < 1) {
-    return message.reply('❌ Please provide a valid number.');
-  }
-
-  if (count > MAX_TAGSPAM) {
-    return message.reply(`❌ Max allowed tags is **${MAX_TAGSPAM}**.`);
-  }
-
-  const mention = `<@${target.id}>`;
-  let batch = '';
-  const sentMessages = [];
-
-  for (let i = 0; i < count; i++) {
-    if ((batch + mention + ' ').length > 1900) {
-      const msg = await message.channel.send(batch);
-      sentMessages.push(msg);
-      batch = '';
+    if (message.author.id !== OWNER_ID && !isImmune(message.author) && !isServerAdmin(message.member)) {
+        const deniedEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('🚫 Access Denied')
+            .setDescription('You do not have clearance for this command.')
+            .setFooter({ text: '🔒 Moderation Command • Owner/Immune/Admin Only' })
+            .setTimestamp();
+        return message.channel.send({ embeds: [deniedEmbed] });
     }
-    batch += mention + ' ';
-  }
 
-  if (batch.length > 0) {
-    const msg = await message.channel.send(batch);
-    sentMessages.push(msg);
-  }
+    const target = message.mentions.users.first();
+    const count = parseInt(args[1]);
 
-  setTimeout(() => {
-    for (const msg of sentMessages) {
-      msg.delete().catch(() => {});
+    if (!target) {
+        return message.reply('❌ You must mention a user.\nExample: `$tagspam @user 10`');
     }
-  }, TAGSPAM_DELETE_TIME);
 
-  await sendLog(
-    message.guild.id,
-    `\`[TAGSPAM]\` **${message.author.tag}** spam-tagged **${target.tag}** ${count} times (auto-deleted)`
-  );
+    if (isImmune(target)) {
+        return message.reply('❌ You cannot tag spam an immune user or the owner.');
+    }
+
+    if (isNaN(count) || count < 1) {
+        return message.reply('❌ Please provide a valid number.');
+    }
+
+    if (count > MAX_TAGSPAM) {
+        return message.reply(`❌ Max allowed tags is **${MAX_TAGSPAM}**.`);
+    }
+
+    const mention = `<@${target.id}>`;
+    let batch = '';
+    const sentMessages = [];
+
+    for (let i = 0; i < count; i++) {
+        if ((batch + mention + ' ').length > 1900) {
+            const msg = await message.channel.send(batch);
+            sentMessages.push(msg);
+            batch = '';
+        }
+        batch += mention + ' ';
+    }
+
+    if (batch.length > 0) {
+        const msg = await message.channel.send(batch);
+        sentMessages.push(msg);
+    }
+
+    setTimeout(() => {
+        for (const msg of sentMessages) {
+            msg.delete().catch(() => {});
+        }
+    }, TAGSPAM_DELETE_TIME);
+
+    await sendLog(
+        message.guild.id,
+        `\`[TAGSPAM]\` **${message.author.tag}** spam-tagged **${target.tag}** ${count} times (auto-deleted)`
+    );
 }
 
 // ==================================================
@@ -11356,35 +11374,48 @@ else if (command === 'aicheck' || command === 'aitest') {
     await statusMsg.edit({ content: null, embeds: [embed] });
 }
 // ==================================================
-// ROLE LIST COMMAND
+// COMMAND: ROLELIST
 // ==================================================
 if (message.content === `${PREFIX}rolelist`) {
-  if (!message.guild) return;
-  if (!isImmune(message.author)) return;
+    if (!message.guild) return;
 
-  const roles = message.guild.roles.cache
-    .sort((a, b) => b.position - a.position)
-    .map(role => {
-      const botTag = role.managed ? ' (bot)' : '';
-      return `${role.name} — ${role.id}${botTag}`;
-    });
-
-  let output = '';
-  const messages = [];
-
-  for (const line of roles) {
-    if ((output + line + '\n').length > 1900) {
-      messages.push(output);
-      output = '';
+    if (message.author.id !== OWNER_ID && !isImmune(message.author) && !isServerAdmin(message.member)) {
+        const deniedEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('🚫 Access Denied')
+            .setDescription('You do not have clearance for this command.')
+            .setFooter({ text: '🔒 Utility Command • Owner/Immune/Admin Only' })
+            .setTimestamp();
+        return message.channel.send({ embeds: [deniedEmbed] });
     }
-    output += line + '\n';
-  }
 
-  if (output.length) messages.push(output);
+    const guild = message.guild;
 
-  for (const msg of messages) {
-    await message.channel.send('```' + msg + '```');
-  }
+    const roles = guild.roles.cache
+        .sort((a, b) => b.position - a.position)
+        .map(role => {
+            const botTag = role.managed ? ' (bot)' : '';
+            return `${role.name} — ${role.id}${botTag}`;
+        });
+
+    const header = `Server: ${guild.name} | ID: ${guild.id}\n${'─'.repeat(40)}\n`;
+
+    let output = header;
+    const messages = [];
+
+    for (const line of roles) {
+        if ((output + line + '\n').length > 1900) {
+            messages.push(output);
+            output = '';
+        }
+        output += line + '\n';
+    }
+
+    if (output.length) messages.push(output);
+
+    for (const msg of messages) {
+        await message.channel.send('```' + msg + '```');
+    }
 }
 // ==================================================
 // COMMAND: PREVIEWCOLOR (PUBLIC)
@@ -11462,54 +11493,59 @@ if (command === 'colors') {
 }
 // ==================================================
 // COMMAND: INFO (DYNAMIC SECTIONS + PER-SECTION COLORS)
-// PREFIX: $
 // ==================================================
 if (command === 'info') {
 
-  // ------------------------------
-  // PERMISSION CHECK (USING YOUR IMMUNITY SYSTEM)
-  // ------------------------------
-  if (!isImmune(message.author)) {
-    return message.reply('❌ You are not allowed to use this command.');
-  }
+    // ------------------------------
+    // PERMISSION CHECK
+    // ------------------------------
+    if (message.author.id !== OWNER_ID && !isImmune(message.author) && !isServerAdmin(message.member)) {
+        const deniedEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('🚫 Access Denied')
+            .setDescription('You do not have clearance for this command.')
+            .setFooter({ text: '🔒 Utility Command • Owner/Immune/Admin Only' })
+            .setTimestamp();
+        return message.channel.send({ embeds: [deniedEmbed] });
+    }
 
-  // ------------------------------
-  // SHOW TUTORIAL IF NO ARGUMENTS
-  // ------------------------------
-  if (!args.length) {
-    return message.channel.send({
-      embeds: [
-        new EmbedBuilder()
-          .setColor(0x5865F2)
-          .setTitle('📘 $info Command Tutorial')
-          .setDescription(
-            '**Post multiple GIF + embed sections without editing code.**\n\n' +
+    // ------------------------------
+    // SHOW TUTORIAL IF NO ARGUMENTS
+    // ------------------------------
+    if (!args.length) {
+        return message.channel.send({
+            embeds: [
+                new EmbedBuilder()
+                    .setColor(0x5865F2)
+                    .setTitle('📘 $info Command Tutorial')
+                    .setDescription(
+                        '**Post multiple GIF + embed sections without editing code.**\n\n' +
 
-            '**SYNTAX:**\n' +
-            '`$info | <color> | <gif> | <title> | <text> || <color> | <gif> | <title> | <text>`\n\n' +
+                        '**SYNTAX:**\n' +
+                        '`$info | <color> | <gif> | <title> | <text> || <color> | <gif> | <title> | <text>`\n\n' +
 
-            '**SEPARATORS:**\n' +
-            '`||` → New section\n' +
-            '`|` → Field separator\n' +
-            '`\\n` → New line inside text\n\n' +
+                        '**SEPARATORS:**\n' +
+                        '`||` → New section\n' +
+                        '`|` → Field separator\n' +
+                        '`\\n` → New line inside text\n\n' +
 
-            '**EACH SECTION SUPPORTS:**\n' +
-            '• Its own embed color\n' +
-            '• One GIF\n' +
-            '• Title & description\n\n' +
+                        '**EACH SECTION SUPPORTS:**\n' +
+                        '• Its own embed color\n' +
+                        '• One GIF\n' +
+                        '• Title & description\n\n' +
 
-            '**EXAMPLE (COPY & EDIT):**\n' +
-            '```' +
-            '$info |\n' +
-            '#ff5555 | https://media.giphy.com/media/rules.gif | 📜 Rules | Be respectful\\nNo spam\\nFollow TOS ||\n' +
-            '#5865F2 | https://media.giphy.com/media/info.gif | ℹ️ Info | Welcome to the server\\nUse correct channels ||\n' +
-            '#57F287 | https://media.giphy.com/media/support.gif | 🆘 Support | Open a ticket\\nPing staff\n' +
-            '```'
-          )
-          .setFooter({ text: 'Delete the command message after posting for a clean channel' })
-      ]
-    });
-  }
+                        '**EXAMPLE (COPY & EDIT):**\n' +
+                        '```' +
+                        '$info |\n' +
+                        '#ff5555 | https://media.giphy.com/media/rules.gif | 📜 Rules | Be respectful\\nNo spam\\nFollow TOS ||\n' +
+                        '#5865F2 | https://media.giphy.com/media/info.gif | ℹ️ Info | Welcome to the server\\nUse correct channels ||\n' +
+                        '#57F287 | https://media.giphy.com/media/support.gif | 🆘 Support | Open a ticket\\nPing staff\n' +
+                        '```'
+                    )
+                    .setFooter({ text: 'Delete the command message after posting for a clean channel' })
+            ]
+        });
+    }
 
   // ------------------------------
   // PARSE AND SEND SECTIONS
@@ -11550,7 +11586,16 @@ if (command === 'info') {
 // COMMAND: KICK
 // ==================================================
 else if (command === 'kick') {
-    if (!checkPermission(PermissionsBitField.Flags.KickMembers)) return;
+    if (message.author.id !== OWNER_ID && !isImmune(message.author) && !isServerAdmin(message.member) && !message.member.permissions.has(PermissionsBitField.Flags.KickMembers)) {
+        const deniedEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('🚫 Access Denied')
+            .setDescription('You do not have clearance for this command.')
+            .setFooter({ text: '🔒 Moderation Command • Owner/Immune/Admin/Kick Members Only' })
+            .setTimestamp();
+        return message.channel.send({ embeds: [deniedEmbed] });
+    }
+
     const target = message.mentions.members.first();
     if (!target) return message.reply('⚠️ Tag a user to kick.');
     const reason = args.slice(1).join(' ') || 'No reason';
@@ -11563,7 +11608,16 @@ else if (command === 'kick') {
 // COMMAND: BAN
 // ==================================================
 else if (command === 'ban') {
-    if (!checkPermission(PermissionsBitField.Flags.BanMembers)) return;
+    if (message.author.id !== OWNER_ID && !isImmune(message.author) && !isServerAdmin(message.member) && !message.member.permissions.has(PermissionsBitField.Flags.BanMembers)) {
+        const deniedEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('🚫 Access Denied')
+            .setDescription('You do not have clearance for this command.')
+            .setFooter({ text: '🔒 Moderation Command • Owner/Immune/Admin/Ban Members Only' })
+            .setTimestamp();
+        return message.channel.send({ embeds: [deniedEmbed] });
+    }
+
     const target = message.mentions.members.first();
     if (!target) return message.reply('⚠️ Tag a user to ban.');
     const reason = args.slice(1).join(' ') || 'No reason';
@@ -11576,12 +11630,21 @@ else if (command === 'ban') {
 // COMMAND: MUTE
 // ==================================================
 else if (command === 'mute') {
-    if (!checkPermission(PermissionsBitField.Flags.ModerateMembers)) return;
+    if (message.author.id !== OWNER_ID && !isImmune(message.author) && !isServerAdmin(message.member) && !message.member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) {
+        const deniedEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('🚫 Access Denied')
+            .setDescription('You do not have clearance for this command.')
+            .setFooter({ text: '🔒 Moderation Command • Owner/Immune/Admin/Moderate Members Only' })
+            .setTimestamp();
+        return message.channel.send({ embeds: [deniedEmbed] });
+    }
+
     const target = message.mentions.members.first();
     if (!target) return message.reply('⚠️ Tag a user to mute.');
     const durationArg = args[1] || '10m';
     const durationMs = parseDuration(durationArg);
-    if (!durationMs) return message.reply('❌ Invalid duration. Use formats like 10s, 5m, 1h, 1d.');
+    if (!durationMs) return message.reply('❌ Invalid duration. Use formats like `10s`, `5m`, `1h`, `1d`.');
     await target.timeout(durationMs, 'Muted by command');
     message.channel.send(`🔇 ${target.user.tag} has been muted for ${durationArg}.`);
     await sendLog(message.guild.id, `\`[MUTE]\` **${message.author.tag}** muted **${target.user.tag}** for ${durationArg}.`);
@@ -11591,7 +11654,16 @@ else if (command === 'mute') {
 // COMMAND: UNMUTE
 // ==================================================
 else if (command === 'unmute') {
-    if (!checkPermission(PermissionsBitField.Flags.ModerateMembers)) return;
+    if (message.author.id !== OWNER_ID && !isImmune(message.author) && !isServerAdmin(message.member) && !message.member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) {
+        const deniedEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('🚫 Access Denied')
+            .setDescription('You do not have clearance for this command.')
+            .setFooter({ text: '🔒 Moderation Command • Owner/Immune/Admin/Moderate Members Only' })
+            .setTimestamp();
+        return message.channel.send({ embeds: [deniedEmbed] });
+    }
+
     const target = message.mentions.members.first();
     if (!target) return message.reply('⚠️ Tag a user to unmute.');
     await target.timeout(null);
