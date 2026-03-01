@@ -12632,373 +12632,234 @@ else if (command === 'editsnipe' || command === 'esnipe') {
     message.channel.send({ embeds: [snipeEmbed] });
 }
 
-// ==================================================
-// COMMAND: NICK
-// ==================================================
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// COMMAND: NICK / NICKNAME
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 else if (command === 'nick' || command === 'nickname') {
-    if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
-        const deniedEmbed = new EmbedBuilder()
-            .setColor(0xFF0000)
-            .setTitle('🚫 ACCESS DENIED')
-            .setDescription(
-                '```ansi\n' +
-                '\u001b[31m╔═══════════════════════════════════════════╗\n' +
-                '║   ⛔ UNAUTHORIZED ACCESS ATTEMPT ⛔        ║\n' +
-                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
-                '```\n' +
-                'You do not have clearance for this command.'
-            )
-            .setFooter({ text: '🔒 Moderation Command • Owner/Immune Only' })
-            .setTimestamp();
-        return message.channel.send({ embeds: [deniedEmbed] });
-    }
-    
+    const isPrivileged =
+        message.author.id === OWNER_ID ||
+        isImmune(message.author) ||
+        isServerAdmin(message.guild.id, message.author.id) ||
+        message.member.permissions.has(PermissionsBitField.Flags.ManageNicknames);
+
+    if (!isPrivileged) return message.reply('❌ No permission.');
+
     const target = message.mentions.members.first();
     const newNick = args.slice(1).join(' ');
-    
-    if (!target) {
-        return message.reply('❌ Please mention a user.\nUsage: `$nick @user <new nickname>`');
-    }
-    
-    if (!newNick) {
-        return message.reply('❌ Please provide a new nickname.\nUsage: `$nick @user <new nickname>`');
-    }
-    
+
+    if (!target) return message.reply('❌ Usage: `$nick @user <new nickname>`');
+    if (!newNick) return message.reply('❌ Usage: `$nick @user <new nickname>`');
+
     const oldNick = target.nickname || target.user.username;
-    
+
     try {
         await target.setNickname(newNick);
-        
-        const nickEmbed = new EmbedBuilder()
+
+        const embed = new EmbedBuilder()
             .setColor(0x9B59B6)
-            .setTitle('📝 NICKNAME CHANGED')
-            .setDescription(
-                '```ansi\n' +
-                '\u001b[35m╔═══════════════════════════════════════════╗\n' +
-                '║       ✏️  IDENTITY MODIFIED  ✏️           ║\n' +
-                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
-                '```'
-            )
+            .setTitle('📝 Nickname Changed')
             .addFields(
                 { name: '👤 User', value: `<@${target.id}>`, inline: true },
                 { name: '📝 Old Nick', value: `\`${oldNick}\``, inline: true },
                 { name: '📝 New Nick', value: `\`${newNick}\``, inline: true }
             )
-            .setFooter({ text: '✏️ Changed by ' + message.author.tag })
+            .setFooter({ text: `Changed by ${message.author.tag}` })
             .setTimestamp();
-        
-        message.channel.send({ embeds: [nickEmbed] });
+
+        message.channel.send({ embeds: [embed] });
         await sendLog(message.guild.id, `\`[NICK]\` **${message.author.tag}** changed **${target.user.tag}**'s nickname from \`${oldNick}\` to \`${newNick}\`.`);
-        
     } catch (err) {
-        message.reply('❌ Failed to change nickname. I may not have permission or user has higher role.');
+        message.reply('❌ Failed to change nickname. I may not have permission or the user has a higher role.');
     }
 }
 
-// ==================================================
-// COMMAND: RESETNICK
-// ==================================================
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// COMMAND: RESETNICK / CLEARNICK
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 else if (command === 'resetnick' || command === 'clearnick') {
-    if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
-        const deniedEmbed = new EmbedBuilder()
-            .setColor(0xFF0000)
-            .setTitle('🚫 ACCESS DENIED')
-            .setDescription(
-                '```ansi\n' +
-                '\u001b[31m╔═══════════════════════════════════════════╗\n' +
-                '║   ⛔ UNAUTHORIZED ACCESS ATTEMPT ⛔        ║\n' +
-                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
-                '```\n' +
-                'You do not have clearance for this command.'
-            )
-            .setFooter({ text: '🔒 Moderation Command • Owner/Immune Only' })
-            .setTimestamp();
-        return message.channel.send({ embeds: [deniedEmbed] });
-    }
-    
+    const isPrivileged =
+        message.author.id === OWNER_ID ||
+        isImmune(message.author) ||
+        isServerAdmin(message.guild.id, message.author.id) ||
+        message.member.permissions.has(PermissionsBitField.Flags.ManageNicknames);
+
+    if (!isPrivileged) return message.reply('❌ No permission.');
+
     const target = message.mentions.members.first();
-    
-    if (!target) {
-        return message.reply('❌ Please mention a user.\nUsage: `$resetnick @user`');
-    }
-    
+    if (!target) return message.reply('❌ Usage: `$resetnick @user`');
+
     const oldNick = target.nickname;
-    
-    if (!oldNick) {
-        return message.reply(`✅ **${target.user.tag}** doesn't have a nickname set.`);
-    }
-    
+    if (!oldNick) return message.reply(`✅ **${target.user.tag}** doesn't have a nickname set.`);
+
     try {
         await target.setNickname(null);
-        
-        const resetEmbed = new EmbedBuilder()
-            .setColor(0x00FF00)
-            .setTitle('🔄 NICKNAME RESET')
-            .setDescription(
-                '```ansi\n' +
-                '\u001b[32m╔═══════════════════════════════════════════╗\n' +
-                '║       ✅  IDENTITY RESTORED  ✅           ║\n' +
-                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
-                '```'
-            )
+
+        const embed = new EmbedBuilder()
+            .setColor(0x00CC66)
+            .setTitle('🔄 Nickname Reset')
             .addFields(
                 { name: '👤 User', value: `<@${target.id}>`, inline: true },
                 { name: '📝 Removed Nick', value: `\`${oldNick}\``, inline: true },
                 { name: '📝 Now Shows', value: `\`${target.user.username}\``, inline: true }
             )
-            .setFooter({ text: '🔄 Reset by ' + message.author.tag })
+            .setFooter({ text: `Reset by ${message.author.tag}` })
             .setTimestamp();
-        
-        message.channel.send({ embeds: [resetEmbed] });
+
+        message.channel.send({ embeds: [embed] });
         await sendLog(message.guild.id, `\`[RESETNICK]\` **${message.author.tag}** reset **${target.user.tag}**'s nickname from \`${oldNick}\`.`);
-        
     } catch (err) {
         message.reply('❌ Failed to reset nickname.');
     }
 }
 
-// ==================================================
-// COMMAND: VCMUTE (Voice Mute)
-// ==================================================
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// COMMAND: VCMUTE
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 else if (command === 'vcmute') {
-    if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
-        const deniedEmbed = new EmbedBuilder()
-            .setColor(0xFF0000)
-            .setTitle('🚫 ACCESS DENIED')
-            .setDescription(
-                '```ansi\n' +
-                '\u001b[31m╔═══════════════════════════════════════════╗\n' +
-                '║   ⛔ UNAUTHORIZED ACCESS ATTEMPT ⛔        ║\n' +
-                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
-                '```\n' +
-                'You do not have clearance for this command.'
-            )
-            .setFooter({ text: '🔒 Voice Command • Owner/Immune Only' })
-            .setTimestamp();
-        return message.channel.send({ embeds: [deniedEmbed] });
-    }
-    
+    const isPrivileged =
+        message.author.id === OWNER_ID ||
+        isImmune(message.author) ||
+        isServerAdmin(message.guild.id, message.author.id) ||
+        message.member.permissions.has(PermissionsBitField.Flags.MuteMembers);
+
+    if (!isPrivileged) return message.reply('❌ No permission.');
+
     const target = message.mentions.members.first();
-    
-    if (!target) {
-        return message.reply('❌ Please mention a user.\nUsage: `$vcmute @user`');
-    }
-    
-    if (!target.voice.channel) {
-        return message.reply('❌ That user is not in a voice channel.');
-    }
-    
+    if (!target) return message.reply('❌ Usage: `$vcmute @user`');
+    if (!target.voice.channel) return message.reply('❌ That user is not in a voice channel.');
+
     try {
         await target.voice.setMute(true);
-        
-        const muteEmbed = new EmbedBuilder()
+
+        const embed = new EmbedBuilder()
             .setColor(0xFF0000)
-            .setTitle('🔇 VOICE MUTED')
-            .setDescription(
-                '```ansi\n' +
-                '\u001b[31m╔═══════════════════════════════════════════╗\n' +
-                '║       🔇  USER SILENCED  🔇               ║\n' +
-                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
-                '```'
-            )
+            .setTitle('🔇 Voice Muted')
             .addFields(
                 { name: '👤 User', value: `<@${target.id}>`, inline: true },
                 { name: '🔊 Channel', value: `\`${target.voice.channel.name}\``, inline: true },
                 { name: '👮 Muted By', value: `<@${message.author.id}>`, inline: true }
             )
-            .setFooter({ text: '🔇 Server muted in voice' })
+            .setFooter({ text: 'Voice Mute' })
             .setTimestamp();
-        
-        message.channel.send({ embeds: [muteEmbed] });
-        await sendLog(message.guild.id, `\`[VCMUTE]\` **${message.author.tag}** server muted **${target.user.tag}** in voice.`);
-        
+
+        message.channel.send({ embeds: [embed] });
+        await sendLog(message.guild.id, `\`[VCMUTE]\` **${message.author.tag}** muted **${target.user.tag}** in voice.`);
     } catch (err) {
         message.reply('❌ Failed to mute user in voice.');
     }
 }
 
-// ==================================================
-// COMMAND: VCUNMUTE (Voice Unmute)
-// ==================================================
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// COMMAND: VCUNMUTE
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 else if (command === 'vcunmute') {
-    if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
-        const deniedEmbed = new EmbedBuilder()
-            .setColor(0xFF0000)
-            .setTitle('🚫 ACCESS DENIED')
-            .setDescription(
-                '```ansi\n' +
-                '\u001b[31m╔═══════════════════════════════════════════╗\n' +
-                '║   ⛔ UNAUTHORIZED ACCESS ATTEMPT ⛔        ║\n' +
-                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
-                '```\n' +
-                'You do not have clearance for this command.'
-            )
-            .setFooter({ text: '🔒 Voice Command • Owner/Immune Only' })
-            .setTimestamp();
-        return message.channel.send({ embeds: [deniedEmbed] });
-    }
-    
+    const isPrivileged =
+        message.author.id === OWNER_ID ||
+        isImmune(message.author) ||
+        isServerAdmin(message.guild.id, message.author.id) ||
+        message.member.permissions.has(PermissionsBitField.Flags.MuteMembers);
+
+    if (!isPrivileged) return message.reply('❌ No permission.');
+
     const target = message.mentions.members.first();
-    
-    if (!target) {
-        return message.reply('❌ Please mention a user.\nUsage: `$vcunmute @user`');
-    }
-    
-    if (!target.voice.channel) {
-        return message.reply('❌ That user is not in a voice channel.');
-    }
-    
+    if (!target) return message.reply('❌ Usage: `$vcunmute @user`');
+    if (!target.voice.channel) return message.reply('❌ That user is not in a voice channel.');
+
     try {
         await target.voice.setMute(false);
-        
-        const unmuteEmbed = new EmbedBuilder()
-            .setColor(0x00FF00)
-            .setTitle('🔊 VOICE UNMUTED')
-            .setDescription(
-                '```ansi\n' +
-                '\u001b[32m╔═══════════════════════════════════════════╗\n' +
-                '║       🔊  USER CAN SPEAK  🔊              ║\n' +
-                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
-                '```'
-            )
+
+        const embed = new EmbedBuilder()
+            .setColor(0x00CC66)
+            .setTitle('🔊 Voice Unmuted')
             .addFields(
                 { name: '👤 User', value: `<@${target.id}>`, inline: true },
                 { name: '🔊 Channel', value: `\`${target.voice.channel.name}\``, inline: true },
                 { name: '👮 Unmuted By', value: `<@${message.author.id}>`, inline: true }
             )
-            .setFooter({ text: '🔊 Server unmuted in voice' })
+            .setFooter({ text: 'Voice Unmute' })
             .setTimestamp();
-        
-        message.channel.send({ embeds: [unmuteEmbed] });
-        await sendLog(message.guild.id, `\`[VCUNMUTE]\` **${message.author.tag}** server unmuted **${target.user.tag}** in voice.`);
-        
+
+        message.channel.send({ embeds: [embed] });
+        await sendLog(message.guild.id, `\`[VCUNMUTE]\` **${message.author.tag}** unmuted **${target.user.tag}** in voice.`);
     } catch (err) {
         message.reply('❌ Failed to unmute user in voice.');
     }
 }
 
-// ==================================================
-// COMMAND: VCKICK (Voice Kick)
-// ==================================================
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// COMMAND: VCKICK / VCDISCONNECT
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 else if (command === 'vckick' || command === 'vcdisconnect') {
-    if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
-        const deniedEmbed = new EmbedBuilder()
-            .setColor(0xFF0000)
-            .setTitle('🚫 ACCESS DENIED')
-            .setDescription(
-                '```ansi\n' +
-                '\u001b[31m╔═══════════════════════════════════════════╗\n' +
-                '║   ⛔ UNAUTHORIZED ACCESS ATTEMPT ⛔        ║\n' +
-                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
-                '```\n' +
-                'You do not have clearance for this command.'
-            )
-            .setFooter({ text: '🔒 Voice Command • Owner/Immune Only' })
-            .setTimestamp();
-        return message.channel.send({ embeds: [deniedEmbed] });
-    }
-    
+    const isPrivileged =
+        message.author.id === OWNER_ID ||
+        isImmune(message.author) ||
+        isServerAdmin(message.guild.id, message.author.id) ||
+        message.member.permissions.has(PermissionsBitField.Flags.MoveMembers);
+
+    if (!isPrivileged) return message.reply('❌ No permission.');
+
     const target = message.mentions.members.first();
-    
-    if (!target) {
-        return message.reply('❌ Please mention a user.\nUsage: `$vckick @user`');
-    }
-    
-    if (!target.voice.channel) {
-        return message.reply('❌ That user is not in a voice channel.');
-    }
-    
+    if (!target) return message.reply('❌ Usage: `$vckick @user`');
+    if (!target.voice.channel) return message.reply('❌ That user is not in a voice channel.');
+
     const vcName = target.voice.channel.name;
-    
+
     try {
         await target.voice.disconnect();
-        
-        const kickEmbed = new EmbedBuilder()
+
+        const embed = new EmbedBuilder()
             .setColor(0xFF6600)
-            .setTitle('📤 VOICE KICKED')
-            .setDescription(
-                '```ansi\n' +
-                '\u001b[33m╔═══════════════════════════════════════════╗\n' +
-                '║      📤  USER DISCONNECTED  📤           ║\n' +
-                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
-                '```'
-            )
+            .setTitle('📤 Voice Kicked')
             .addFields(
                 { name: '👤 User', value: `<@${target.id}>`, inline: true },
                 { name: '🔊 From Channel', value: `\`${vcName}\``, inline: true },
                 { name: '👮 Kicked By', value: `<@${message.author.id}>`, inline: true }
             )
-            .setFooter({ text: '📤 Disconnected from voice' })
+            .setFooter({ text: 'Voice Disconnect' })
             .setTimestamp();
-        
-        message.channel.send({ embeds: [kickEmbed] });
-        await sendLog(message.guild.id, `\`[VCKICK]\` **${message.author.tag}** disconnected **${target.user.tag}** from voice channel \`${vcName}\`.`);
-        
+
+        message.channel.send({ embeds: [embed] });
+        await sendLog(message.guild.id, `\`[VCKICK]\` **${message.author.tag}** disconnected **${target.user.tag}** from \`${vcName}\`.`);
     } catch (err) {
         message.reply('❌ Failed to disconnect user from voice.');
     }
 }
 
-// ==================================================
-// COMMAND: MOVEALL (Move All VC Members)
-// ==================================================
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// COMMAND: MOVEALL
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 else if (command === 'moveall') {
-    if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
-        const deniedEmbed = new EmbedBuilder()
-            .setColor(0xFF0000)
-            .setTitle('🚫 ACCESS DENIED')
-            .setDescription(
-                '```ansi\n' +
-                '\u001b[31m╔═══════════════════════════════════════════╗\n' +
-                '║   ⛔ UNAUTHORIZED ACCESS ATTEMPT ⛔        ║\n' +
-                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
-                '```\n' +
-                'You do not have clearance for this command.'
-            )
-            .setFooter({ text: '🔒 Voice Command • Owner/Immune Only' })
-            .setTimestamp();
-        return message.channel.send({ embeds: [deniedEmbed] });
-    }
-    
+    const isPrivileged =
+        message.author.id === OWNER_ID ||
+        isImmune(message.author) ||
+        isServerAdmin(message.guild.id, message.author.id) ||
+        message.member.permissions.has(PermissionsBitField.Flags.MoveMembers);
+
+    if (!isPrivileged) return message.reply('❌ No permission.');
+
     const targetChannel = message.mentions.channels.first();
-    
-    if (!targetChannel || !targetChannel.isVoiceBased()) {
-        return message.reply('❌ Please mention a voice channel.\nUsage: `$moveall #voice-channel`');
-    }
-    
-    if (!message.member.voice.channel) {
-        return message.reply('❌ You must be in a voice channel to use this command.');
-    }
-    
+    if (!targetChannel || !targetChannel.isVoiceBased()) return message.reply('❌ Usage: `$moveall #voice-channel`');
+    if (!message.member.voice.channel) return message.reply('❌ You must be in a voice channel to use this command.');
+
     const sourceChannel = message.member.voice.channel;
     const members = sourceChannel.members;
-    
-    if (members.size === 0) {
-        return message.reply('❌ No members in your voice channel to move.');
-    }
-    
+    if (members.size === 0) return message.reply('❌ No members in your voice channel to move.');
+
     let movedCount = 0;
     let failedCount = 0;
-    
-    for (const [memberId, member] of members) {
+
+    for (const [, member] of members) {
         try {
             await member.voice.setChannel(targetChannel);
             movedCount++;
-        } catch (err) {
+        } catch {
             failedCount++;
         }
     }
-    
-    const moveEmbed = new EmbedBuilder()
+
+    const embed = new EmbedBuilder()
         .setColor(0x3498DB)
-        .setTitle('📦 MASS VOICE MOVE')
-        .setDescription(
-            '```ansi\n' +
-            '\u001b[34m╔═══════════════════════════════════════════╗\n' +
-            '║       📦  USERS RELOCATED  📦             ║\n' +
-            '╚═══════════════════════════════════════════╝\u001b[0m\n' +
-            '```'
-        )
+        .setTitle('📦 Mass Voice Move')
         .addFields(
             { name: '📤 From', value: `\`${sourceChannel.name}\``, inline: true },
             { name: '📥 To', value: `\`${targetChannel.name}\``, inline: true },
@@ -13006,13 +12867,12 @@ else if (command === 'moveall') {
             { name: '✅ Moved', value: `\`${movedCount}\``, inline: true },
             { name: '❌ Failed', value: `\`${failedCount}\``, inline: true }
         )
-        .setFooter({ text: '📦 Mass voice move complete' })
+        .setFooter({ text: 'Mass Voice Move' })
         .setTimestamp();
-    
-    message.channel.send({ embeds: [moveEmbed] });
+
+    message.channel.send({ embeds: [embed] });
     await sendLog(message.guild.id, `\`[MOVEALL]\` **${message.author.tag}** moved ${movedCount} user(s) from \`${sourceChannel.name}\` to \`${targetChannel.name}\`.`);
 }
-
 // ==================================================
 // COMMAND: SLOWMODE
 // ==================================================
