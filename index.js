@@ -10038,24 +10038,21 @@ if (command === 'promote') {
         ` in **${message.guild.name}**.`
     );
 }
-
 // ==================================================
 // COMMAND: DEMOTE
 // Bot Owner / Immune → can demote anyone in any server
 // CSM → can demote Server Admins (not another CSM) in their own server only
 // Usage: $demote @user [rank]                  (mention, no rank = full removal)
 //        $demote <userID> [rank]               (by ID, no rank = full removal)
-// Note: Deleted accounts are auto-removed from ranks
+//        $demote @user immune                  (remove from immune list — Owner/Immune only)
+//        $demote <userID> immune               (remove from immune list by ID — Owner/Immune only)
+// Note: Deleted accounts can be removed using their ID
 // ==================================================
 if (command === 'demote') {
     const guildId = message.guild.id;
     const actorId = message.author.id;
     const isOwnerOrImmune = actorId === OWNER_ID || isImmune(message.author);
     const actorIsCSM = isCSM(guildId, actorId);
-
-    if (!isOwnerOrImmune && !actorIsCSM) {
-        return message.reply('❌ You do not have permission to demote users.');
-    }
 
     // ── Resolve target by mention OR user ID ──
     const mentionedUser = message.mentions.users.first();
@@ -10071,7 +10068,49 @@ if (command === 'demote') {
     }
 
     const targetId = target?.id || rawId;
-    const rankInput = args.slice(1).join(' ').trim();
+    const rankInput = args.slice(1).join(' ').trim().toLowerCase();
+
+    // ── Handle Immune Removal FIRST (before server admin checks) ──
+    if (rankInput === 'immune') {
+        if (!isOwnerOrImmune) {
+            return message.reply('❌ Only the **Bot Owner** or **Immunes** can remove immune users.');
+        }
+
+        if (!targetId || !botData.immuneUsers?.[targetId]) {
+            return message.reply(`❌ User \`${targetId ?? 'unknown'}\` is not in the immune list.`);
+        }
+
+        const oldRank = typeof botData.immuneUsers[targetId] === 'object'
+            ? botData.immuneUsers[targetId].rank
+            : botData.immuneUsers[targetId];
+
+        const resolvedUser = target || await client.users.fetch(targetId).catch(() => null);
+        const displayName = resolvedUser ? resolvedUser.tag : '⚠️ Unknown User';
+        const isUnknown = !resolvedUser;
+
+        delete botData.immuneUsers[targetId];
+        markDirty();
+        scheduleSave();
+
+        const immuneDemoteEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('🔻 Immune User Removed')
+            .addFields(
+                { name: '👤 User', value: isUnknown ? 'Unknown User' : displayName, inline: true },
+                { name: '🆔 User ID', value: `\`${targetId}\``, inline: true },
+                { name: '🎖️ Previous Rank', value: oldRank, inline: true },
+                { name: '🗑️ Status', value: isUnknown ? '✅ Unknown user purged from data' : '✅ Removed from immune list', inline: false }
+            )
+            .setTimestamp()
+            .setFooter({ text: '🔒 Owner / Immune Only Action' });
+
+        return message.channel.send({ embeds: [immuneDemoteEmbed] });
+    }
+
+    // ── Permission check for server admin demotion ──
+    if (!isOwnerOrImmune && !actorIsCSM) {
+        return message.reply('❌ You do not have permission to demote users.');
+    }
 
     // ── Auto-remove deleted/invalid accounts ──
     if (!target) {
