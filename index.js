@@ -10051,6 +10051,103 @@ if (command === 'ranks') {
 }
 
 // ==================================================
+// COMMAND: GETINVITE
+// ==================================================
+else if (command === 'getinvite') {
+
+    // 🔐 Only Owner and Immune Users allowed
+    if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
+        return message.reply('❌ You do not have permission to use this command.');
+    }
+
+    // 📋 STEP 1: No args = list all servers with numbers
+    if (!args[0]) {
+        const guilds = [...client.guilds.cache.values()];
+
+        if (guilds.length === 0) {
+            return message.reply('❌ The bot is not in any servers.');
+        }
+
+        const serverList = guilds.map((g, i) =>
+            `\`[${i + 1}]\` **${g.name}** — ${g.memberCount} members (ID: \`${g.id}\`)`
+        ).join('\n');
+
+        const embed = new EmbedBuilder()
+            .setColor(0x5865F2)
+            .setTitle(`🌐 Servers the Bot is In (${guilds.length} total)`)
+            .setDescription(serverList)
+            .setFooter({ text: `Reply with: ${PREFIX}getinvite <number>  —  e.g. ${PREFIX}getinvite 2` })
+            .setTimestamp();
+
+        return message.channel.send({ embeds: [embed] });
+    }
+
+    // 🔢 STEP 2: User picked a number — generate invite
+    const pickedNumber = parseInt(args[0]);
+    const guilds = [...client.guilds.cache.values()];
+
+    if (isNaN(pickedNumber) || pickedNumber < 1 || pickedNumber > guilds.length) {
+        return message.reply(`⚠️ Invalid number. Please pick between **1** and **${guilds.length}**.\n**Usage:** \`${PREFIX}getinvite <number>\``);
+    }
+
+    const targetGuild = guilds[pickedNumber - 1];
+
+    try {
+        // Find the first text channel the bot can create an invite in
+        const inviteChannel = targetGuild.channels.cache.find(c =>
+            c.type === 0 && // GuildText
+            targetGuild.members.me.permissionsIn(c).has(PermissionsBitField.Flags.CreateInstantInvite)
+        );
+
+        if (!inviteChannel) {
+            return message.reply(`❌ Couldn't find a usable channel to create an invite in **${targetGuild.name}**.`);
+        }
+
+        // Generate the invite
+        const invite = await inviteChannel.createInvite({
+            maxAge: 3600,   // 1 hour — change to 0 for permanent
+            maxUses: 1,     // 1 use only for security
+            unique: true,
+            reason: `Requested by ${message.author.tag} via ${PREFIX}getinvite`
+        });
+
+        // ✅ Build the invite embed
+        const inviteEmbed = new EmbedBuilder()
+            .setColor(0x57F287)
+            .setTitle(`🔗 Invite Generated: ${targetGuild.name}`)
+            .addFields(
+                { name: '🆔 Server ID', value: `\`${targetGuild.id}\``, inline: true },
+                { name: '👥 Members', value: `**${targetGuild.memberCount}**`, inline: true },
+                { name: '🔗 Invite Link', value: `**${invite.url}**`, inline: false },
+                { name: '⏳ Expires', value: '**1 hour** | Uses: **1**', inline: true },
+                { name: '📋 Requested By', value: `${message.author.tag}`, inline: true }
+            )
+            .setTimestamp();
+
+        // 📢 Send to the channel (visible to owner/immunes since they're in their private channel)
+        await message.channel.send({ embeds: [inviteEmbed] });
+
+        // 📩 Also send to DMs as a backup
+        try {
+            await message.author.send({ embeds: [inviteEmbed] });
+            await message.reply('✅ Invite sent here and to your DMs!');
+        } catch (dmErr) {
+            // DMs failed (disabled) — channel send already succeeded, no problem
+            await message.reply('✅ Invite sent to this channel! (DMs are closed, so no DM copy was sent.)');
+        }
+
+        // 📋 Log it
+        await sendLog(message.guild.id,
+            `\`[GETINVITE]\` **${message.author.tag}** generated an invite for **${targetGuild.name}** (\`${targetGuild.id}\`).`
+        );
+
+    } catch (err) {
+        console.error('[GETINVITE ERROR]', err);
+        message.reply('❌ Something went wrong while generating the invite.');
+    }
+}
+
+// ==================================================
 // COMMAND: SERVERLIST
 // ==================================================
 else if (command === 'serverlist') {
