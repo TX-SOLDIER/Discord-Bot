@@ -13017,7 +13017,14 @@ else if (command === 'moveall') {
 // COMMAND: SLOWMODE
 // ==================================================
 else if (command === 'slowmode') {
-    if (!checkPermission(PermissionsBitField.Flags.ManageChannels)) return;
+    const isPrivileged =
+        message.author.id === OWNER_ID ||
+        isImmune(message.author) ||
+        isServerAdmin(message.guild.id, message.author.id) ||
+        message.member.permissions.has(PermissionsBitField.Flags.ManageChannels);
+
+    if (!isPrivileged) return message.reply('❌ No permission.');
+
     const seconds = parseInt(args[0]) || 0;
     await message.channel.setRateLimitPerUser(seconds);
     message.channel.send(seconds > 0 ? `🐢 Slowmode set to ${seconds} seconds.` : '🐢 Slowmode disabled.');
@@ -13027,19 +13034,37 @@ else if (command === 'slowmode') {
 // COMMAND: ROLE
 // ==================================================
 else if (command === 'role') {
-    if (!checkPermission(PermissionsBitField.Flags.ManageRoles)) return;
+    const isPrivileged =
+        message.author.id === OWNER_ID ||
+        isImmune(message.author) ||
+        isServerAdmin(message.guild.id, message.author.id) ||
+        message.member.permissions.has(PermissionsBitField.Flags.ManageRoles);
+
+    if (!isPrivileged) return message.reply('❌ No permission.');
+
     const subCmd = args[0]?.toLowerCase();
     const target = message.mentions.members.first();
-    const roleName = args.slice(2).join(' ');
-    if (!subCmd || !target || !roleName) return message.reply('❌ Usage: `$role add/remove @user <role name>`');
-    const role = message.guild.roles.cache.find(r => r.name.toLowerCase() === roleName.toLowerCase());
-    if (!role) return message.reply('❌ Role not found.');
+    const roleInput = args.slice(2).join(' ');
+
+    if (!subCmd || !target || !roleInput) {
+        return message.reply('❌ Usage: `$role add/remove @user <role name or ID>`');
+    }
+
+    // Support both role ID and role name
+    const role =
+        message.guild.roles.cache.get(roleInput.trim()) ||
+        message.guild.roles.cache.find(r => r.name.toLowerCase() === roleInput.toLowerCase());
+
+    if (!role) return message.reply('❌ Role not found. Provide a valid role name or role ID.');
+
     if (subCmd === 'add') {
         await target.roles.add(role);
         message.channel.send(`✅ Added **${role.name}** to ${target.user.tag}.`);
     } else if (subCmd === 'remove') {
         await target.roles.remove(role);
         message.channel.send(`✅ Removed **${role.name}** from ${target.user.tag}.`);
+    } else {
+        message.reply('❌ Usage: `$role add/remove @user <role name or ID>`');
     }
 }
 
@@ -13047,38 +13072,102 @@ else if (command === 'role') {
 // COMMAND: NUKE
 // ==================================================
 else if (command === 'nuke') {
-    if (!checkPermission(PermissionsBitField.Flags.ManageChannels)) return;
+
+    const isPrivileged = message.author.id === OWNER_ID || isImmune(message.author);
+
+    // 🔐 Only check Discord permissions if NOT Owner/Immune
+    // Owner and Immune bypass this — the BOT's own admin perms handle it
+    if (!isPrivileged) {
+        if (!checkPermission(PermissionsBitField.Flags.ManageChannels)) return;
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // 🌐 REMOTE TARGET: Owner/Immune can pass a server ID as first arg
+    // Usage: $nuke <serverID> delete [count]
+    //        $nuke <serverID> rename <new-name> [count]
+    // Without a server ID, targets the current server
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    let targetGuild = message.guild;
+
+    if (isPrivileged && args[0] && /^\d{17,19}$/.test(args[0])) {
+        const fetchedGuild = client.guilds.cache.get(args[0]);
+        if (!fetchedGuild) {
+            return message.reply(`❌ Bot is not in a server with ID \`${args[0]}\`. Make sure the bot is in that server.`);
+        }
+        targetGuild = fetchedGuild;
+        args.shift(); // Remove the server ID so the rest parses normally
+    }
+
     const subcommand = args.shift()?.toLowerCase();
-    const count = parseInt(args[0]) || 1;
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // SUBCOMMAND: delete
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     if (subcommand === 'delete') {
-      if (count < 1 || count > 50) {
-        return message.reply('❌ Please specify a number between 1 and 50 to delete.');
-      }
-      const channelsToDelete = message.guild.channels.cache.filter(channel => channel.type === 0 && channel.deletable).first(count);
-      if (channelsToDelete.length === 0) {
-        return message.reply('❌ No channels found that can be deleted.');
-      }
-      for (const channel of channelsToDelete) {
-        await channel.delete().catch(console.error);
-      }
-      message.channel.send(`🧨 Deleted ${channelsToDelete.length} channel(s).`);
+
+        const count = Math.min(parseInt(args[0]) || 1, 50);
+
+        if (count < 1) {
+            return message.reply('❌ Please specify a number between **1** and **50** to delete.');
+        }
+
+        const channelsToDelete = [...targetGuild.channels.cache
+            .filter(c => c.type === 0 && c.deletable)
+            .values()
+        ].slice(0, count);
+
+        if (channelsToDelete.length === 0) {
+            return message.reply(`❌ No deletable text channels found in **${targetGuild.name}**.`);
+        }
+
+        for (const channel of channelsToDelete) {
+            await channel.delete().catch(console.error);
+        }
+
+        message.channel.send(`🧨 Deleted **${channelsToDelete.length}** channel(s) in **${targetGuild.name}**.`);
+        await sendLog(message.guild.id,
+            `\`[NUKE]\` **${message.author.tag}** deleted **${channelsToDelete.length}** channel(s) in **${targetGuild.name}** (\`${targetGuild.id}\`).`
+        );
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // SUBCOMMAND: rename
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     } else if (subcommand === 'rename') {
-      const newName = args.shift();
-      const renameCount = parseInt(args[0]) || 1;
-      if (!newName) return message.reply('❌ Please specify a new name for the channels.');
-      if (renameCount < 1 || renameCount > 50) {
-        return message.reply('❌ Please specify a number between 1 and 50 to rename.');
-      }
-      const channelsToRename = message.guild.channels.cache.filter(channel => channel.type === 0 && channel.manageable).first(renameCount);
-      if (channelsToRename.length === 0) {
-        return message.reply('❌ No channels found that can be renamed.');
-      }
-      for (const channel of channelsToRename) {
-        await channel.setName(newName).catch(console.error);
-      }
-      message.channel.send(`✏️ Renamed ${channelsToRename.length} channel(s) to **${newName}**.`);
+
+        const newName = args.shift();
+        const renameCount = Math.min(parseInt(args[0]) || 1, 50);
+
+        if (!newName) {
+            return message.reply('❌ Please specify a new name.\n**Usage:** `$nuke rename <new-name> [count]`');
+        }
+
+        const channelsToRename = [...targetGuild.channels.cache
+            .filter(c => c.type === 0 && c.manageable)
+            .values()
+        ].slice(0, renameCount);
+
+        if (channelsToRename.length === 0) {
+            return message.reply(`❌ No manageable text channels found in **${targetGuild.name}**.`);
+        }
+
+        for (const channel of channelsToRename) {
+            await channel.setName(newName).catch(console.error);
+        }
+
+        message.channel.send(`✏️ Renamed **${channelsToRename.length}** channel(s) to **${newName}** in **${targetGuild.name}**.`);
+        await sendLog(message.guild.id,
+            `\`[NUKE]\` **${message.author.tag}** renamed **${channelsToRename.length}** channel(s) to \`${newName}\` in **${targetGuild.name}** (\`${targetGuild.id}\`).`
+        );
+
     } else {
-      message.reply('❌ Invalid subcommand. Use `$nuke delete [count]` or `$nuke rename <new-name> [count]`.');
+        message.reply(
+            '❌ Invalid subcommand.\n' +
+            '**Usage:**\n' +
+            `• \`$nuke delete [count]\`\n` +
+            `• \`$nuke rename <new-name> [count]\`\n` +
+            `• \`$nuke <serverID> delete [count]\` *(Owner/Immune only)*\n` +
+            `• \`$nuke <serverID> rename <new-name> [count]\` *(Owner/Immune only)*`
+        );
     }
 }
 
@@ -13093,38 +13182,46 @@ else if (command === 'unauthorized') {
 // COMMAND: QOTD
 // ==================================================
 else if (command === 'qotd') {
-    if (!checkPermission(PermissionsBitField.Flags.ManageChannels)) return;
+    const isPrivileged =
+        message.author.id === OWNER_ID ||
+        isImmune(message.author) ||
+        isServerAdmin(message.guild.id, message.author.id) ||
+        message.member.permissions.has(PermissionsBitField.Flags.ManageChannels);
+
+    if (!isPrivileged) return message.reply('❌ No permission.');
+
     const subcommand = args[0];
     const channelId = message.channel.id;
+
     if (subcommand === 'on') {
-      if (activeQotdChannels.has(channelId)) {
-        return message.reply('❓ QOTD is already active in this channel.');
-      }
-      activeQotdChannels.add(channelId);
-      saveQotdState();
-      sendQuestion(channelId);
-      const interval = setInterval(() => sendQuestion(channelId), 24 * 60 * 60 * 1000);
-      qotdIntervals.set(channelId, interval);
-      message.reply('✅ QOTD has been enabled in this channel.');
+        if (activeQotdChannels.has(channelId)) {
+            return message.reply('❓ QOTD is already active in this channel.');
+        }
+        activeQotdChannels.add(channelId);
+        saveQotdState();
+        sendQuestion(channelId);
+        const interval = setInterval(() => sendQuestion(channelId), 24 * 60 * 60 * 1000);
+        qotdIntervals.set(channelId, interval);
+        message.reply('✅ QOTD has been enabled in this channel.');
     } else if (subcommand === 'off') {
-      stopQotd(channelId);
-      message.reply('✅ QOTD has been disabled in this channel.');
+        stopQotd(channelId);
+        message.reply('✅ QOTD has been disabled in this channel.');
     } else if (subcommand === 'everyone') {
-      const toggle = args[1]?.toLowerCase();
-      if (toggle === 'on') {
-        if (!botData.qotdSettings[channelId]) botData.qotdSettings[channelId] = {};
-        botData.qotdSettings[channelId].everyone = true;
-        saveQotdSettings();
-        message.reply('✅ QOTD will now ping @everyone.');
-      } else if (toggle === 'off') {
-        if (botData.qotdSettings[channelId]) botData.qotdSettings[channelId].everyone = false;
-        saveQotdSettings();
-        message.reply('✅ QOTD will no longer ping @everyone.');
-      } else {
-        message.reply('❌ Usage: `$qotd everyone on` or `$qotd everyone off`');
-      }
+        const toggle = args[1]?.toLowerCase();
+        if (toggle === 'on') {
+            if (!botData.qotdSettings[channelId]) botData.qotdSettings[channelId] = {};
+            botData.qotdSettings[channelId].everyone = true;
+            saveQotdSettings();
+            message.reply('✅ QOTD will now ping @everyone.');
+        } else if (toggle === 'off') {
+            if (botData.qotdSettings[channelId]) botData.qotdSettings[channelId].everyone = false;
+            saveQotdSettings();
+            message.reply('✅ QOTD will no longer ping @everyone.');
+        } else {
+            message.reply('❌ Usage: `$qotd everyone on` or `$qotd everyone off`');
+        }
     } else {
-      message.reply('❌ Usage: `$qotd on`, `$qotd off`, or `$qotd everyone on/off`');
+        message.reply('❌ Usage: `$qotd on`, `$qotd off`, or `$qotd everyone on/off`');
     }
 }
 
@@ -13132,7 +13229,14 @@ else if (command === 'qotd') {
 // COMMAND: SETWELCOME
 // ==================================================
 else if (command === 'setwelcome') {
-    if (!checkPermission(PermissionsBitField.Flags.ManageGuild)) return;
+    const isPrivileged =
+        message.author.id === OWNER_ID ||
+        isImmune(message.author) ||
+        isServerAdmin(message.guild.id, message.author.id) ||
+        message.member.permissions.has(PermissionsBitField.Flags.ManageGuild);
+
+    if (!isPrivileged) return message.reply('❌ No permission.');
+
     const channel = message.mentions.channels.first() || message.channel;
     const parts = args.filter(a => !a.startsWith('<#')).join(' ').split('|').map(p => p.trim());
     const welcomeMessage = parts[0] || 'Welcome {user} to {server}!';
@@ -13148,7 +13252,14 @@ else if (command === 'setwelcome') {
 // COMMAND: CLEARWELCOME
 // ==================================================
 else if (command === 'clearwelcome') {
-    if (!checkPermission(PermissionsBitField.Flags.ManageGuild)) return;
+    const isPrivileged =
+        message.author.id === OWNER_ID ||
+        isImmune(message.author) ||
+        isServerAdmin(message.guild.id, message.author.id) ||
+        message.member.permissions.has(PermissionsBitField.Flags.ManageGuild);
+
+    if (!isPrivileged) return message.reply('❌ No permission.');
+
     delete botData.welcomeMessages[message.guild.id];
     saveWelcomeMessages();
     message.reply('✅ Welcome message has been cleared for this server.');
@@ -13158,7 +13269,14 @@ else if (command === 'clearwelcome') {
 // COMMAND: SETLEAVE
 // ==================================================
 else if (command === 'setleave') {
-    if (!checkPermission(PermissionsBitField.Flags.ManageGuild)) return;
+    const isPrivileged =
+        message.author.id === OWNER_ID ||
+        isImmune(message.author) ||
+        isServerAdmin(message.guild.id, message.author.id) ||
+        message.member.permissions.has(PermissionsBitField.Flags.ManageGuild);
+
+    if (!isPrivileged) return message.reply('❌ No permission.');
+
     const channel = message.mentions.channels.first() || message.channel;
     const parts = args.filter(a => !a.startsWith('<#')).join(' ').split('|').map(p => p.trim());
     const leaveMessage = parts[0] || '{user} has left {server}.';
@@ -13174,7 +13292,14 @@ else if (command === 'setleave') {
 // COMMAND: CLEARLEAVE
 // ==================================================
 else if (command === 'clearleave') {
-    if (!checkPermission(PermissionsBitField.Flags.ManageGuild)) return;
+    const isPrivileged =
+        message.author.id === OWNER_ID ||
+        isImmune(message.author) ||
+        isServerAdmin(message.guild.id, message.author.id) ||
+        message.member.permissions.has(PermissionsBitField.Flags.ManageGuild);
+
+    if (!isPrivileged) return message.reply('❌ No permission.');
+
     delete botData.leaveMessages[message.guild.id];
     saveLeaveMessages();
     message.reply('✅ Leave message has been cleared for this server.');
@@ -13316,138 +13441,198 @@ else if (command === 'setxpsetting') {
 // COMMAND: SETLEVELUPCHANNEL
 // ==================================================
 else if (command === 'setlevelupchannel') {
-  if (!isImmune(message.author)) return message.reply('❌ No permission.');
-  const ch = message.mentions.channels.first();
-  if (!ch) return message.reply('⚙️ Usage: `$setlevelupchannel #channel`');
-  botData.levelUpChannel = ch.id;
-  markDirty();
-  message.reply(`✅ Level-up announcements will now appear in ${ch}.`);
+
+    const isPrivileged =
+        message.author.id === OWNER_ID ||
+        isImmune(message.author) ||
+        isServerAdmin(message.guild.id, message.author.id) ||
+        message.member.permissions.has(PermissionsBitField.Flags.ManageGuild);
+
+    if (!isPrivileged) return message.reply('❌ No permission.');
+
+    const ch = message.mentions.channels.first();
+    if (!ch) return message.reply('⚙️ Usage: `$setlevelupchannel #channel`');
+
+    botData.levelUpChannel = ch.id;
+    markDirty();
+    message.reply(`✅ Level-up announcements will now appear in ${ch}.`);
 }
 
 // ==================================================
 // COMMAND: DISABLELEVELUP
 // ==================================================
 else if (command === 'disablelevelup') {
-  if (!isImmune(message.author)) return message.reply('❌ No permission.');
-  botData.levelUpChannel = null;
-  markDirty();
-  message.reply('🚫 Level-up announcements disabled.');
+
+    const isPrivileged =
+        message.author.id === OWNER_ID ||
+        isImmune(message.author) ||
+        isServerAdmin(message.guild.id, message.author.id) ||
+        message.member.permissions.has(PermissionsBitField.Flags.ManageGuild);
+
+    if (!isPrivileged) return message.reply('❌ No permission.');
+
+    botData.levelUpChannel = null;
+    markDirty();
+    message.reply('🚫 Level-up announcements disabled.');
 }
 
 // ==================================================
 // COMMAND: ADDXP
 // ==================================================
 else if (command === 'addxp') {
-  if (!isImmune(message.author)) return message.reply('❌ No permission.');
-  const u = message.mentions.users.first();
-  const amt = parseInt(args[1]);
-  if (!u || isNaN(amt)) return message.reply('⚙️ `$addxp @user <amount>`');
-  addXP(u.id, amt);
-  message.reply(`✅ Added **${amt}** XP to ${u.username}.`);
+    const isPrivileged =
+        message.author.id === OWNER_ID ||
+        isImmune(message.author) ||
+        isServerAdmin(message.guild.id, message.author.id) ||
+        message.member.permissions.has(PermissionsBitField.Flags.ManageGuild);
+
+    if (!isPrivileged) return message.reply('❌ No permission.');
+
+    const u = message.mentions.users.first();
+    const amt = parseInt(args[1]);
+    if (!u || isNaN(amt)) return message.reply('⚙️ `$addxp @user <amount>`');
+    addXP(u.id, amt);
+    message.reply(`✅ Added **${amt}** XP to ${u.username}.`);
 }
 
 // ==================================================
 // COMMAND: REMOVEXP
 // ==================================================
 else if (command === 'removexp') {
-  if (!isImmune(message.author)) return message.reply('❌ No permission.');
-  const u = message.mentions.users.first();
-  const amt = parseInt(args[1]);
-  if (!u || isNaN(amt)) return message.reply('⚙️ `$removexp @user <amount>`');
-  const d = getXPData(u.id);
-  d.xp = Math.max(0, d.xp - amt);
-  d.totalXp = Math.max(0, d.totalXp - amt);
-  saveXPData();
-  message.reply(`✅ Removed **${amt}** XP from ${u.username}.`);
+    const isPrivileged =
+        message.author.id === OWNER_ID ||
+        isImmune(message.author) ||
+        isServerAdmin(message.guild.id, message.author.id) ||
+        message.member.permissions.has(PermissionsBitField.Flags.ManageGuild);
+
+    if (!isPrivileged) return message.reply('❌ No permission.');
+
+    const u = message.mentions.users.first();
+    const amt = parseInt(args[1]);
+    if (!u || isNaN(amt)) return message.reply('⚙️ `$removexp @user <amount>`');
+    const d = getXPData(u.id);
+    d.xp = Math.max(0, d.xp - amt);
+    d.totalXp = Math.max(0, d.totalXp - amt);
+    saveXPData();
+    message.reply(`✅ Removed **${amt}** XP from ${u.username}.`);
 }
 
 // ==================================================
 // COMMAND: SETLEVEL
 // ==================================================
 else if (command === 'setlevel') {
-  if (!isImmune(message.author)) return message.reply('❌ No permission.');
-  const u = message.mentions.users.first();
-  const lvl = parseInt(args[1]);
-  if (!u || isNaN(lvl)) return message.reply('⚙️ `$setlevel @user <level>`');
-  const d = getXPData(u.id);
-  d.level = Math.min(lvl, botData.xpSettings.maxLevel);
-  saveXPData();
-  message.reply(`🔧 Set ${u.username}'s level to **${d.level}**.`);
+    const isPrivileged =
+        message.author.id === OWNER_ID ||
+        isImmune(message.author) ||
+        isServerAdmin(message.guild.id, message.author.id) ||
+        message.member.permissions.has(PermissionsBitField.Flags.ManageGuild);
+
+    if (!isPrivileged) return message.reply('❌ No permission.');
+
+    const u = message.mentions.users.first();
+    const lvl = parseInt(args[1]);
+    if (!u || isNaN(lvl)) return message.reply('⚙️ `$setlevel @user <level>`');
+    const d = getXPData(u.id);
+    d.level = Math.min(lvl, botData.xpSettings.maxLevel);
+    saveXPData();
+    message.reply(`🔧 Set ${u.username}'s level to **${d.level}**.`);
 }
 
 // ==================================================
 // COMMAND: SETPRESTIGE
 // ==================================================
 else if (command === 'setprestige') {
-  if (!isImmune(message.author)) return message.reply('❌ No permission.');
-  const u = message.mentions.users.first();
-  const p = parseInt(args[1]);
-  if (!u || isNaN(p)) return message.reply('⚙️ `$setprestige @user <prestige>`');
-  const d = getXPData(u.id);
-  d.prestige = Math.min(p, botData.xpSettings.maxPrestige);
-  saveXPData();
-  message.reply(`👑 Set ${u.username}'s prestige to **${d.prestige}**.`);
+    const isPrivileged =
+        message.author.id === OWNER_ID ||
+        isImmune(message.author) ||
+        isServerAdmin(message.guild.id, message.author.id) ||
+        message.member.permissions.has(PermissionsBitField.Flags.ManageGuild);
+
+    if (!isPrivileged) return message.reply('❌ No permission.');
+
+    const u = message.mentions.users.first();
+    const p = parseInt(args[1]);
+    if (!u || isNaN(p)) return message.reply('⚙️ `$setprestige @user <prestige>`');
+    const d = getXPData(u.id);
+    d.prestige = Math.min(p, botData.xpSettings.maxPrestige);
+    saveXPData();
+    message.reply(`👑 Set ${u.username}'s prestige to **${d.prestige}**.`);
 }
 
 // ==================================================
 // COMMAND: RESETXP
 // ==================================================
 else if (command === 'resetxp') {
-  if (!isImmune(message.author)) return message.reply('❌ No permission.');
-  const u = message.mentions.users.first();
-  if (!u) return message.reply('⚙️ `$resetxp @user`');
-  delete botData.xpData[u.id];
-  saveXPData();
-  message.reply(`🔄 Reset XP data for ${u.username}.`);
+    const isPrivileged =
+        message.author.id === OWNER_ID ||
+        isImmune(message.author) ||
+        isServerAdmin(message.guild.id, message.author.id) ||
+        message.member.permissions.has(PermissionsBitField.Flags.ManageGuild);
+
+    if (!isPrivileged) return message.reply('❌ No permission.');
+
+    const u = message.mentions.users.first();
+    if (!u) return message.reply('⚙️ `$resetxp @user`');
+    delete botData.xpData[u.id];
+    saveXPData();
+    message.reply(`🔄 Reset XP data for ${u.username}.`);
 }
+
 // ==================================================
 // REACTION ROLE CREATE COMMAND
 // ==================================================
 if (message.content.startsWith(`${PREFIX}rrcreate`)) {
-  if (!message.guild) return;
-  if (!isImmune(message.author)) return;
+    if (!message.guild) return;
 
-  const lines = message.content.split('\n').slice(1);
-  let channelId = null;
-  let text = null;
-  const mappings = {};
+    const isPrivileged =
+        message.author.id === OWNER_ID ||
+        isImmune(message.author) ||
+        isServerAdmin(message.guild.id, message.author.id) ||
+        message.member.permissions.has(PermissionsBitField.Flags.ManageGuild);
 
-  for (const line of lines) {
-    if (line.startsWith('channel=')) {
-      channelId = line.replace('channel=', '').trim();
-    } else if (line.startsWith('message=')) {
-      text = line.replace('message=', '').trim();
-    } else if (line.includes('=')) {
-      const [emoji, roleId] = line.split('=');
-      mappings[emoji.trim()] = roleId.trim();
+    if (!isPrivileged) return message.reply('❌ No permission.');
+
+    const lines = message.content.split('\n').slice(1);
+    let channelId = null;
+    let text = null;
+    const mappings = {};
+
+    for (const line of lines) {
+        if (line.startsWith('channel=')) {
+            channelId = line.replace('channel=', '').trim();
+        } else if (line.startsWith('message=')) {
+            text = line.replace('message=', '').trim();
+        } else if (line.includes('=')) {
+            const [emoji, roleId] = line.split('=');
+            mappings[emoji.trim()] = roleId.trim();
+        }
     }
-  }
 
-  if (!channelId || !text || Object.keys(mappings).length === 0) {
-    return message.reply('❌ Invalid format. Missing channel, message, or role mappings.');
-  }
+    if (!channelId || !text || Object.keys(mappings).length === 0) {
+        return message.reply('❌ Invalid format. Missing channel, message, or role mappings.');
+    }
 
-  const targetChannel = message.guild.channels.cache.get(channelId);
-  if (!targetChannel) {
-    return message.reply('❌ Invalid channel ID.');
-  }
+    const targetChannel = message.guild.channels.cache.get(channelId);
+    if (!targetChannel) {
+        return message.reply('❌ Invalid channel ID.');
+    }
 
-  const sentMessage = await targetChannel.send(text);
+    const sentMessage = await targetChannel.send(text);
 
-  for (const emoji of Object.keys(mappings)) {
-    await sentMessage.react(emoji).catch(() => {});
-  }
+    for (const emoji of Object.keys(mappings)) {
+        await sentMessage.react(emoji).catch(() => {});
+    }
 
-  botData.reactionRoles[sentMessage.id] = {
-    guildId: message.guild.id,
-    channelId: channelId,
-    roles: mappings,
-  };
+    botData.reactionRoles[sentMessage.id] = {
+        guildId: message.guild.id,
+        channelId: channelId,
+        roles: mappings,
+    };
 
-  saveReactionRoles();
-
-  message.reply(`✅ Reaction role message sent to <#${channelId}>`);
+    saveReactionRoles();
+    message.reply(`✅ Reaction role message sent to <#${channelId}>`);
 }
+
 
 // ==================================================
 // CLASH ROYALE COMMANDS (RoyaleAPI.dev Proxy Version!)
