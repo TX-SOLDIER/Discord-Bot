@@ -9968,10 +9968,48 @@ if (command === 'promote') {
         if (!isOwnerOrImmune) {
             return message.reply('❌ Only the **Bot Owner** and **Immunes** can promote to Immune ranks.');
         }
-        // --- YOUR EXISTING IMMUNE PROMOTION LOGIC GOES HERE (unchanged) ---
-        // Leave whatever your current $promote immune logic does right here.
-        // Do NOT delete it — just keep it inside this if block.
-        return;
+
+        // Find the exact matching rank with correct casing
+        const immuneRank = IMMUNITY_RANKS.find(r => r.toLowerCase() === rankInput.toLowerCase());
+
+        const previousImmuneRank = botData.immuneUsers?.[target.id]
+            ? (typeof botData.immuneUsers[target.id] === 'object'
+                ? botData.immuneUsers[target.id].rank
+                : botData.immuneUsers[target.id])
+            : null;
+
+        // Save to botData
+        if (!botData.immuneUsers) botData.immuneUsers = {};
+        botData.immuneUsers[target.id] = { rank: immuneRank, addedBy: actorId, addedAt: Date.now() };
+        markDirty();
+        scheduleSave();
+
+        const immuneEmbed = new EmbedBuilder()
+            .setColor(0x00CED1)
+            .setTitle('🛡️ Immune Rank Assigned')
+            .addFields(
+                { name: '👤 User', value: `<@${target.id}> (${target.tag})`, inline: true },
+                { name: '🎖️ Immune Rank', value: `**${immuneRank}**`, inline: true },
+                { name: '📈 Previous Rank', value: previousImmuneRank ? `**${previousImmuneRank}**` : '*(none)*', inline: true },
+                { name: '🔑 Promoted By', value: `<@${actorId}>`, inline: true }
+            )
+            .setThumbnail(target.displayAvatarURL({ dynamic: true }))
+            .setTimestamp()
+            .setFooter({ text: '🔒 Immune System — SOLDIER¹' });
+
+        await message.channel.send({ embeds: [immuneEmbed] });
+
+        // DM the promoted user
+        target.send(
+            `🛡️ You have been granted the **${immuneRank}** Immune rank by <@${actorId}>. You now have global access across all servers.`
+        ).catch(() => {});
+
+        // Log
+        return await sendLog(
+            guildId,
+            `\`[IMMUNE PROMOTE]\` <@${actorId}> granted <@${target.id}> the Immune rank **${immuneRank}**` +
+            (previousImmuneRank ? ` (was **${previousImmuneRank}**)` : '') + `.`
+        );
     }
 
     // ── Check if it's a SERVER ADMIN rank ──
