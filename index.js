@@ -102,6 +102,11 @@ const SERVER_ADMIN_RANKS = [
 ];
 const CSM_RANK = 'Command Sergeant Major';
 const CSM_MAX_PROMOTE_TO = 'Sergeant Major'; // CSM can only promote UP TO this rank
+
+// ==================================================
+// LOTTERY TIMERS (in-memory, per guild)
+// ==================================================
+const lotteryTimers = {};
 // ==================================================
 // GOOGLE GENERATIVE AI SETUP
 // ==================================================
@@ -125,15 +130,6 @@ let botData = {
     economyData: {},
 
     reactionRoles: {},
-
-    lotteryData: {
-        drawDate: null,
-        winningNumbers: [],
-        entries: {},
-        prizePool: 500000,
-        isActive: false,
-    },
-
     storeData: {},
     playerData: {},
     activeBattles: {},
@@ -351,6 +347,162 @@ async function loadData() {
     console.error('[DATA] ❌ CRITICAL error loading data from JSONBin. Bot will use default data. Error:', e);
   }
 }
+// ==================================================
+// LOTTERY SYSTEM - HELPER FUNCTIONS
+// ==================================================
+
+async function saveLotteryData() {
+    botData.lottery = botData.lottery || {};
+    await saveBotData();
+}
+
+async function deleteLotteryData(guildId) {
+    if (botData.lottery?.[guildId]) {
+        delete botData.lottery[guildId];
+        await saveBotData();
+    }
+}
+
+function generateWinningNumbers() {
+    const numbers = new Set();
+    while (numbers.size < 7) {
+        numbers.add(Math.floor(Math.random() * 99) + 1);
+    }
+    return Array.from(numbers).sort((a, b) => a - b);
+}
+
+async function runLotteryDraw(guildId) {
+    const lotto = botData.lottery?.[guildId];
+    if (!lotto || !lotto.isActive || lotto.isPaused) return;
+
+    const guild = client.guilds.cache.get(guildId);
+    if (!guild) return;
+
+    const channel = guild.channels.cache.get(lotto.channelId);
+    if (!channel) return;
+
+    const winningNumbers = generateWinningNumbers();
+    let winner = null;
+
+    for (const [userId, tickets] of Object.entries(lotto.entries || {})) {
+        for (const ticket of tickets) {
+            const matches = ticket.filter(n => winningNumbers.includes(n)).length;
+            if (matches === 7) {
+                winner = { userId, ticket };
+                break;
+            }
+        }
+        if (winner) break;
+    }
+
+    const now = new Date();
+    const endDate = new Date(lotto.endDate);
+    const isLastDraw =
+        now >= endDate ||
+        new Date(lotto.nextDraw).getTime() + lotto.intervalDays * 24 * 60 * 60 * 1000 > endDate.getTime();
+
+    if (winner) {
+        const resultsEmbed = new EmbedBuilder()
+            .setColor(0xFFD700)
+            .setTitle('🎉 Lottery Jackpot Winner!')
+            .setDescription(`<@${winner.userId}> matched all 7 numbers and wins the jackpot!`)
+            .addFields(
+                { name: '✨ Winning Numbers', value: `\`${winningNumbers.join(', ')}\``, inline: false },
+                { name: '🎟️ Winning Ticket', value: `\`${winner.ticket.join(', ')}\``, inline: false },
+                { name: '🏆 Prize', value: lotto.prize, inline: false },
+                { name: '📝 Details', value: lotto.prizeDesc || 'No additional details.', inline: false }
+            )
+            .setImage('https://i.imgur.com/rN99D4p.png')
+            .setTimestamp();
+
+        await channel.send({ embeds: [resultsEmbed] });
+        await deleteLotteryData(guildId);
+        return;
+    }
+
+    if (isLastDraw) {
+        const closeEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('🎟️ Lottery Ended — No Winner')
+            .setDescription('The lottery has ended and unfortunately there was no winner this time. Better luck next time!')
+            .addFields(
+                { name: '✨ Final Winning Numbers', value: `\`${winningNumbers.join(', ')}\``, inline: false },
+                { name: '🏆 Unclaimed Prize', value: lotto.prize, inline: false }
+            )
+            .setImage('https://i.imgur.com/rN99D4p.png')
+            .setTimestamp();
+
+        await channel.send({ embeds: [closeEmbed] });
+        await deleteLotteryData(guildId);
+        return;
+    }
+
+    // Roll over
+    const nextDraw = new Date(lotto.nextDraw);
+    nextDraw.setDate(nextDraw.getDate() + lotto.intervalDays);
+    lotto.nextDraw = nextDraw.toISOString();
+    lotto.entries = {};
+    await saveLotteryData();
+
+    const rolloverEmbed = new EmbedBuilder()
+        .setColor(0xFFA500)
+        .setTitle('🎟️ Lottery Draw — No Winner')
+        .setDescription('No one matched all 7 numbers this round. The lottery rolls over to the next draw!')
+        .addFields(
+            { name: '✨ Winning Numbers', value: `\`${winningNumbers.join(', ')}\``, inline: false },
+            { name: '🏆 Prize', value: lotto.prize, inline: false },
+            { name: '⏰ Next Draw', value: `<t:${Math.floor(nextDraw.getTime() / 1000)}:R>`, inline: false }
+        )
+        .setImage('https://i.imgur.com/rN99D4p.png')
+        .setTimestamp();
+
+    await channel.send({ embeds: [rolloverEmbed] });
+}
+
+function scheduleLotteryDraw(guildId) {
+    if (lotteryTimers[guildId]) {
+        clearTimeout(lotteryTimers[guildId]);
+        delete lotteryTimers[guildId];
+    }
+
+    const lotto = botData.lottery?.[guildId];
+    if (!lotto || !lotto.isActive || lotto.isPaused) return;
+
+    const now = Date.now();
+    const nextDraw = new Date(lotto.nextDraw).getTime();
+    const delay = Math.max(nextDraw - now, 0);
+
+    lotteryTimers[guildId] = setTimeout(async () => {
+        await runLotteryDraw(guildId);
+        if (botData.lottery?.[guildId]?.isActive) {
+            scheduleLotteryDraw(guildId);
+        }
+    }, delay);
+}
+
+async function recoverLotteries() {
+    if (!botData.lottery) return;
+
+    for (const [guildId, lotto] of Object.entries(botData.lottery)) {
+        if (!lotto.isActive || lotto.isPaused) continue;
+
+        const now = new Date();
+
+        while (new Date(lotto.nextDraw) <= now) {
+            console.log(`[LOTTERY] Catching up missed draw for guild ${guildId}`);
+            await runLotteryDraw(guildId);
+            if (!botData.lottery?.[guildId]) break;
+
+            const nd = new Date(lotto.nextDraw);
+            nd.setDate(nd.getDate() + lotto.intervalDays);
+            lotto.nextDraw = nd.toISOString();
+        }
+
+        if (botData.lottery?.[guildId]?.isActive) {
+            scheduleLotteryDraw(guildId);
+        }
+    }
+}
 
 // ==================================================
 // CONSOLIDATED SAVE FUNCTION ALIASES
@@ -359,7 +511,6 @@ const saveImmunity = markDirty;
 const saveServerAdmins = markDirty;
 const saveCountingData = markDirty;
 const saveEconomyData = markDirty;
-const saveLotteryData = markDirty;
 const saveStoreData = markDirty;
 const savePlayerData = markDirty;
 const saveBattles = markDirty;
@@ -1254,80 +1405,6 @@ function getDiscordBadges(user) {
     };
     
     return flags.map(flag => badgeEmojis[flag] || flag);
-}
-
-// ==================================================
-// LOTTERY SYSTEM - GENERATE WINNING NUMBERS
-// ==================================================
-function generateWinningNumbers() {
-    const numbers = new Set();
-    while (numbers.size < 7) {
-        numbers.add(Math.floor(Math.random() * 99) + 1);
-    }
-    return Array.from(numbers).sort((a, b) => a - b);
-}
-
-// ==================================================
-// LOTTERY SYSTEM - RUN DRAW
-// ==================================================
-async function runLotteryDraw() {
-    if (!botData.lotteryData.isActive || (botData.lotteryData.drawDate && new Date(botData.lotteryData.drawDate) > new Date())) {
-        return;
-    }
-    
-    botData.lotteryData.winningNumbers = generateWinningNumbers();
-    
-    let jackpotWinner = null;
-    
-    for (const [guildId, entries] of Object.entries(botData.lotteryData.entries)) {
-        for (const [userId, userNumbers] of Object.entries(entries)) {
-            const matchCount = userNumbers.filter(num => botData.lotteryData.winningNumbers.includes(num)).length;
-            if (matchCount === 7) {
-                jackpotWinner = { userId, guildId, userNumbers };
-                break;
-            }
-        }
-        if (jackpotWinner) break;
-    }
-
-    for (const guildId of Object.keys(botData.lotteryData.entries)) {
-        const guild = client.guilds.cache.get(guildId);
-        if (!guild) continue;
-        const channel = guild.channels.cache.find(c => c.name.includes('lottery') || c.type === 0); 
-        if (!channel) continue;
-
-        const resultsEmbed = new EmbedBuilder()
-            .setTitle('💰 Weekly Lottery Draw Results!')
-            .setColor(0xFFA500)
-            .addFields({ name: '✨ Winning Numbers', value: `\`${botData.lotteryData.winningNumbers.join(', ')}\``, inline: false })
-            .setImage('https://i.imgur.com/rN99D4p.png');
-
-        if (jackpotWinner && jackpotWinner.guildId === guildId) {
-            const winnerId = jackpotWinner.userId;
-            const winnings = botData.lotteryData.prizePool;
-            
-            updateBalance(winnerId, winnings);
-            saveEconomyData();
-
-            resultsEmbed.setDescription(`🎉 **JACKPOT WINNER FOUND!** 🎉\n<@${winnerId}> guessed all 7 numbers and wins **${winnings} Gold Coins**!`)
-                         .setColor(0xFFD700)
-                         .addFields({ name: 'Winning Ticket', value: `\`${jackpotWinner.userNumbers.join(', ')}\``, inline: false });
-
-            botData.lotteryData.drawDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-            botData.lotteryData.entries = {};
-            
-        } else {
-            resultsEmbed.setDescription('Sorry, no jackpot winner this week. The prize pool rolls over!')
-                         .addFields({ name: 'Next Draw', value: `<t:${Math.floor(new Date(botData.lotteryData.drawDate).getTime() / 1000)}:R>` });
-        }
-        
-        await channel.send({ embeds: [resultsEmbed] });
-    }
-    
-    if (!jackpotWinner) {
-        botData.lotteryData.drawDate = new Date(new Date(botData.lotteryData.drawDate).getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
-    }
-    saveLotteryData();
 }
 
 // ==================================================
@@ -8813,59 +8890,303 @@ else if (command === 'hl') {
 // ==================================================
 // COMMAND: LOTTERY
 // ==================================================
-  } else if (command === 'lottery') {
-    const nextDraw = new Date(botData.lotteryData.drawDate);
-    const timeUntilDraw = Math.floor(nextDraw.getTime() / 1000);
-    const gifUrl = 'https://media3.giphy.com/media/v1.Y2lkPTZjMDliOTUyNmY5NWR2M2pjcTZqM2J4bHp4aTVxcWh6b3Ftb2QzeWNvMmhhNnNyNyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/6r66mC6UA0fEk2QAeZ/giphy.gif';
+else if (command === 'lottery') {
+    const sub = args[0]?.toLowerCase();
 
-    const guildEntries = botData.lotteryData.entries[message.guild.id] || {};
-    const userTickets = guildEntries[message.author.id]?.length || 0;
+    if (!sub) {
+        const tutorialEmbed = new EmbedBuilder()
+            .setColor(0x9B59B6)
+            .setTitle('🎟️ Weekly Lottery')
+            .setDescription('Pick 7 unique numbers between 1-99 and match them all to win the jackpot!')
+            .addFields(
+                {
+                    name: '🛒 How to Buy a Ticket',
+                    value: '`$buyticket <num1> <num2> ... <num7>`\n**Example:** `$buyticket 5 10 15 20 25 30 35`\n💵 Cost: 1,000 Gold Coins | Max 7 tickets per round.',
+                    inline: false
+                },
+                {
+                    name: '🎟️ View Your Tickets',
+                    value: '`$lottery tickets` — See your tickets for the current round.',
+                    inline: false
+                },
+                {
+                    name: 'ℹ️ Lottery Status',
+                    value: '`$lottery info` — View the prize, next draw time and total entries.',
+                    inline: false
+                }
+            )
+            // REPLACE THIS GIF URL
+            .setImage('https://media3.giphy.com/media/v1.Y2lkPTZjMDliOTUyNmY5NWR2M2pjcTZqM2J4bHp4aTVxcWh6b3Ftb2QzeWNvMmhhNnNyNyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/6r66mC6UA0fEk2QAeZ/giphy.gif')
+            .setFooter({ text: 'Good luck! Tickets reset after each draw.' })
+            .setTimestamp();
 
-    const infoEmbed = new EmbedBuilder()
-      .setTitle('🎟️ Weekly Lottery Information')
-      .setDescription('Match 7 unique numbers (1-99) to win the jackpot!')
-      .addFields(
-        { name: '🏆 Jackpot Prize', value: `**${botData.lotteryData.prizePool.toLocaleString()} Gold Coins**`, inline: true },
-        { name: '⏰ Next Draw', value: `<t:${timeUntilDraw}:R>`, inline: true },
-        { name: '🔢 Your Tickets', value: `${userTickets}`, inline: true },
-        { name: '💵 Cost to Enter', value: '1,000 Gold Coins per ticket', inline: true },
-        { name: '❓ How to Play', value: 'Use `$buyticket <num1> <num2> ... <num7>`', inline: false }
-      )
-      .setColor(0x9B59B6)
-      .setImage(gifUrl)
-      .setFooter({ text: 'Good luck! All tickets reset after the draw.' });
+        return message.channel.send({ embeds: [tutorialEmbed] });
+    }
 
-    return message.channel.send({ embeds: [infoEmbed] });
+    const controlSubs = ['start', 'end', 'draw', 'resume'];
+    if (controlSubs.includes(sub)) {
+        if (message.author.id !== OWNER_ID && !isImmune(message.author) && !isServerAdmin(message.member)) {
+            const deniedEmbed = new EmbedBuilder()
+                .setColor(0xFF0000)
+                .setTitle('🚫 Access Denied')
+                .setDescription('You do not have clearance for this command.')
+                .setFooter({ text: '🔒 Lottery Control • Owner/Immune/Admin Only' })
+                .setTimestamp();
+            return message.channel.send({ embeds: [deniedEmbed] });
+        }
+    }
+
+    if (sub === 'start') {
+        if (botData.lottery?.[message.guild.id]?.isActive) {
+            return message.reply('❌ A lottery is already running in this server. Use `$lottery end` to end it first.');
+        }
+
+        const fullArgs = args.slice(1).join(' ').split('|').map(s => s.trim());
+
+        if (fullArgs.length < 4) {
+            return message.reply(
+                '❌ Not enough arguments.\n' +
+                '**Usage:** `$lottery start #channel | prize text | optional description | interval_days | total_days`\n' +
+                '**Example:** `$lottery start #lottery | 1,000,000 Gold Coins | Winner paid instantly | 5 | 30`'
+            );
+        }
+
+        const mentionedChannel = message.mentions.channels.first();
+        if (!mentionedChannel) return message.reply('❌ Please mention a valid channel. e.g. `#lottery`');
+
+        const prize = fullArgs[1];
+        const prizeDesc = fullArgs.length === 5 ? fullArgs[2] : null;
+        const intervalDays = parseInt(fullArgs[fullArgs.length === 5 ? 3 : 2]);
+        const totalDays = parseInt(fullArgs[fullArgs.length === 5 ? 4 : 3]);
+
+        if (!prize) return message.reply('❌ Please provide a prize.');
+        if (isNaN(intervalDays) || intervalDays < 1) return message.reply('❌ Interval days must be a number of 1 or more.');
+        if (isNaN(totalDays) || totalDays < intervalDays) return message.reply(`❌ Total days must be a number greater than the interval (${intervalDays}).`);
+
+        const now = new Date();
+        const startDate = now.toISOString();
+        const endDate = new Date(now.getTime() + totalDays * 24 * 60 * 60 * 1000).toISOString();
+        const nextDraw = new Date(now.getTime() + intervalDays * 24 * 60 * 60 * 1000).toISOString();
+
+        botData.lottery = botData.lottery || {};
+        botData.lottery[message.guild.id] = {
+            isActive: true,
+            isPaused: false,
+            channelId: mentionedChannel.id,
+            prize,
+            prizeDesc: prizeDesc || null,
+            intervalDays,
+            totalDays,
+            startDate,
+            endDate,
+            nextDraw,
+            entries: {}
+        };
+
+        await saveLotteryData();
+        scheduleLotteryDraw(message.guild.id);
+
+        const startEmbed = new EmbedBuilder()
+            .setColor(0x9B59B6)
+            .setTitle('🎟️ Lottery Started!')
+            .addFields(
+                { name: '📢 Channel', value: `<#${mentionedChannel.id}>`, inline: true },
+                { name: '🏆 Prize', value: prize, inline: true },
+                { name: '📝 Description', value: prizeDesc || 'None', inline: false },
+                { name: '🔁 Draw Every', value: `${intervalDays} days`, inline: true },
+                { name: '📅 Total Duration', value: `${totalDays} days`, inline: true },
+                { name: '⏰ First Draw', value: `<t:${Math.floor(new Date(nextDraw).getTime() / 1000)}:R>`, inline: true },
+                { name: '🏁 Lottery Ends', value: `<t:${Math.floor(new Date(endDate).getTime() / 1000)}:F>`, inline: false }
+            )
+            // REPLACE THIS GIF URL
+            .setImage('https://media3.giphy.com/media/v1.Y2lkPTZjMDliOTUyNmY5NWR2M2pjcTZqM2J4bHp4aTVxcWh6b3Ftb2QzeWNvMmhhNnNyNyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/6r66mC6UA0fEk2QAeZ/giphy.gif')
+            .setTimestamp();
+
+        return message.channel.send({ embeds: [startEmbed] });
+
+    } else if (sub === 'end') {
+        if (!botData.lottery?.[message.guild.id]) {
+            return message.reply('❌ There is no active lottery in this server.');
+        }
+
+        if (lotteryTimers[message.guild.id]) {
+            clearTimeout(lotteryTimers[message.guild.id]);
+            delete lotteryTimers[message.guild.id];
+        }
+
+        await deleteLotteryData(message.guild.id);
+
+        const endEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('🛑 Lottery Ended')
+            .setDescription('The lottery has been ended and all data has been permanently deleted.')
+            .setTimestamp();
+
+        return message.channel.send({ embeds: [endEmbed] });
+
+    } else if (sub === 'draw') {
+        if (!botData.lottery?.[message.guild.id]?.isActive) {
+            return message.reply('❌ There is no active lottery in this server.');
+        }
+
+        await runLotteryDraw(message.guild.id);
+
+        if (botData.lottery?.[message.guild.id]) {
+            scheduleLotteryDraw(message.guild.id);
+        }
+
+    } else if (sub === 'resume') {
+        const lotto = botData.lottery?.[message.guild.id];
+        if (!lotto) return message.reply('❌ There is no lottery data for this server.');
+        if (!lotto.isActive) return message.reply('❌ The lottery is not active.');
+
+        lotto.isPaused = false;
+        await saveLotteryData();
+        scheduleLotteryDraw(message.guild.id);
+
+        const resumeEmbed = new EmbedBuilder()
+            .setColor(0x00FF00)
+            .setTitle('▶️ Lottery Resumed')
+            .setDescription('The lottery has been resumed and the draw timer is back on track.')
+            .addFields(
+                { name: '⏰ Next Draw', value: `<t:${Math.floor(new Date(lotto.nextDraw).getTime() / 1000)}:R>`, inline: true }
+            )
+            .setTimestamp();
+
+        return message.channel.send({ embeds: [resumeEmbed] });
+
+    } else if (sub === 'info') {
+        const lotto = botData.lottery?.[message.guild.id];
+        if (!lotto) return message.reply('❌ There is no active lottery in this server.');
+
+        const now = new Date();
+        const endDate = new Date(lotto.endDate);
+        const totalDraws = Math.floor(lotto.totalDays / lotto.intervalDays);
+        const drawsSoFar = Math.floor((now - new Date(lotto.startDate)) / (lotto.intervalDays * 24 * 60 * 60 * 1000));
+        const drawsLeft = Math.max(totalDraws - drawsSoFar, 0);
+        const totalEntries = Object.values(lotto.entries || {}).reduce((acc, tickets) => acc + tickets.length, 0);
+
+        const infoEmbed = new EmbedBuilder()
+            .setColor(0x9B59B6)
+            .setTitle('🎟️ Lottery Status')
+            .addFields(
+                { name: '🏆 Prize', value: lotto.prize, inline: true },
+                { name: '📝 Description', value: lotto.prizeDesc || 'None', inline: true },
+                { name: '📢 Channel', value: `<#${lotto.channelId}>`, inline: true },
+                { name: '⏰ Next Draw', value: `<t:${Math.floor(new Date(lotto.nextDraw).getTime() / 1000)}:R>`, inline: true },
+                { name: '🔁 Draw Interval', value: `Every ${lotto.intervalDays} days`, inline: true },
+                { name: '📊 Draws Left', value: `${drawsLeft}`, inline: true },
+                { name: '🏁 Lottery Ends', value: `<t:${Math.floor(endDate.getTime() / 1000)}:F>`, inline: false },
+                { name: '🎟️ Total Tickets This Round', value: `${totalEntries}`, inline: true },
+                { name: '⏸️ Paused', value: lotto.isPaused ? 'Yes' : 'No', inline: true }
+            )
+            // REPLACE THIS GIF URL
+            .setImage('https://media3.giphy.com/media/v1.Y2lkPTZjMDliOTUyNmY5NWR2M2pjcTZqM2J4bHp4aTVxcWh6b3Ftb2QzeWNvMmhhNnNyNyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/6r66mC6UA0fEk2QAeZ/giphy.gif')
+            .setTimestamp();
+
+        return message.channel.send({ embeds: [infoEmbed] });
+
+    } else if (sub === 'tickets') {
+        const lotto = botData.lottery?.[message.guild.id];
+        if (!lotto) return message.reply('❌ There is no active lottery in this server.');
+
+        const targetUser = message.mentions.users.first();
+
+        if (targetUser && message.author.id !== OWNER_ID) {
+            const deniedEmbed = new EmbedBuilder()
+                .setColor(0xFF0000)
+                .setTitle('🚫 Access Denied')
+                .setDescription('Only the bot owner can view another user\'s tickets.')
+                .setTimestamp();
+            return message.channel.send({ embeds: [deniedEmbed] });
+        }
+
+        const viewTarget = targetUser || message.author;
+        const tickets = lotto.entries?.[viewTarget.id] || [];
+
+        if (tickets.length === 0) {
+            return message.reply(`❌ ${targetUser ? `**${viewTarget.tag}** has` : 'You have'} no tickets this round.`);
+        }
+
+        let ticketList = '';
+        tickets.forEach((ticket, i) => {
+            ticketList += `**Ticket ${i + 1}:** \`${ticket.join(', ')}\`\n`;
+        });
+
+        const ticketsEmbed = new EmbedBuilder()
+            .setColor(0x9B59B6)
+            .setTitle(`🎟️ Tickets — ${viewTarget.tag}`)
+            .setDescription(ticketList)
+            .addFields(
+                { name: '🎟️ Total Tickets', value: `${tickets.length} / 7`, inline: true }
+            )
+            .setFooter({ text: 'Tickets reset after each draw.' })
+            .setTimestamp();
+
+        return message.channel.send({ embeds: [ticketsEmbed] });
+    }
 }
 
 // ==================================================
 // COMMAND: BUY TICKET
 // ==================================================
 else if (command === 'buyticket') {
+    const lotto = botData.lottery?.[message.guild.id];
+
+    if (!lotto || !lotto.isActive) {
+        return message.reply('❌ There is no active lottery in this server right now.');
+    }
+
+    if (lotto.isPaused) {
+        return message.reply('❌ The lottery is currently paused.');
+    }
+
     const ticketCost = 1000;
+    const maxTickets = 7;
     const balance = getBalance(message.author.id);
-    if (balance < ticketCost) {
-        return message.reply(`❌ Buying a ticket costs **${ticketCost} Gold Coins**, and you only have **${balance}**.`);
-    }
+
     if (args.length !== 7) {
-        return message.reply('❌ You must provide exactly 7 unique numbers between 1 and 99. Usage: `$buyticket 5 10 15 20 25 30 35`');
+        return message.reply('❌ You must provide exactly 7 unique numbers between 1 and 99.\n**Usage:** `$buyticket 5 10 15 20 25 30 35`');
     }
+
     const userNumbers = args.map(n => parseInt(n)).filter(n => !isNaN(n) && n >= 1 && n <= 99);
     if (userNumbers.length !== 7 || new Set(userNumbers).size !== 7) {
         return message.reply('❌ All 7 numbers must be unique and between 1 and 99.');
     }
+
+    const existingTickets = lotto.entries?.[message.author.id] || [];
+    if (existingTickets.length >= maxTickets) {
+        return message.reply(`❌ You have reached the maximum of **${maxTickets} tickets** per round. Tickets reset after each draw.`);
+    }
+
+    if (balance < ticketCost) {
+        return message.reply(`❌ Buying a ticket costs **${ticketCost} Gold Coins** and you only have **${balance}**.`);
+    }
+
     const newBalance = updateBalance(message.author.id, -ticketCost);
     saveEconomyData();
-    if (!botData.lotteryData.entries[message.guild.id]) {
-        botData.lotteryData.entries[message.guild.id] = {};
-    }
-    if (!botData.lotteryData.entries[message.guild.id][message.author.id]) {
-        botData.lotteryData.entries[message.guild.id][message.author.id] = [];
-    }
-    botData.lotteryData.entries[message.guild.id][message.author.id].push(userNumbers.sort((a, b) => a - b));
-    saveLotteryData();
-    const embed = new EmbedBuilder().setTitle('✅ Lottery Ticket Purchased!').setDescription(`Your ticket numbers: \`${userNumbers.join(', ')}\`\nGood luck!`).addFields({ name: '💵 Cost', value: `${ticketCost} Gold Coins`, inline: true }, { name: '💰 New Balance', value: `${newBalance} Gold Coins`, inline: true }).setColor(0x9B59B6);
-    message.channel.send({ embeds: [embed] });
+
+    if (!lotto.entries) lotto.entries = {};
+    if (!lotto.entries[message.author.id]) lotto.entries[message.author.id] = [];
+    lotto.entries[message.author.id].push(userNumbers.sort((a, b) => a - b));
+
+    await saveLotteryData();
+
+    const ticketEmbed = new EmbedBuilder()
+        .setColor(0x9B59B6)
+        .setTitle('✅ Lottery Ticket Purchased!')
+        .setDescription(`Your numbers: \`${userNumbers.join(', ')}\`\nGood luck!`)
+        .addFields(
+            { name: '💵 Cost', value: `${ticketCost} Gold Coins`, inline: true },
+            { name: '💰 New Balance', value: `${newBalance} Gold Coins`, inline: true },
+            { name: '🎟️ Your Tickets This Round', value: `${lotto.entries[message.author.id].length} / ${maxTickets}`, inline: true },
+            { name: '⏰ Next Draw', value: `<t:${Math.floor(new Date(lotto.nextDraw).getTime() / 1000)}:R>`, inline: false }
+        )
+        // REPLACE THIS GIF URL
+        .setImage('https://media3.giphy.com/media/v1.Y2lkPTZjMDliOTUyNmY5NWR2M2pjcTZqM2J4bHp4aTVxcWh6b3Ftb2QzeWNvMmhhNnNyNyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/6r66mC6UA0fEk2QAeZ/giphy.gif')
+        .setTimestamp();
+
+    return message.channel.send({ embeds: [ticketEmbed] });
 }
 
 // ==================================================
@@ -14986,4 +15307,5 @@ else if (command === 'forcesave') {
   await loadData(); // WAIT for JSONBin to finish
   console.log("Starting bot login...");
   await client.login(process.env.BOT_TOKEN);
+  await recoverLotteries();
 })();
