@@ -11603,96 +11603,109 @@ else if (command === 'unmute') {
 // COMMAND: AUTODELETE
 // ==================================================
 else if (command === 'autodelete') {
-  if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
-    return message.reply('❌ You are not authorized to manage auto-delete settings.');
-  }
-
-  // ==================================================
-  // LIST AUTODELETE USERS (EMBED)
-  // ==================================================
-  if (args[0]?.toLowerCase() === 'list') {
-    const enabledIds = Object.entries(botData.autoDeleteUsers || {})
-      .filter(([_, enabled]) => enabled)
-      .map(([id]) => id);
-
-    if (enabledIds.length === 0) {
-      return message.reply('📋 **Auto-delete is currently not enabled for any users.**');
+    if (message.author.id !== OWNER_ID && !isImmune(message.author) && !isServerAdmin(message.member)) {
+        const deniedEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('🚫 Access Denied')
+            .setDescription('You do not have clearance for this command.')
+            .setFooter({ text: '🔒 Moderation Command • Owner/Immune/Admin Only' })
+            .setTimestamp();
+        return message.channel.send({ embeds: [deniedEmbed] });
     }
 
-    const lines = [];
+    // ==================================================
+    // LIST AUTODELETE USERS
+    // ==================================================
+    if (args[0]?.toLowerCase() === 'list') {
+        const entries = Object.entries(botData.autoDeleteUsers || {})
+            .filter(([_, guilds]) => Array.isArray(guilds) && guilds.length > 0);
 
-    for (const id of enabledIds) {
-      let userTag = 'Unknown User';
+        if (entries.length === 0) {
+            return message.reply('📋 Auto-delete is currently not enabled for any users.');
+        }
 
-      try {
-        const user = await client.users.fetch(id);
-        userTag = user.tag;
-      } catch {
-        userTag = 'User not found';
-      }
+        const lines = [];
 
-      lines.push(`• **${userTag}**\n  └ ID: \`${id}\``);
+        for (const [userId, guilds] of entries) {
+            let userTag = 'Unknown User';
+            try {
+                const user = await client.users.fetch(userId);
+                userTag = user.tag;
+            } catch {
+                userTag = 'User not found';
+            }
+
+            const serverNames = guilds.map(gId => {
+                const g = client.guilds.cache.get(gId);
+                return g ? `${g.name} (\`${gId}\`)` : `Unknown Server (\`${gId}\`)`;
+            }).join(', ');
+
+            lines.push(`• **${userTag}**\n  └ ID: \`${userId}\`\n  └ Servers: ${serverNames}`);
+        }
+
+        const embed = new EmbedBuilder()
+            .setTitle('🧹 Auto-Delete Enabled Users')
+            .setColor(0x00AE86)
+            .setDescription(lines.join('\n\n'))
+            .setFooter({ text: `Total: ${entries.length} user(s)` })
+            .setTimestamp()
+            .setImage('https://media4.giphy.com/media/v1.Y2lkPTZjMDliOTUybTFwOHlob2hwYnZhdjV3MTAxMGJka3AweDIzZmU1aGoxcHlzY25qOCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/4AoU8U5hfS2meEXc3q/giphy.gif');
+
+        return message.reply({ embeds: [embed] });
     }
 
-    const embed = new EmbedBuilder()
-      .setTitle('🧹 Auto-Delete Enabled Users')
-      .setColor(0x00AE86)
-      .setDescription(lines.join('\n\n'))
-      .setFooter({ text: `Total: ${enabledIds.length} user(s)` })
-      .setTimestamp()
-
-      // OPTIONAL GIF (remove or replace if you want)
-      .setImage('https://media4.giphy.com/media/v1.Y2lkPTZjMDliOTUybTFwOHlob2hwYnZhdjV3MTAxMGJka3AweDIzZmU1aGoxcHlzY25qOCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/4AoU8U5hfS2meEXc3q/giphy.gif');
-
-    return message.reply({ embeds: [embed] });
-  }
-
-  // ==================================================
-  // TOGGLE AUTODELETE
-  // ==================================================
-  if (args.length < 1) {
-    return message.reply(
-      '⚙️ Usage:\n' +
-      '`$autodelete <userId> [on|off] [moreUserIds...]`\n' +
-      '`$autodelete list`'
-    );
-  }
-
-  const results = [];
-  let i = 0;
-
-  while (i < args.length) {
-    const id = args[i].replace(/[<@!>]/g, '');
-
-    if (!/^\d{17,19}$/.test(id)) {
-      results.push(`⚠️ Invalid ID: \`${args[i]}\``);
-      i++;
-      continue;
+    // ==================================================
+    // TOGGLE AUTODELETE
+    // ==================================================
+    if (args.length < 2) {
+        return message.reply(
+            '⚙️ Usage:\n' +
+            '`$autodelete <userId> on` — enable auto-delete for a user in this server\n' +
+            '`$autodelete <userId> off` — disable auto-delete for a user in this server\n' +
+            '`$autodelete list` — list all users with auto-delete enabled'
+        );
     }
 
-    let mode = args[i + 1]?.toLowerCase();
+    const userId = args[0].replace(/[<@!>]/g, '');
+    const mode   = args[1]?.toLowerCase();
 
-    if (mode === 'on' || mode === 'off') {
-      botData.autoDeleteUsers[id] = mode === 'on';
-      i += 2;
-    } else {
-      botData.autoDeleteUsers[id] = !botData.autoDeleteUsers[id];
-      i++;
+    if (!/^\d{17,19}$/.test(userId)) {
+        return message.reply('❌ Please provide a valid user ID.');
     }
 
-    results.push(`${botData.autoDeleteUsers[id] ? '✅ Enabled' : '❌ Disabled'} for <@${id}>`);
-  }
+    if (mode !== 'on' && mode !== 'off') {
+        return message.reply('❌ Please specify `on` or `off`.');
+    }
 
-  markDirty();
+    const guildId = message.guild.id;
 
-  const response = results.join('\n');
-  await message.reply(`🧹 **Auto-delete settings updated:**\n${response}`);
+    if (!botData.autoDeleteUsers) botData.autoDeleteUsers = {};
+    if (!Array.isArray(botData.autoDeleteUsers[userId])) botData.autoDeleteUsers[userId] = [];
 
-  const logMsg =
-    `\`[AUTO-DELETE TOGGLE]\` **${message.author.tag}** updated settings:\n${response}`;
-  await sendLog(message.guild.id, logMsg);
+    if (mode === 'on') {
+        if (botData.autoDeleteUsers[userId].includes(guildId)) {
+            return message.reply('⚠️ Auto-delete is already enabled for that user in this server.');
+        }
+        botData.autoDeleteUsers[userId].push(guildId);
+        markDirty();
+        await message.reply(`✅ Auto-delete **enabled** for <@${userId}> in **${message.guild.name}**.`);
+        await sendLog(message.guild.id, `\`[AUTO-DELETE]\` **${message.author.tag}** enabled auto-delete for \`${userId}\` in **${message.guild.name}**.`);
 
-  return;
+    } else if (mode === 'off') {
+        if (!botData.autoDeleteUsers[userId].includes(guildId)) {
+            return message.reply('⚠️ Auto-delete is not enabled for that user in this server.');
+        }
+        botData.autoDeleteUsers[userId] = botData.autoDeleteUsers[userId].filter(id => id !== guildId);
+
+        // Clean up entry entirely if no servers left
+        if (botData.autoDeleteUsers[userId].length === 0) {
+            delete botData.autoDeleteUsers[userId];
+        }
+
+        markDirty();
+        await message.reply(`❌ Auto-delete **disabled** for <@${userId}> in **${message.guild.name}**.`);
+        await sendLog(message.guild.id, `\`[AUTO-DELETE]\` **${message.author.tag}** disabled auto-delete for \`${userId}\` in **${message.guild.name}**.`);
+    }
 }
 
 // ==================================================
@@ -11735,6 +11748,7 @@ else if (command === 'shout') {
 else if (command === 'spoiler') {
     const text = args.join(' ');
     if (!text) return message.reply('🔒 Nothing to spoiler.');
+    await message.delete().catch(() => {});
     message.channel.send(`||${text}||`);
 }
 
@@ -11744,6 +11758,7 @@ else if (command === 'spoiler') {
 else if (command === 'say') {
     const text = args.join(' ');
     if (!text) return message.reply('💬 Nothing to say.');
+    await message.delete().catch(() => {});
     message.channel.send(text);
 }
 
@@ -11751,26 +11766,55 @@ else if (command === 'say') {
 // COMMAND: SEND
 // ==================================================
 else if (command === 'send') {
-    if (args.length < 2) return message.reply('✉️ Usage: $send <channelID> <message>');
+    if (message.author.id !== OWNER_ID && !isImmune(message.author) && !isServerAdmin(message.member) && !message.member.permissions.has(PermissionsBitField.Flags.ManageMessages)) {
+        const deniedEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('🚫 Access Denied')
+            .setDescription('You do not have clearance for this command.')
+            .setFooter({ text: '🔒 Moderation Command • Owner/Immune/Admin/Manage Messages Only' })
+            .setTimestamp();
+        return message.channel.send({ embeds: [deniedEmbed] });
+    }
+
+    if (args.length < 2) return message.reply('✉️ Usage: `$send <channelID> <message>`');
+
     const channel = client.channels.cache.get(args[0]);
     if (!channel) return message.reply('❌ Channel not found or I do not have access.');
     if (!channel.isTextBased()) return message.reply('❌ That channel is not a text channel.');
+
     const botMember = channel.guild.members.me;
     if (!channel.permissionsFor(botMember)?.has('SendMessages')) return message.reply('❌ I do not have permission to send messages in that channel.');
-    channel.send(args.slice(1).join(' ')).then(() => message.reply(`✅ Message sent to #${channel.name} in ${channel.guild.name}.`)).catch(err => message.reply(`❌ Failed to send message. Error: ${err.message}`));
+
+    channel.send(args.slice(1).join(' '))
+        .then(() => message.reply(`✅ Message sent to #${channel.name} in ${channel.guild.name}.`))
+        .catch(err => message.reply(`❌ Failed to send message. Error: ${err.message}`));
 }
 
 // ==================================================
 // COMMAND: WARN
 // ==================================================
 else if (command === 'warn') {
+    if (message.author.id !== OWNER_ID && !isImmune(message.author) && !isServerAdmin(message.member) && !message.member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) {
+        const deniedEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('🚫 Access Denied')
+            .setDescription('You do not have clearance for this command.')
+            .setFooter({ text: '🔒 Moderation Command • Owner/Immune/Admin/Moderate Members Only' })
+            .setTimestamp();
+        return message.channel.send({ embeds: [deniedEmbed] });
+    }
+
     const target = message.mentions.members.first();
     if (!target) return message.reply('⚠️ Tag a user to warn.');
+
     const reason = args.slice(1).join(' ') || 'No reason';
+
     if (!botData.warnings[message.guild.id]) botData.warnings[message.guild.id] = {};
     if (!botData.warnings[message.guild.id][target.id]) botData.warnings[message.guild.id][target.id] = [];
+
     botData.warnings[message.guild.id][target.id].push({ reason, date: new Date().toISOString(), by: message.author.tag });
     saveWarnings();
+
     message.channel.send(`⚠️ ${target.user.tag} has been warned. Reason: ${reason}`);
     await sendLog(message.guild.id, `\`[WARN]\` **${message.author.tag}** warned **${target.user.tag}**. Reason: ${reason}`);
 }
@@ -11791,48 +11835,122 @@ else if (command === 'warnings') {
 // COMMAND: CLEAR
 // ==================================================
 else if (command === 'clear') {
-  if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
-    return message.reply('❌ You do not have permission to use this command.')
-      .then(msg => setTimeout(() => msg.delete().catch(() => {}), 4000));
-  }
+    if (message.author.id !== OWNER_ID && !isImmune(message.author) && !isServerAdmin(message.member)) {
+        const deniedEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('🚫 Access Denied')
+            .setDescription('You do not have clearance for this command.')
+            .setFooter({ text: '🔒 Moderation Command • Owner/Immune/Admin Only' })
+            .setTimestamp();
+        return message.channel.send({ embeds: [deniedEmbed] });
+    }
 
-  const clearCooldowns = global.clearCooldowns || (global.clearCooldowns = new Set());
-  if (clearCooldowns.has(message.author.id)) {
-    return message.reply('⏳ Please wait a few seconds before using this again.')
-      .then(msg => setTimeout(() => msg.delete().catch(() => {}), 4000));
-  }
-  clearCooldowns.add(message.author.id);
-  setTimeout(() => clearCooldowns.delete(message.author.id), 5000);
+    const clearCooldowns = global.clearCooldowns || (global.clearCooldowns = new Set());
+    if (clearCooldowns.has(message.author.id)) {
+        return message.reply('⏳ Please wait a few seconds before using this again.')
+            .then(msg => setTimeout(() => msg.delete().catch(() => {}), 4000));
+    }
+    clearCooldowns.add(message.author.id);
+    setTimeout(() => clearCooldowns.delete(message.author.id), 5000);
 
-  const count = parseInt(args[0]);
-  if (!count || count < 1 || count > 100) {
-    return message.reply('❌ Enter a number between 1–100.')
-      .then(msg => setTimeout(() => msg.delete().catch(() => {}), 4000));
-  }
+    // ── Remote targeting (Owner/Immune only) ─────────────────────────────────
+    // Usage: $clear <amount> <guildId> <channelId>
+    // Local: $clear <amount>
+    // ─────────────────────────────────────────────────────────────────────────
 
-  try {
-    await message.delete().catch(() => {});
-    const deleted = await message.channel.bulkDelete(count, true);
+    const isRemoteAttempt = args[1] && /^\d{17,19}$/.test(args[1]);
 
-    const confirmMsg = await message.channel.send(`🧹 Deleted **${deleted.size}** messages.`);
-    setTimeout(() => confirmMsg.delete().catch(() => {}), 4000);
+    if (isRemoteAttempt) {
+        if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
+            const deniedEmbed = new EmbedBuilder()
+                .setColor(0xFF0000)
+                .setTitle('🚫 Access Denied')
+                .setDescription('Remote server targeting is restricted to **Owner and Immune** users only.')
+                .setFooter({ text: '🔒 Remote Access • Owner/Immune Only' })
+                .setTimestamp();
+            return message.channel.send({ embeds: [deniedEmbed] });
+        }
 
-    await sendLog(
-      message.guild.id,
-      `\`[CLEAR]\` **${message.author.tag}** cleared **${deleted.size}** messages in <#${message.channel.id}>.`
-    );
-  } catch (err) {
-    console.error('[CLEAR ERROR]', err);
-    message.channel.send('❌ Could not delete messages. They may be older than 14 days.')
-      .then(msg => setTimeout(() => msg.delete().catch(() => {}), 5000));
-  }
+        const count = parseInt(args[0]);
+        if (!count || count < 1 || count > 100) {
+            return message.reply('❌ Enter a number between 1–100.\nUsage: `$clear <amount> <guildId> <channelId>`')
+                .then(msg => setTimeout(() => msg.delete().catch(() => {}), 4000));
+        }
+
+        const remoteGuildId   = args[1];
+        const remoteChannelId = args[2];
+
+        if (!remoteChannelId || !/^\d{17,19}$/.test(remoteChannelId)) {
+            return message.reply('❌ Please provide a valid channel ID for remote clear.\nUsage: `$clear <amount> <guildId> <channelId>`')
+                .then(msg => setTimeout(() => msg.delete().catch(() => {}), 4000));
+        }
+
+        const remoteGuild = client.guilds.cache.get(remoteGuildId);
+        if (!remoteGuild) {
+            return message.reply('❌ Remote guild not found. Make sure the bot is in that server and the ID is correct.');
+        }
+
+        const remoteChannel = remoteGuild.channels.cache.get(remoteChannelId);
+        if (!remoteChannel || !remoteChannel.isTextBased()) {
+            return message.reply('❌ Remote channel not found or is not a text channel.');
+        }
+
+        try {
+            const deleted = await remoteChannel.bulkDelete(count, true);
+            const confirmMsg = await message.channel.send(
+                `🧹 Remotely deleted **${deleted.size}** messages in **${remoteGuild.name}** — <#${remoteChannel.id}>.`
+            );
+            setTimeout(() => confirmMsg.delete().catch(() => {}), 4000);
+            await sendLog(
+                message.guild.id,
+                `\`[CLEAR]\` **${message.author.tag}** remotely cleared **${deleted.size}** messages in **${remoteGuild.name}** (\`${remoteGuildId}\`) channel \`${remoteChannel.name}\`.`
+            );
+        } catch (err) {
+            console.error('[CLEAR REMOTE ERROR]', err);
+            message.channel.send('❌ Could not delete messages. They may be older than 14 days or the bot lacks permissions.')
+                .then(msg => setTimeout(() => msg.delete().catch(() => {}), 5000));
+        }
+
+    // ── Local clear ───────────────────────────────────────────────────────────
+    } else {
+
+        const count = parseInt(args[0]);
+        if (!count || count < 1 || count > 100) {
+            return message.reply('❌ Enter a number between 1–100.\nUsage: `$clear <amount>`')
+                .then(msg => setTimeout(() => msg.delete().catch(() => {}), 4000));
+        }
+
+        try {
+            await message.delete().catch(() => {});
+            const deleted = await message.channel.bulkDelete(count, true);
+            const confirmMsg = await message.channel.send(`🧹 Deleted **${deleted.size}** messages.`);
+            setTimeout(() => confirmMsg.delete().catch(() => {}), 4000);
+            await sendLog(
+                message.guild.id,
+                `\`[CLEAR]\` **${message.author.tag}** cleared **${deleted.size}** messages in <#${message.channel.id}>.`
+            );
+        } catch (err) {
+            console.error('[CLEAR ERROR]', err);
+            message.channel.send('❌ Could not delete messages. They may be older than 14 days.')
+                .then(msg => setTimeout(() => msg.delete().catch(() => {}), 5000));
+        }
+    }
 }
 
 // ==================================================
 // COMMAND: LOCK
 // ==================================================
 else if (command === 'lock') {
-    if (!checkPermission(PermissionsBitField.Flags.ManageChannels)) return;
+    if (message.author.id !== OWNER_ID && !isImmune(message.author) && !isServerAdmin(message.member)) {
+        const deniedEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('🚫 Access Denied')
+            .setDescription('You do not have clearance for this command.')
+            .setFooter({ text: '🔒 Moderation Command • Owner/Immune/Admin Only' })
+            .setTimestamp();
+        return message.channel.send({ embeds: [deniedEmbed] });
+    }
+
     await message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: false });
     message.channel.send('🔒 Channel locked.');
     await sendLog(message.guild.id, `\`[LOCK]\` **${message.author.tag}** locked <#${message.channel.id}>.`);
@@ -11842,7 +11960,16 @@ else if (command === 'lock') {
 // COMMAND: UNLOCK
 // ==================================================
 else if (command === 'unlock') {
-    if (!checkPermission(PermissionsBitField.Flags.ManageChannels)) return;
+    if (message.author.id !== OWNER_ID && !isImmune(message.author) && !isServerAdmin(message.member)) {
+        const deniedEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('🚫 Access Denied')
+            .setDescription('You do not have clearance for this command.')
+            .setFooter({ text: '🔒 Moderation Command • Owner/Immune/Admin Only' })
+            .setTimestamp();
+        return message.channel.send({ embeds: [deniedEmbed] });
+    }
+
     await message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: null });
     message.channel.send('🔓 Channel unlocked.');
     await sendLog(message.guild.id, `\`[UNLOCK]\` **${message.author.tag}** unlocked <#${message.channel.id}>.`);
@@ -11852,45 +11979,48 @@ else if (command === 'unlock') {
 // COMMAND: ANTIRAID
 // ==================================================
 else if (command === 'antiraid') {
-      if (!checkPermission(PermissionsBitField.Flags.Administrator)) return;
-      const subcommand = args[0]?.toLowerCase();
-      if (subcommand === 'on') {
-          const success = await engageAntiRaid(message.guild, message.channel, message.author);
-          if (success) {
-              await sendLog(message.guild.id, `\`[SECURITY]\` **${message.author.tag}** has engaged ANTI-RAID mode.`);
-          }
-      } else if (subcommand === 'off') {
-          const success = await disengageAntiRaid(message.guild, message.channel);
-          if (success) {
-              await sendLog(message.guild.id, `\`[SECURITY]\` **${message.author.tag}** has disengaged ANTI-RAID mode.`);
-          }
-      } else {
-          message.reply('❌ Usage: `$antiraid on` or `$antiraid off`.');
-      }
+    if (message.author.id !== OWNER_ID && !isImmune(message.author) && !isServerAdmin(message.member)) {
+        const deniedEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('🚫 Access Denied')
+            .setDescription('You do not have clearance for this command.')
+            .setFooter({ text: '🔒 Security Command • Owner/Immune/Admin Only' })
+            .setTimestamp();
+        return message.channel.send({ embeds: [deniedEmbed] });
+    }
+
+    const subcommand = args[0]?.toLowerCase();
+
+    if (subcommand === 'on') {
+        const success = await engageAntiRaid(message.guild, message.channel, message.author);
+        if (success) {
+            await sendLog(message.guild.id, `\`[SECURITY]\` **${message.author.tag}** has engaged ANTI-RAID mode.`);
+        }
+    } else if (subcommand === 'off') {
+        const success = await disengageAntiRaid(message.guild, message.channel);
+        if (success) {
+            await sendLog(message.guild.id, `\`[SECURITY]\` **${message.author.tag}** has disengaged ANTI-RAID mode.`);
+        }
+    } else {
+        message.reply('❌ Usage: `$antiraid on` or `$antiraid off`.');
+    }
 }
+
 // ==================================================
 // COMMAND: RESTORE (Manual Anti-Raid Restore)
 // ==================================================
 else if (command === 'restore') {
-    if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
+    if (message.author.id !== OWNER_ID && !isImmune(message.author) && !isServerAdmin(message.member)) {
         const deniedEmbed = new EmbedBuilder()
             .setColor(0xFF0000)
-            .setTitle('🚫 ACCESS DENIED')
-            .setDescription(
-                '```ansi\n' +
-                '\u001b[31m╔═══════════════════════════════════════════╗\n' +
-                '║   ⛔ UNAUTHORIZED ACCESS ATTEMPT ⛔        ║\n' +
-                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
-                '```\n' +
-                'You do not have clearance for this command.\n' +
-                'This incident has been logged.'
-            )
-            .setFooter({ text: '🔒 Security Command • Owner/Immune Only' })
+            .setTitle('🚫 Access Denied')
+            .setDescription('You do not have clearance for this command.')
+            .setFooter({ text: '🔒 Security Command • Owner/Immune/Admin Only' })
             .setTimestamp();
         await sendLog(message.guild.id, `\`[SECURITY]\` **${message.author.tag}** attempted unauthorized use of \`$restore\`.`);
         return message.channel.send({ embeds: [deniedEmbed] });
     }
-    
+
     await disengageAntiRaid(message.guild, message.channel);
 }
 
@@ -11898,47 +12028,32 @@ else if (command === 'restore') {
 // COMMAND: RAIDMODE STATUS
 // ==================================================
 else if (command === 'raidmode') {
-    if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
+    if (message.author.id !== OWNER_ID && !isImmune(message.author) && !isServerAdmin(message.member)) {
         const deniedEmbed = new EmbedBuilder()
             .setColor(0xFF0000)
-            .setTitle('🚫 ACCESS DENIED')
-            .setDescription(
-                '```ansi\n' +
-                '\u001b[31m╔═══════════════════════════════════════════╗\n' +
-                '║   ⛔ UNAUTHORIZED ACCESS ATTEMPT ⛔        ║\n' +
-                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
-                '```\n' +
-                'You do not have clearance for this command.'
-            )
-            .setFooter({ text: '🔒 Security Command • Owner/Immune Only' })
+            .setTitle('🚫 Access Denied')
+            .setDescription('You do not have clearance for this command.')
+            .setFooter({ text: '🔒 Security Command • Owner/Immune/Admin Only' })
             .setTimestamp();
         return message.channel.send({ embeds: [deniedEmbed] });
     }
-    
-    const isActive = antiRaidActive.has(message.guild.id);
+
+    const isActive  = antiRaidActive.has(message.guild.id);
     const savedPerms = originalChannelPermissions.get(message.guild.id);
     const savedLevel = originalVerificationLevels.get(message.guild.id);
-    
+
     const statusEmbed = new EmbedBuilder()
         .setColor(isActive ? 0xFF0000 : 0x00FF00)
-        .setTitle('🛡️ RAID MODE STATUS')
-        .setDescription(
-            '```ansi\n' +
-            (isActive ? '\u001b[31m' : '\u001b[32m') +
-            '╔═══════════════════════════════════════════╗\n' +
-            '║         SECURITY STATUS REPORT            ║\n' +
-            '╚═══════════════════════════════════════════╝\u001b[0m\n' +
-            '```'
-        )
+        .setTitle('🛡️ Raid Mode Status')
         .addFields(
-            { name: '🚨 Lockdown Status', value: isActive ? '```diff\n- ACTIVE\n```' : '```diff\n+ INACTIVE\n```', inline: true },
-            { name: '🔐 Verification Level', value: `\`${message.guild.verificationLevel}\``, inline: true },
-            { name: '📊 Saved Permissions', value: savedPerms ? `\`${savedPerms.length} channels\`` : '`None`', inline: true },
-            { name: '🔒 Original Ver. Level', value: savedLevel !== undefined ? `\`${savedLevel}\`` : '`N/A`', inline: true }
+            { name: '🚨 Lockdown Status',    value: isActive ? '`ACTIVE`' : '`INACTIVE`',                          inline: true },
+            { name: '🔐 Verification Level', value: `\`${message.guild.verificationLevel}\``,                       inline: true },
+            { name: '📊 Saved Permissions',  value: savedPerms ? `\`${savedPerms.length} channels\`` : '`None`',    inline: true },
+            { name: '🔒 Original Ver. Level',value: savedLevel !== undefined ? `\`${savedLevel}\`` : '`N/A`',       inline: true }
         )
         .setFooter({ text: '⚔️ Use $antiraid on/off to toggle • $restore to restore' })
         .setTimestamp();
-    
+
     message.channel.send({ embeds: [statusEmbed] });
 }
 
@@ -11946,38 +12061,56 @@ else if (command === 'raidmode') {
 // COMMAND: LOCKDOWN (Lock ALL Channels)
 // ==================================================
 else if (command === 'lockdown') {
-    if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
+    if (message.author.id !== OWNER_ID && !isImmune(message.author) && !isServerAdmin(message.member)) {
         const deniedEmbed = new EmbedBuilder()
             .setColor(0xFF0000)
-            .setTitle('🚫 ACCESS DENIED')
-            .setDescription(
-                '```ansi\n' +
-                '\u001b[31m╔═══════════════════════════════════════════╗\n' +
-                '║   ⛔ UNAUTHORIZED ACCESS ATTEMPT ⛔        ║\n' +
-                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
-                '```\n' +
-                'You do not have clearance for this command.'
-            )
-            .setFooter({ text: '🔒 Security Command • Owner/Immune Only' })
+            .setTitle('🚫 Access Denied')
+            .setDescription('You do not have clearance for this command.')
+            .setFooter({ text: '🔒 Security Command • Owner/Immune/Admin Only' })
             .setTimestamp();
         return message.channel.send({ embeds: [deniedEmbed] });
     }
-    
-    const loadingEmbed = new EmbedBuilder()
-        .setColor(0xFFFF00)
-        .setTitle('🔒 INITIATING LOCKDOWN...')
-        .setDescription('```Locking all channels...```')
-        .setTimestamp();
-    
-    const loadingMsg = await message.channel.send({ embeds: [loadingEmbed] });
-    
+
+    // ── Remote targeting (Owner/Immune only) ─────────────────────────────────
+    let targetGuild = message.guild;
+    let isRemote = false;
+
+    if (args[0] && /^\d{17,19}$/.test(args[0])) {
+        if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
+            const deniedEmbed = new EmbedBuilder()
+                .setColor(0xFF0000)
+                .setTitle('🚫 Access Denied')
+                .setDescription('Remote server targeting is restricted to **Owner and Immune** users only.')
+                .setFooter({ text: '🔒 Remote Access • Owner/Immune Only' })
+                .setTimestamp();
+            return message.channel.send({ embeds: [deniedEmbed] });
+        }
+
+        targetGuild = client.guilds.cache.get(args[0]);
+        if (!targetGuild) {
+            return message.reply('❌ Remote guild not found. Make sure the bot is in that server and the ID is correct.');
+        }
+        isRemote = true;
+    }
+
+    // ── Loading message ───────────────────────────────────────────────────────
+    const loadingMsg = await message.channel.send({
+        embeds: [
+            new EmbedBuilder()
+                .setColor(0xFFFF00)
+                .setTitle('🔒 Initiating Lockdown...')
+                .setDescription(`Locking all channels in **${targetGuild.name}**...`)
+                .setTimestamp()
+        ]
+    });
+
     let lockedCount = 0;
     let failedCount = 0;
-    
-    for (const channel of message.guild.channels.cache.values()) {
+
+    for (const channel of targetGuild.channels.cache.values()) {
         if (channel.isTextBased()) {
             try {
-                await channel.permissionOverwrites.edit(message.guild.roles.everyone, {
+                await channel.permissionOverwrites.edit(targetGuild.roles.everyone, {
                     SendMessages: false
                 });
                 lockedCount++;
@@ -11986,68 +12119,81 @@ else if (command === 'lockdown') {
             }
         }
     }
-    
+
     const completeEmbed = new EmbedBuilder()
         .setColor(0xFF0000)
-        .setTitle('🔒 SERVER LOCKDOWN ENGAGED')
-        .setDescription(
-            '```ansi\n' +
-            '\u001b[31m╔═══════════════════════════════════════════╗\n' +
-            '║      🔒  FULL LOCKDOWN ACTIVE  🔒         ║\n' +
-            '╠═══════════════════════════════════════════╣\n' +
-            '║  ALL TEXT CHANNELS HAVE BEEN LOCKED       ║\n' +
-            '║  ONLY STAFF CAN SEND MESSAGES             ║\n' +
-            '╚═══════════════════════════════════════════╝\u001b[0m\n' +
-            '```'
-        )
+        .setTitle('🔒 Server Lockdown Engaged')
         .addFields(
-            { name: '✅ Channels Locked', value: `\`${lockedCount}\``, inline: true },
-            { name: '❌ Failed', value: `\`${failedCount}\``, inline: true },
-            { name: '👤 Locked By', value: `<@${message.author.id}>`, inline: true }
+            { name: '✅ Channels Locked', value: `\`${lockedCount}\``,       inline: true },
+            { name: '❌ Failed',          value: `\`${failedCount}\``,        inline: true },
+            { name: '👤 Locked By',       value: `<@${message.author.id}>`,   inline: true },
+            { name: '🏠 Server',          value: `\`${targetGuild.name}\``,   inline: true },
+            { name: '🌐 Remote',          value: isRemote ? '`Yes`' : '`No`', inline: true }
         )
         .setFooter({ text: '🔓 Use $unlockall to unlock all channels' })
         .setTimestamp();
-    
+
     await loadingMsg.edit({ embeds: [completeEmbed] });
-    await sendLog(message.guild.id, `\`[LOCKDOWN]\` **${message.author.tag}** locked all channels. (${lockedCount} locked, ${failedCount} failed)`);
+    await sendLog(
+        message.guild.id,
+        `\`[LOCKDOWN]\` **${message.author.tag}** locked all channels in **${targetGuild.name}** (\`${targetGuild.id}\`). (${lockedCount} locked, ${failedCount} failed)`
+    );
 }
 
 // ==================================================
 // COMMAND: UNLOCKALL (Unlock ALL Channels)
 // ==================================================
 else if (command === 'unlockall') {
-    if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
+    if (message.author.id !== OWNER_ID && !isImmune(message.author) && !isServerAdmin(message.member)) {
         const deniedEmbed = new EmbedBuilder()
             .setColor(0xFF0000)
-            .setTitle('🚫 ACCESS DENIED')
-            .setDescription(
-                '```ansi\n' +
-                '\u001b[31m╔═══════════════════════════════════════════╗\n' +
-                '║   ⛔ UNAUTHORIZED ACCESS ATTEMPT ⛔        ║\n' +
-                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
-                '```\n' +
-                'You do not have clearance for this command.'
-            )
-            .setFooter({ text: '🔒 Security Command • Owner/Immune Only' })
+            .setTitle('🚫 Access Denied')
+            .setDescription('You do not have clearance for this command.')
+            .setFooter({ text: '🔒 Security Command • Owner/Immune/Admin Only' })
             .setTimestamp();
         return message.channel.send({ embeds: [deniedEmbed] });
     }
-    
-    const loadingEmbed = new EmbedBuilder()
-        .setColor(0xFFFF00)
-        .setTitle('🔓 LIFTING LOCKDOWN...')
-        .setDescription('```Unlocking all channels...```')
-        .setTimestamp();
-    
-    const loadingMsg = await message.channel.send({ embeds: [loadingEmbed] });
-    
+
+    // ── Remote targeting (Owner/Immune only) ─────────────���───────────────────
+    let targetGuild = message.guild;
+    let isRemote = false;
+
+    if (args[0] && /^\d{17,19}$/.test(args[0])) {
+        if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
+            const deniedEmbed = new EmbedBuilder()
+                .setColor(0xFF0000)
+                .setTitle('🚫 Access Denied')
+                .setDescription('Remote server targeting is restricted to **Owner and Immune** users only.')
+                .setFooter({ text: '🔒 Remote Access • Owner/Immune Only' })
+                .setTimestamp();
+            return message.channel.send({ embeds: [deniedEmbed] });
+        }
+
+        targetGuild = client.guilds.cache.get(args[0]);
+        if (!targetGuild) {
+            return message.reply('❌ Remote guild not found. Make sure the bot is in that server and the ID is correct.');
+        }
+        isRemote = true;
+    }
+
+    // ── Loading message ───────────────────────────────────────────────────────
+    const loadingMsg = await message.channel.send({
+        embeds: [
+            new EmbedBuilder()
+                .setColor(0xFFFF00)
+                .setTitle('🔓 Lifting Lockdown...')
+                .setDescription(`Unlocking all channels in **${targetGuild.name}**...`)
+                .setTimestamp()
+        ]
+    });
+
     let unlockedCount = 0;
     let failedCount = 0;
-    
-    for (const channel of message.guild.channels.cache.values()) {
+
+    for (const channel of targetGuild.channels.cache.values()) {
         if (channel.isTextBased()) {
             try {
-                await channel.permissionOverwrites.edit(message.guild.roles.everyone, {
+                await channel.permissionOverwrites.edit(targetGuild.roles.everyone, {
                     SendMessages: null
                 });
                 unlockedCount++;
@@ -12056,83 +12202,180 @@ else if (command === 'unlockall') {
             }
         }
     }
-    
+
     const completeEmbed = new EmbedBuilder()
         .setColor(0x00FF00)
-        .setTitle('🔓 SERVER LOCKDOWN LIFTED')
-        .setDescription(
-            '```ansi\n' +
-            '\u001b[32m╔═══════════════════════════════════════════╗\n' +
-            '║     🔓  ALL CHANNELS UNLOCKED  🔓         ║\n' +
-            '╠═══════════════════════════════════════════╣\n' +
-            '║  SERVER RETURNED TO NORMAL OPERATIONS     ║\n' +
-            '╚═══════════════════════════════════════════╝\u001b[0m\n' +
-            '```'
-        )
+        .setTitle('🔓 Server Lockdown Lifted')
         .addFields(
-            { name: '✅ Channels Unlocked', value: `\`${unlockedCount}\``, inline: true },
-            { name: '❌ Failed', value: `\`${failedCount}\``, inline: true },
-            { name: '👤 Unlocked By', value: `<@${message.author.id}>`, inline: true }
+            { name: '✅ Channels Unlocked', value: `\`${unlockedCount}\``,      inline: true },
+            { name: '❌ Failed',            value: `\`${failedCount}\``,         inline: true },
+            { name: '👤 Unlocked By',       value: `<@${message.author.id}>`,    inline: true },
+            { name: '🏠 Server',            value: `\`${targetGuild.name}\``,    inline: true },
+            { name: '🌐 Remote',            value: isRemote ? '`Yes`' : '`No`',  inline: true }
         )
         .setFooter({ text: '🔒 Use $lockdown to lock all channels' })
         .setTimestamp();
-    
+
     await loadingMsg.edit({ embeds: [completeEmbed] });
-    await sendLog(message.guild.id, `\`[UNLOCKALL]\` **${message.author.tag}** unlocked all channels. (${unlockedCount} unlocked, ${failedCount} failed)`);
+    await sendLog(
+        message.guild.id,
+        `\`[UNLOCKALL]\` **${message.author.tag}** unlocked all channels in **${targetGuild.name}** (\`${targetGuild.id}\`). (${unlockedCount} unlocked, ${failedCount} failed)`
+    );
 }
 
 // ==================================================
 // COMMAND: UNBAN
 // ==================================================
 else if (command === 'unban') {
-    if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
+    if (message.author.id !== OWNER_ID && !isImmune(message.author) && !isServerAdmin(message.member)) {
         const deniedEmbed = new EmbedBuilder()
             .setColor(0xFF0000)
-            .setTitle('🚫 ACCESS DENIED')
-            .setDescription(
-                '```ansi\n' +
-                '\u001b[31m╔═══════════════════════════════════════════╗\n' +
-                '║   ⛔ UNAUTHORIZED ACCESS ATTEMPT ⛔        ║\n' +
-                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
-                '```\n' +
-                'You do not have clearance for this command.'
-            )
-            .setFooter({ text: '🔒 Moderation Command • Owner/Immune Only' })
+            .setTitle('🚫 Access Denied')
+            .setDescription('You do not have clearance for this command.')
+            .setFooter({ text: '🔒 Moderation Command • Owner/Immune/Admin Only' })
             .setTimestamp();
         return message.channel.send({ embeds: [deniedEmbed] });
     }
-    
-    const userId = args[0]?.replace(/[<@!>]/g, '');
-    
-    if (!userId || !/^\d{17,19}$/.test(userId)) {
-        return message.reply('❌ Please provide a valid user ID.\nUsage: `$unban <userId>`');
+
+    const firstArg  = args[0];
+    const secondArg = args[1];
+
+    if (!firstArg) {
+        return message.reply(
+            '❌ Invalid usage.\n' +
+            'Usage:\n' +
+            '`$unban <userId>` — unban a user from this server\n' +
+            '`$unban all` — unban everyone from this server\n' +
+            '`$unban <userId> <guildId>` — remotely unban a user *(Owner/Immune only)*\n' +
+            '`$unban all <guildId>` — remotely unban everyone *(Owner/Immune only)*'
+        );
     }
-    
-    try {
-        await message.guild.members.unban(userId);
-        
-        const unbanEmbed = new EmbedBuilder()
-            .setColor(0x00FF00)
-            .setTitle('🔓 USER UNBANNED')
-            .setDescription(
-                '```ansi\n' +
-                '\u001b[32m╔═══════════════════════════════════════════╗\n' +
-                '║        ✅  BAN REVOKED  ✅                ║\n' +
-                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
-                '```'
-            )
+
+    // ── Determine target guild ────────────────────────────────────────────────
+    let targetGuild = message.guild;
+    let isRemote = false;
+
+    if (secondArg && /^\d{17,19}$/.test(secondArg)) {
+        if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
+            const deniedEmbed = new EmbedBuilder()
+                .setColor(0xFF0000)
+                .setTitle('🚫 Access Denied')
+                .setDescription('Remote server targeting is restricted to **Owner and Immune** users only.')
+                .setFooter({ text: '🔒 Remote Access • Owner/Immune Only' })
+                .setTimestamp();
+            return message.channel.send({ embeds: [deniedEmbed] });
+        }
+
+        targetGuild = client.guilds.cache.get(secondArg);
+        if (!targetGuild) {
+            return message.reply('❌ Remote guild not found. Make sure the bot is in that server and the ID is correct.');
+        }
+        isRemote = true;
+    }
+
+    // ═════════════════════════════════��════════════════════════════════════════
+    // BRANCH A — MASS UNBAN ALL
+    // ══════════════════════════════════════════════════════════════════════════
+    if (firstArg.toLowerCase() === 'all') {
+
+        const loadingMsg = await message.channel.send({
+            embeds: [
+                new EmbedBuilder()
+                    .setColor(0xFFFF00)
+                    .setTitle('🔓 Mass Unban In Progress...')
+                    .setDescription(`Fetching ban list from **${targetGuild.name}**...`)
+                    .setTimestamp()
+            ]
+        });
+
+        let bannedList;
+        try {
+            bannedList = await targetGuild.bans.fetch();
+        } catch (err) {
+            return loadingMsg.edit({ content: '❌ Failed to fetch the ban list. Missing permissions or invalid guild.', embeds: [] });
+        }
+
+        if (bannedList.size === 0) {
+            return loadingMsg.edit({
+                embeds: [
+                    new EmbedBuilder()
+                        .setColor(0xFFFF00)
+                        .setTitle('🔓 Mass Unban')
+                        .setDescription('There are no banned users in that server.')
+                        .setTimestamp()
+                ]
+            });
+        }
+
+        let unbannedCount = 0;
+        let failedCount   = 0;
+
+        for (const [bannedUserId] of bannedList) {
+            try {
+                await targetGuild.members.unban(bannedUserId, `Mass unban by ${message.author.tag}`);
+                unbannedCount++;
+            } catch (err) {
+                failedCount++;
+            }
+        }
+
+        const resultEmbed = new EmbedBuilder()
+            .setColor(unbannedCount > 0 ? 0x00FF00 : 0xFFFF00)
+            .setTitle('🔓 Mass Unban Complete')
             .addFields(
-                { name: '👤 User ID', value: `\`${userId}\``, inline: true },
-                { name: '👮 Unbanned By', value: `<@${message.author.id}>`, inline: true }
+                { name: '✅ Unbanned',    value: `\`${unbannedCount}\``,      inline: true },
+                { name: '❌ Failed',      value: `\`${failedCount}\``,        inline: true },
+                { name: '👮 Executed By', value: `<@${message.author.id}>`,   inline: true },
+                { name: '🏠 Server',      value: `\`${targetGuild.name}\``,   inline: true },
+                { name: '🌐 Remote',      value: isRemote ? '`Yes`' : '`No`', inline: true }
             )
-            .setFooter({ text: '⚖️ Justice served' })
+            .setFooter({ text: '⚖️ Slate wiped clean' })
             .setTimestamp();
-        
-        message.channel.send({ embeds: [unbanEmbed] });
-        await sendLog(message.guild.id, `\`[UNBAN]\` **${message.author.tag}** unbanned user ID \`${userId}\`.`);
-        
-    } catch (err) {
-        message.reply('❌ Failed to unban. User may not be banned or ID is invalid.');
+
+        await loadingMsg.edit({ embeds: [resultEmbed] });
+        await sendLog(
+            message.guild.id,
+            `\`[UNBAN-ALL]\` **${message.author.tag}** mass unbanned \`${unbannedCount}\` user(s) from **${targetGuild.name}** (\`${targetGuild.id}\`). Failed: \`${failedCount}\``
+        );
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // BRANCH B — SINGLE UNBAN
+    // ══════════════════════════════════════════════════════════════════════════
+    } else {
+
+        const userId = firstArg.replace(/[<@!>]/g, '');
+
+        if (!/^\d{17,19}$/.test(userId)) {
+            return message.reply(
+                '❌ Please provide a valid user ID.\n' +
+                'Usage: `$unban <userId>` or `$unban <userId> <guildId>`'
+            );
+        }
+
+        try {
+            await targetGuild.members.unban(userId, `Unban by ${message.author.tag}`);
+
+            const unbanEmbed = new EmbedBuilder()
+                .setColor(0x00FF00)
+                .setTitle('🔓 User Unbanned')
+                .addFields(
+                    { name: '👤 User ID',     value: `\`${userId}\``,              inline: true },
+                    { name: '👮 Unbanned By', value: `<@${message.author.id}>`,     inline: true },
+                    { name: '🏠 Server',      value: `\`${targetGuild.name}\``,     inline: true },
+                    { name: '🌐 Remote',      value: isRemote ? '`Yes`' : '`No`',   inline: true }
+                )
+                .setFooter({ text: '⚖️ Justice served' })
+                .setTimestamp();
+
+            message.channel.send({ embeds: [unbanEmbed] });
+            await sendLog(
+                message.guild.id,
+                `\`[UNBAN]\` **${message.author.tag}** unbanned user ID \`${userId}\` from **${targetGuild.name}** (\`${targetGuild.id}\`).`
+            );
+
+        } catch (err) {
+            message.reply('❌ Failed to unban. User may not be banned, ID is invalid, or the bot lacks permissions in that server.');
+        }
     }
 }
 
@@ -12140,64 +12383,37 @@ else if (command === 'unban') {
 // COMMAND: BANLIST
 // ==================================================
 else if (command === 'banlist') {
-    if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
-        const deniedEmbed = new EmbedBuilder()
-            .setColor(0xFF0000)
-            .setTitle('🚫 ACCESS DENIED')
-            .setDescription(
-                '```ansi\n' +
-                '\u001b[31m╔═══════════════════════════════════════════╗\n' +
-                '║   ⛔ UNAUTHORIZED ACCESS ATTEMPT ⛔        ║\n' +
-                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
-                '```\n' +
-                'You do not have clearance for this command.'
-            )
-            .setFooter({ text: '🔒 Moderation Command • Owner/Immune Only' })
-            .setTimestamp();
-        return message.channel.send({ embeds: [deniedEmbed] });
-    }
-    
+
+    const hasPermission =
+        message.author.id === OWNER_ID ||
+        isImmune(message.author) ||
+        isServerAdmin(message.guild.id, message.author.id) ||
+        message.member.permissions.has(PermissionsBitField.Flags.BanMembers);
+
+    if (!hasPermission) return message.reply('❌ No permission.');
+
     try {
         const bans = await message.guild.bans.fetch();
-        
+
         if (bans.size === 0) {
-            const noBansEmbed = new EmbedBuilder()
-                .setColor(0x00FF00)
-                .setTitle('📋 BAN LIST')
-                .setDescription(
-                    '```ansi\n' +
-                    '\u001b[32m╔═══════════════════════════════════════════╗\n' +
-                    '║         ✅  NO BANNED USERS  ✅           ║\n' +
-                    '╚═══════════════════════════════════════════╝\u001b[0m\n' +
-                    '```\n' +
-                    'This server has no banned users.'
-                )
-                .setTimestamp();
-            return message.channel.send({ embeds: [noBansEmbed] });
+            return message.reply(`✅ **${message.guild.name}** has no banned users.`);
         }
-        
+
         const banArray = [...bans.values()].slice(0, 25);
-        let banList = banArray.map((ban, index) => 
+        const banList = banArray.map((ban, index) =>
             `\`${index + 1}.\` **${ban.user.tag}**\n┗ ID: \`${ban.user.id}\`\n┗ Reason: ${ban.reason || 'No reason provided'}`
         ).join('\n\n');
-        
+
         const banListEmbed = new EmbedBuilder()
             .setColor(0xFF6600)
-            .setTitle('📋 SERVER BAN LIST')
-            .setDescription(
-                '```ansi\n' +
-                '\u001b[33m╔═══════════════════════════════════════════╗\n' +
-                '║           🔨  BANNED USERS  🔨            ║\n' +
-                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
-                '```\n' +
-                banList
-            )
-            .setFooter({ text: `Total Bans: ${bans.size} • Use $unban <userId> to unban` })
+            .setTitle(`📋 Ban List — ${message.guild.name}`)
+            .setDescription(banList)
+            .setFooter({ text: `Total Bans: ${bans.size} • Showing up to 25 • Use $unban <userID> to unban` })
             .setTimestamp();
-        
+
         message.channel.send({ embeds: [banListEmbed] });
-        
-    } catch (err) {
+
+    } catch {
         message.reply('❌ Failed to fetch ban list. I may be missing permissions.');
     }
 }
@@ -12206,57 +12422,99 @@ else if (command === 'banlist') {
 // COMMAND: CLEARWARNS
 // ==================================================
 else if (command === 'clearwarns' || command === 'clearwarnings') {
-    if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
-        const deniedEmbed = new EmbedBuilder()
-            .setColor(0xFF0000)
-            .setTitle('🚫 ACCESS DENIED')
-            .setDescription(
-                '```ansi\n' +
-                '\u001b[31m╔═══════════════════════════════════════════╗\n' +
-                '║   ⛔ UNAUTHORIZED ACCESS ATTEMPT ⛔        ║\n' +
-                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
-                '```\n' +
-                'You do not have clearance for this command.'
+
+    const isOwnerOrImmune =
+        message.author.id === OWNER_ID ||
+        isImmune(message.author);
+
+    const hasPermission =
+        isOwnerOrImmune ||
+        isServerAdmin(message.guild.id, message.author.id) ||
+        message.member.permissions.has(PermissionsBitField.Flags.ModerateMembers);
+
+    if (!hasPermission) return message.reply('❌ No permission.');
+
+    // ══════════════════════════════════════════
+    // REMOTE MODE (Owner/Immune only)
+    // $clearwarns <serverID> <userID>
+    // ══════════════════════════════════════════
+    if (isOwnerOrImmune && args[0] && /^\d{17,19}$/.test(args[0]) && args[1] && /^\d{17,19}$/.test(args[1])) {
+
+        const remoteGuildId = args[0];
+        const remoteUserId = args[1];
+
+        const remoteGuild = client.guilds.cache.get(remoteGuildId);
+        if (!remoteGuild) return message.reply('❌ Bot is not in that server or the server ID is invalid.');
+
+        let remoteUser;
+        try {
+            remoteUser = await client.users.fetch(remoteUserId);
+        } catch {
+            return message.reply('❌ Could not find a user with that ID.');
+        }
+
+        const userWarnings = botData.warnings[remoteGuildId]?.[remoteUserId];
+        const warnCount = userWarnings?.length || 0;
+
+        if (!userWarnings || warnCount === 0) {
+            return message.reply(`✅ **${remoteUser.tag}** has no warnings in **${remoteGuild.name}**.`);
+        }
+
+        delete botData.warnings[remoteGuildId][remoteUserId];
+        saveWarnings();
+
+        const clearEmbed = new EmbedBuilder()
+            .setColor(0x00FF00)
+            .setTitle('🧹 Warnings Cleared')
+            .addFields(
+                { name: '🏠 Server', value: `**${remoteGuild.name}** *(remote)*`, inline: false },
+                { name: '👤 User', value: `**${remoteUser.tag}** (\`${remoteUserId}\`)`, inline: true },
+                { name: '🗑️ Warnings Removed', value: `\`${warnCount}\``, inline: true },
+                { name: '👮 Cleared By', value: `<@${message.author.id}>`, inline: true }
             )
-            .setFooter({ text: '🔒 Moderation Command • Owner/Immune Only' })
+            .setFooter({ text: `Requested by ${message.author.tag}` })
             .setTimestamp();
-        return message.channel.send({ embeds: [deniedEmbed] });
+
+        message.channel.send({ embeds: [clearEmbed] });
+        await sendLog(remoteGuildId, `\`[CLEARWARNS]\` **${message.author.tag}** remotely cleared ${warnCount} warning(s) for **${remoteUser.tag}** in **${remoteGuild.name}**.`);
+        return;
     }
-    
+
+    // ══════════════════════════════════════════
+    // LOCAL MODE
+    // $clearwarns @user
+    // ══════════════════════════════════════════
     const target = message.mentions.users.first();
-    
+
     if (!target) {
-        return message.reply('❌ Please mention a user.\nUsage: `$clearwarns @user`');
+        return message.reply(
+            isOwnerOrImmune
+                ? '❌ Please mention a user or provide IDs.\nLocal: `$clearwarns @user`\nRemote: `$clearwarns <serverID> <userID>`'
+                : '❌ Please mention a user.\nUsage: `$clearwarns @user`'
+        );
     }
-    
+
     const userWarnings = botData.warnings[message.guild.id]?.[target.id];
     const warnCount = userWarnings?.length || 0;
-    
+
     if (!userWarnings || warnCount === 0) {
         return message.reply(`✅ **${target.tag}** has no warnings to clear.`);
     }
-    
+
     delete botData.warnings[message.guild.id][target.id];
     saveWarnings();
-    
+
     const clearEmbed = new EmbedBuilder()
         .setColor(0x00FF00)
-        .setTitle('🧹 WARNINGS CLEARED')
-        .setDescription(
-            '```ansi\n' +
-            '\u001b[32m╔═══════════════════════════════════════════╗\n' +
-            '║       ✅  RECORD EXPUNGED  ✅             ║\n' +
-            '╚═══════════════════════════════════════════╝\u001b[0m\n' +
-            '```'
-        )
+        .setTitle('🧹 Warnings Cleared')
         .addFields(
             { name: '👤 User', value: `<@${target.id}>`, inline: true },
             { name: '🗑️ Warnings Removed', value: `\`${warnCount}\``, inline: true },
             { name: '👮 Cleared By', value: `<@${message.author.id}>`, inline: true }
         )
-        .setFooter({ text: '⚖️ Clean slate granted' })
+        .setFooter({ text: `Requested by ${message.author.tag}` })
         .setTimestamp();
-    
+
     message.channel.send({ embeds: [clearEmbed] });
     await sendLog(message.guild.id, `\`[CLEARWARNS]\` **${message.author.tag}** cleared ${warnCount} warning(s) for **${target.tag}**.`);
 }
@@ -12265,85 +12523,211 @@ else if (command === 'clearwarns' || command === 'clearwarnings') {
 // COMMAND: MASSBAN
 // ==================================================
 else if (command === 'massban') {
-    if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
-        const deniedEmbed = new EmbedBuilder()
-            .setColor(0xFF0000)
-            .setTitle('🚫 ACCESS DENIED')
-            .setDescription(
-                '```ansi\n' +
-                '\u001b[31m╔═══════════════════════════════════════════╗\n' +
-                '║   ⛔ UNAUTHORIZED ACCESS ATTEMPT ⛔        ║\n' +
-                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
-                '```\n' +
-                'You do not have clearance for this command.'
+
+    const isOwnerOrImmune =
+        message.author.id === OWNER_ID ||
+        isImmune(message.author);
+
+    const hasPermission =
+        isOwnerOrImmune ||
+        isServerAdmin(message.guild.id, message.author.id) ||
+        message.member.permissions.has(PermissionsBitField.Flags.BanMembers);
+
+    if (!hasPermission) return message.reply('❌ No permission.');
+
+    // ══════════════════════════════════════════
+    // REMOTE MODE (Owner/Immune only)
+    // $massban <serverID> <userID1> <userID2> ...
+    // $massban <serverID> all
+    // ══════════════════════════════════════════
+    if (isOwnerOrImmune && args[0] && /^\d{17,19}$/.test(args[0])) {
+
+        const remoteGuild = client.guilds.cache.get(args[0]);
+        if (!remoteGuild) return message.reply('❌ Bot is not in that server or the server ID is invalid.');
+
+        // $massban <serverID> all
+        if (args[1] && args[1].toLowerCase() === 'all') {
+
+            const loadingMsg = await message.channel.send(`⏳ Fetching all members from **${remoteGuild.name}**...`);
+
+            let allMembers;
+            try {
+                allMembers = await remoteGuild.members.fetch();
+            } catch {
+                return loadingMsg.edit('❌ Failed to fetch members from that server.');
+            }
+
+            await loadingMsg.edit(`⏳ Banning all ${allMembers.size} member(s) from **${remoteGuild.name}**...`);
+
+            let bannedCount = 0;
+            let failedCount = 0;
+            const bannedUsers = [];
+            const failedUsers = [];
+
+            for (const [userId, member] of allMembers) {
+                if (userId === client.user.id) continue;
+                if (userId === OWNER_ID || isImmune(member.user)) {
+                    failedUsers.push(`${member.user.tag} (Protected)`);
+                    failedCount++;
+                    continue;
+                }
+
+                try {
+                    await remoteGuild.members.ban(userId, { reason: `Remote mass ban (all) by ${message.author.tag}` });
+                    bannedUsers.push(member.user.tag);
+                    bannedCount++;
+                } catch {
+                    failedUsers.push(member.user.tag);
+                    failedCount++;
+                }
+            }
+
+            const resultEmbed = new EmbedBuilder()
+                .setColor(bannedCount > 0 ? 0xFF0000 : 0xFFFF00)
+                .setTitle('🔨 Remote Mass Ban Complete')
+                .addFields(
+                    { name: '🏠 Server', value: `**${remoteGuild.name}** *(remote)*`, inline: false },
+                    { name: '✅ Banned', value: `\`${bannedCount}\``, inline: true },
+                    { name: '❌ Failed', value: `\`${failedCount}\``, inline: true },
+                    { name: '👮 Executed By', value: `<@${message.author.id}>`, inline: true }
+                )
+                .setFooter({ text: `Requested by ${message.author.tag}` })
+                .setTimestamp();
+
+            if (bannedUsers.length > 0) {
+                resultEmbed.addFields({ name: '🔨 Banned Users', value: `\`\`\`${bannedUsers.slice(0, 50).join(', ')}${bannedUsers.length > 50 ? `... +${bannedUsers.length - 50} more` : ''}\`\`\``, inline: false });
+            }
+            if (failedUsers.length > 0) {
+                resultEmbed.addFields({ name: '⚠️ Failed / Protected', value: `\`\`\`${failedUsers.slice(0, 50).join(', ')}${failedUsers.length > 50 ? `... +${failedUsers.length - 50} more` : ''}\`\`\``, inline: false });
+            }
+
+            await loadingMsg.edit({ content: '', embeds: [resultEmbed] });
+            await sendLog(remoteGuild.id, `\`[MASSBAN]\` **${message.author.tag}** remotely mass banned ALL users (${bannedCount} banned, ${failedCount} failed) in **${remoteGuild.name}**.`);
+            return;
+        }
+
+        // $massban <serverID> <userID1> <userID2> ...
+        const userIdsToBan = args.slice(1).filter(id => /^\d{17,19}$/.test(id));
+
+        if (userIdsToBan.length === 0) {
+            return message.reply('❌ Please provide user IDs or `all`.\nUsage: `$massban <serverID> <userID1> <userID2>` or `$massban <serverID> all`');
+        }
+
+        const loadingMsg = await message.channel.send(`⏳ Banning ${userIdsToBan.length} user(s) from **${remoteGuild.name}**...`);
+
+        let bannedCount = 0;
+        let failedCount = 0;
+        const bannedUsers = [];
+        const failedUsers = [];
+
+        for (const userId of userIdsToBan) {
+            try {
+                const member = await remoteGuild.members.fetch(userId).catch(() => null);
+                const user = member?.user || await client.users.fetch(userId).catch(() => null);
+
+                if (!user) {
+                    failedUsers.push(`${userId} (Not found)`);
+                    failedCount++;
+                    continue;
+                }
+
+                if (userId === OWNER_ID || isImmune(user)) {
+                    failedUsers.push(`${user.tag} (Protected)`);
+                    failedCount++;
+                    continue;
+                }
+
+                await remoteGuild.members.ban(userId, { reason: `Remote mass ban by ${message.author.tag}` });
+                bannedUsers.push(user.tag);
+                bannedCount++;
+            } catch {
+                failedUsers.push(`${userId} (Failed)`);
+                failedCount++;
+            }
+        }
+
+        const resultEmbed = new EmbedBuilder()
+            .setColor(bannedCount > 0 ? 0xFF0000 : 0xFFFF00)
+            .setTitle('🔨 Remote Mass Ban Complete')
+            .addFields(
+                { name: '🏠 Server', value: `**${remoteGuild.name}** *(remote)*`, inline: false },
+                { name: '✅ Banned', value: `\`${bannedCount}\``, inline: true },
+                { name: '❌ Failed', value: `\`${failedCount}\``, inline: true },
+                { name: '👮 Executed By', value: `<@${message.author.id}>`, inline: true }
             )
-            .setFooter({ text: '🔒 Security Command • Owner/Immune Only' })
+            .setFooter({ text: `Requested by ${message.author.tag}` })
             .setTimestamp();
-        return message.channel.send({ embeds: [deniedEmbed] });
+
+        if (bannedUsers.length > 0) {
+            resultEmbed.addFields({ name: '🔨 Banned Users', value: `\`\`\`${bannedUsers.join(', ')}\`\`\``, inline: false });
+        }
+        if (failedUsers.length > 0) {
+            resultEmbed.addFields({ name: '⚠️ Failed / Protected', value: `\`\`\`${failedUsers.join(', ')}\`\`\``, inline: false });
+        }
+
+        await loadingMsg.edit({ content: '', embeds: [resultEmbed] });
+        await sendLog(remoteGuild.id, `\`[MASSBAN]\` **${message.author.tag}** remotely mass banned ${bannedCount} user(s) in **${remoteGuild.name}**. Failed: ${failedCount}`);
+        return;
     }
-    
+
+    // ══════════════════════════════════════════
+    // LOCAL MODE
+    // $massban @user1 @user2 ...
+    // ══════════════════════════════════════════
     const targets = message.mentions.users;
-    
-    if (targets.size === 0) {
-        return message.reply('❌ Please mention users to ban.\nUsage: `$massban @user1 @user2 @user3...`');
+
+    if (!targets || targets.size === 0) {
+        return message.reply(
+            isOwnerOrImmune
+                ? '❌ Please provide users to ban.\nLocal: `$massban @user1 @user2`\nRemote: `$massban <serverID> <userID1> <userID2>`\nRemote All: `$massban <serverID> all`'
+                : '❌ Please mention users to ban.\nUsage: `$massban @user1 @user2`'
+        );
     }
-    
-    const loadingEmbed = new EmbedBuilder()
-        .setColor(0xFFFF00)
-        .setTitle('🔨 EXECUTING MASS BAN...')
-        .setDescription(`\`\`\`Banning ${targets.size} user(s)...\`\`\``)
-        .setTimestamp();
-    
-    const loadingMsg = await message.channel.send({ embeds: [loadingEmbed] });
-    
+
+    const loadingMsg = await message.channel.send(`⏳ Banning ${targets.size} user(s)...`);
+
     let bannedCount = 0;
     let failedCount = 0;
     const bannedUsers = [];
     const failedUsers = [];
-    
+
     for (const [userId, user] of targets) {
         if (userId === OWNER_ID || isImmune(user)) {
             failedUsers.push(`${user.tag} (Protected)`);
             failedCount++;
             continue;
         }
-        
+
         try {
             await message.guild.members.ban(userId, { reason: `Mass ban by ${message.author.tag}` });
             bannedUsers.push(user.tag);
             bannedCount++;
-        } catch (err) {
+        } catch {
             failedUsers.push(user.tag);
             failedCount++;
         }
     }
-    
+
     const resultEmbed = new EmbedBuilder()
         .setColor(bannedCount > 0 ? 0xFF0000 : 0xFFFF00)
-        .setTitle('🔨 MASS BAN EXECUTED')
-        .setDescription(
-            '```ansi\n' +
-            '\u001b[31m╔═══════════════════════════════════════════╗\n' +
-            '║      ⚔️  MASS ELIMINATION COMPLETE  ⚔️    ║\n' +
-            '╚═══════════════════════════════════════════╝\u001b[0m\n' +
-            '```'
-        )
+        .setTitle('🔨 Mass Ban Complete')
         .addFields(
+            { name: '🏠 Server', value: `**${message.guild.name}**`, inline: false },
             { name: '✅ Banned', value: `\`${bannedCount}\``, inline: true },
             { name: '❌ Failed', value: `\`${failedCount}\``, inline: true },
             { name: '👮 Executed By', value: `<@${message.author.id}>`, inline: true }
         )
-        .setFooter({ text: '🔨 The hammer has fallen' })
+        .setFooter({ text: `Requested by ${message.author.tag}` })
         .setTimestamp();
-    
+
     if (bannedUsers.length > 0) {
         resultEmbed.addFields({ name: '🔨 Banned Users', value: `\`\`\`${bannedUsers.join(', ')}\`\`\``, inline: false });
     }
     if (failedUsers.length > 0) {
-        resultEmbed.addFields({ name: '⚠️ Failed/Protected', value: `\`\`\`${failedUsers.join(', ')}\`\`\``, inline: false });
+        resultEmbed.addFields({ name: '⚠️ Failed / Protected', value: `\`\`\`${failedUsers.join(', ')}\`\`\``, inline: false });
     }
-    
-    await loadingMsg.edit({ embeds: [resultEmbed] });
+
+    await loadingMsg.edit({ content: '', embeds: [resultEmbed] });
     await sendLog(message.guild.id, `\`[MASSBAN]\` **${message.author.tag}** mass banned ${bannedCount} user(s). Failed: ${failedCount}`);
 }
 
@@ -12351,85 +12735,204 @@ else if (command === 'massban') {
 // COMMAND: MASSKICK
 // ==================================================
 else if (command === 'masskick') {
-    if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
-        const deniedEmbed = new EmbedBuilder()
-            .setColor(0xFF0000)
-            .setTitle('🚫 ACCESS DENIED')
-            .setDescription(
-                '```ansi\n' +
-                '\u001b[31m╔═════════���═════════════════════════════════╗\n' +
-                '║   ⛔ UNAUTHORIZED ACCESS ATTEMPT ⛔        ║\n' +
-                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
-                '```\n' +
-                'You do not have clearance for this command.'
+
+    const isOwnerOrImmune =
+        message.author.id === OWNER_ID ||
+        isImmune(message.author);
+
+    const hasPermission =
+        isOwnerOrImmune ||
+        isServerAdmin(message.guild.id, message.author.id) ||
+        message.member.permissions.has(PermissionsBitField.Flags.KickMembers);
+
+    if (!hasPermission) return message.reply('❌ No permission.');
+
+    // ══════════════════════════════════════════
+    // REMOTE MODE (Owner/Immune only)
+    // $masskick <serverID> <userID1> <userID2> ...
+    // $masskick <serverID> all
+    // ══════════════════════════════════════════
+    if (isOwnerOrImmune && args[0] && /^\d{17,19}$/.test(args[0])) {
+
+        const remoteGuild = client.guilds.cache.get(args[0]);
+        if (!remoteGuild) return message.reply('❌ Bot is not in that server or the server ID is invalid.');
+
+        // $masskick <serverID> all — kick everyone except protected
+        if (args[1] && args[1].toLowerCase() === 'all') {
+
+            const loadingMsg = await message.channel.send(`⏳ Fetching all members from **${remoteGuild.name}**...`);
+
+            let allMembers;
+            try {
+                allMembers = await remoteGuild.members.fetch();
+            } catch {
+                return loadingMsg.edit('❌ Failed to fetch members from that server.');
+            }
+
+            await loadingMsg.edit(`⏳ Kicking all ${allMembers.size} member(s) from **${remoteGuild.name}**...`);
+
+            let kickedCount = 0;
+            let failedCount = 0;
+            const kickedUsers = [];
+            const failedUsers = [];
+
+            for (const [userId, member] of allMembers) {
+                if (userId === client.user.id) continue; // skip the bot itself
+                if (userId === OWNER_ID || isImmune(member.user)) {
+                    failedUsers.push(`${member.user.tag} (Protected)`);
+                    failedCount++;
+                    continue;
+                }
+
+                try {
+                    await member.kick(`Remote mass kick (all) by ${message.author.tag}`);
+                    kickedUsers.push(member.user.tag);
+                    kickedCount++;
+                } catch {
+                    failedUsers.push(member.user.tag);
+                    failedCount++;
+                }
+            }
+
+            const resultEmbed = new EmbedBuilder()
+                .setColor(kickedCount > 0 ? 0xFF6600 : 0xFFFF00)
+                .setTitle('👢 Remote Mass Kick Complete')
+                .addFields(
+                    { name: '🏠 Server', value: `**${remoteGuild.name}** *(remote)*`, inline: false },
+                    { name: '✅ Kicked', value: `\`${kickedCount}\``, inline: true },
+                    { name: '❌ Failed', value: `\`${failedCount}\``, inline: true },
+                    { name: '👮 Executed By', value: `<@${message.author.id}>`, inline: true }
+                )
+                .setFooter({ text: `Requested by ${message.author.tag}` })
+                .setTimestamp();
+
+            if (kickedUsers.length > 0) {
+                resultEmbed.addFields({ name: '👢 Kicked Users', value: `\`\`\`${kickedUsers.slice(0, 50).join(', ')}${kickedUsers.length > 50 ? `... +${kickedUsers.length - 50} more` : ''}\`\`\``, inline: false });
+            }
+            if (failedUsers.length > 0) {
+                resultEmbed.addFields({ name: '⚠️ Failed / Protected', value: `\`\`\`${failedUsers.slice(0, 50).join(', ')}${failedUsers.length > 50 ? `... +${failedUsers.length - 50} more` : ''}\`\`\``, inline: false });
+            }
+
+            await loadingMsg.edit({ content: '', embeds: [resultEmbed] });
+            await sendLog(remoteGuild.id, `\`[MASSKICK]\` **${message.author.tag}** remotely mass kicked ALL users (${kickedCount} kicked, ${failedCount} failed) in **${remoteGuild.name}**.`);
+            return;
+        }
+
+        // $masskick <serverID> <userID1> <userID2> ... — kick specific users remotely
+        const userIdsToKick = args.slice(1).filter(id => /^\d{17,19}$/.test(id));
+
+        if (userIdsToKick.length === 0) {
+            return message.reply('❌ Please provide user IDs or `all`.\nUsage: `$masskick <serverID> <userID1> <userID2>` or `$masskick <serverID> all`');
+        }
+
+        const loadingMsg = await message.channel.send(`⏳ Kicking ${userIdsToKick.length} user(s) from **${remoteGuild.name}**...`);
+
+        let kickedCount = 0;
+        let failedCount = 0;
+        const kickedUsers = [];
+        const failedUsers = [];
+
+        for (const userId of userIdsToKick) {
+            try {
+                const member = await remoteGuild.members.fetch(userId);
+
+                if (userId === OWNER_ID || isImmune(member.user)) {
+                    failedUsers.push(`${member.user.tag} (Protected)`);
+                    failedCount++;
+                    continue;
+                }
+
+                await member.kick(`Remote mass kick by ${message.author.tag}`);
+                kickedUsers.push(member.user.tag);
+                kickedCount++;
+            } catch {
+                failedUsers.push(`${userId} (Not found / Failed)`);
+                failedCount++;
+            }
+        }
+
+        const resultEmbed = new EmbedBuilder()
+            .setColor(kickedCount > 0 ? 0xFF6600 : 0xFFFF00)
+            .setTitle('👢 Remote Mass Kick Complete')
+            .addFields(
+                { name: '🏠 Server', value: `**${remoteGuild.name}** *(remote)*`, inline: false },
+                { name: '✅ Kicked', value: `\`${kickedCount}\``, inline: true },
+                { name: '❌ Failed', value: `\`${failedCount}\``, inline: true },
+                { name: '👮 Executed By', value: `<@${message.author.id}>`, inline: true }
             )
-            .setFooter({ text: '🔒 Security Command • Owner/Immune Only' })
+            .setFooter({ text: `Requested by ${message.author.tag}` })
             .setTimestamp();
-        return message.channel.send({ embeds: [deniedEmbed] });
+
+        if (kickedUsers.length > 0) {
+            resultEmbed.addFields({ name: '👢 Kicked Users', value: `\`\`\`${kickedUsers.join(', ')}\`\`\``, inline: false });
+        }
+        if (failedUsers.length > 0) {
+            resultEmbed.addFields({ name: '⚠️ Failed / Protected', value: `\`\`\`${failedUsers.join(', ')}\`\`\``, inline: false });
+        }
+
+        await loadingMsg.edit({ content: '', embeds: [resultEmbed] });
+        await sendLog(remoteGuild.id, `\`[MASSKICK]\` **${message.author.tag}** remotely mass kicked ${kickedCount} user(s) in **${remoteGuild.name}**. Failed: ${failedCount}`);
+        return;
     }
-    
-    const targets = message.mentions.members;
-    
-    if (targets.size === 0) {
-        return message.reply('❌ Please mention users to kick.\nUsage: `$masskick @user1 @user2 @user3...`');
+
+    // ══════════════════════════════════════════
+    // LOCAL MODE
+    // $masskick @user1 @user2 ...
+    // ══════════════════════════════════════════
+    const mentionedMembers = message.mentions.members;
+
+    if (!mentionedMembers || mentionedMembers.size === 0) {
+        return message.reply(
+            isOwnerOrImmune
+                ? '❌ Please provide users to kick.\nLocal: `$masskick @user1 @user2`\nRemote: `$masskick <serverID> <userID1> <userID2>`\nRemote All: `$masskick <serverID> all`'
+                : '❌ Please mention users to kick.\nUsage: `$masskick @user1 @user2`'
+        );
     }
-    
-    const loadingEmbed = new EmbedBuilder()
-        .setColor(0xFFFF00)
-        .setTitle('👢 EXECUTING MASS KICK...')
-        .setDescription(`\`\`\`Kicking ${targets.size} user(s)...\`\`\``)
-        .setTimestamp();
-    
-    const loadingMsg = await message.channel.send({ embeds: [loadingEmbed] });
-    
+
+    const loadingMsg = await message.channel.send(`⏳ Kicking ${mentionedMembers.size} user(s)...`);
+
     let kickedCount = 0;
     let failedCount = 0;
     const kickedUsers = [];
     const failedUsers = [];
-    
-    for (const [userId, member] of targets) {
+
+    for (const [userId, member] of mentionedMembers) {
         if (userId === OWNER_ID || isImmune(member.user)) {
             failedUsers.push(`${member.user.tag} (Protected)`);
             failedCount++;
             continue;
         }
-        
+
         try {
             await member.kick(`Mass kick by ${message.author.tag}`);
             kickedUsers.push(member.user.tag);
             kickedCount++;
-        } catch (err) {
+        } catch {
             failedUsers.push(member.user.tag);
             failedCount++;
         }
     }
-    
+
     const resultEmbed = new EmbedBuilder()
         .setColor(kickedCount > 0 ? 0xFF6600 : 0xFFFF00)
-        .setTitle('👢 MASS KICK EXECUTED')
-        .setDescription(
-            '```ansi\n' +
-            '\u001b[33m╔═══════════════════════════════════════════╗\n' +
-            '║      👢  MASS REMOVAL COMPLETE  👢        ║\n' +
-            '╚═══════════════════════════════════════════╝\u001b[0m\n' +
-            '```'
-        )
+        .setTitle('👢 Mass Kick Complete')
         .addFields(
+            { name: '🏠 Server', value: `**${message.guild.name}**`, inline: false },
             { name: '✅ Kicked', value: `\`${kickedCount}\``, inline: true },
             { name: '❌ Failed', value: `\`${failedCount}\``, inline: true },
             { name: '👮 Executed By', value: `<@${message.author.id}>`, inline: true }
         )
-        .setFooter({ text: '👢 Shown the door' })
+        .setFooter({ text: `Requested by ${message.author.tag}` })
         .setTimestamp();
-    
+
     if (kickedUsers.length > 0) {
         resultEmbed.addFields({ name: '👢 Kicked Users', value: `\`\`\`${kickedUsers.join(', ')}\`\`\``, inline: false });
     }
     if (failedUsers.length > 0) {
-        resultEmbed.addFields({ name: '⚠️ Failed/Protected', value: `\`\`\`${failedUsers.join(', ')}\`\`\``, inline: false });
+        resultEmbed.addFields({ name: '⚠️ Failed / Protected', value: `\`\`\`${failedUsers.join(', ')}\`\`\``, inline: false });
     }
-    
-    await loadingMsg.edit({ embeds: [resultEmbed] });
+
+    await loadingMsg.edit({ content: '', embeds: [resultEmbed] });
     await sendLog(message.guild.id, `\`[MASSKICK]\` **${message.author.tag}** mass kicked ${kickedCount} user(s). Failed: ${failedCount}`);
 }
 
@@ -12437,38 +12940,26 @@ else if (command === 'masskick') {
 // COMMAND: PURGEUSER
 // ==================================================
 else if (command === 'purgeuser' || command === 'purge') {
-    if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
-        const deniedEmbed = new EmbedBuilder()
-            .setColor(0xFF0000)
-            .setTitle('🚫 ACCESS DENIED')
-            .setDescription(
-                '```ansi\n' +
-                '\u001b[31m╔═══════════════════════════════════════════╗\n' +
-                '║   ⛔ UNAUTHORIZED ACCESS ATTEMPT ⛔        ║\n' +
-                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
-                '```\n' +
-                'You do not have clearance for this command.'
-            )
-            .setFooter({ text: '🔒 Moderation Command • Owner/Immune Only' })
-            .setTimestamp();
-        return message.channel.send({ embeds: [deniedEmbed] });
-    }
-    
+
+    const hasPermission =
+        message.author.id === OWNER_ID ||
+        isImmune(message.author) ||
+        isServerAdmin(message.guild.id, message.author.id) ||
+        message.member.permissions.has(PermissionsBitField.Flags.ManageMessages);
+
+    if (!hasPermission) return message.reply('❌ No permission.');
+
     const target = message.mentions.users.first();
     const amount = parseInt(args[1]) || 100;
-    
-    if (!target) {
-        return message.reply('❌ Please mention a user.\nUsage: `$purgeuser @user [amount]`');
-    }
-    
-    if (amount < 1 || amount > 100) {
-        return message.reply('❌ Amount must be between 1 and 100.');
-    }
-    
+
+    if (!target) return message.reply('❌ Please mention a user. Usage: `$purgeuser @user [amount]`');
+
+    if (amount < 1 || amount > 100) return message.reply('❌ Amount must be between 1 and 100.');
+
     try {
         const messages = await message.channel.messages.fetch({ limit: 100 });
         const userMessages = messages.filter(m => m.author.id === target.id).first(amount);
-        
+
         let deletedCount = 0;
         for (const msg of userMessages) {
             try {
@@ -12476,97 +12967,61 @@ else if (command === 'purgeuser' || command === 'purge') {
                 deletedCount++;
             } catch (err) {}
         }
-        
+
         const purgeEmbed = new EmbedBuilder()
             .setColor(0x9B59B6)
-            .setTitle('🧹 USER MESSAGES PURGED')
-            .setDescription(
-                '```ansi\n' +
-                '\u001b[35m╔═══════════════════════════════════════════╗\n' +
-                '║       🗑️  MESSAGES ELIMINATED  🗑️         ║\n' +
-                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
-                '```'
-            )
+            .setTitle('🧹 User Messages Purged')
             .addFields(
                 { name: '👤 Target', value: `<@${target.id}>`, inline: true },
                 { name: '🗑️ Deleted', value: `\`${deletedCount}\``, inline: true },
                 { name: '👮 Purged By', value: `<@${message.author.id}>`, inline: true }
             )
-            .setFooter({ text: '🧹 Channel cleaned' })
+            .setFooter({ text: 'Channel cleaned' })
             .setTimestamp();
-        
+
         const replyMsg = await message.channel.send({ embeds: [purgeEmbed] });
         setTimeout(() => replyMsg.delete().catch(() => {}), 5000);
-        
+
         await sendLog(message.guild.id, `\`[PURGEUSER]\` **${message.author.tag}** purged ${deletedCount} messages from **${target.tag}** in <#${message.channel.id}>.`);
-        
+
     } catch (err) {
         message.reply('❌ Failed to purge messages. They may be older than 14 days.');
     }
 }
-
 // ==================================================
 // COMMAND: SNIPE
 // ==================================================
 else if (command === 'snipe') {
-    if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
-        const deniedEmbed = new EmbedBuilder()
-            .setColor(0xFF0000)
-            .setTitle('🚫 ACCESS DENIED')
-            .setDescription(
-                '```ansi\n' +
-                '\u001b[31m╔═══════════════════════════════════════════╗\n' +
-                '║   ⛔ UNAUTHORIZED ACCESS ATTEMPT ⛔        ║\n' +
-                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
-                '```\n' +
-                'You do not have clearance for this command.'
-            )
-            .setFooter({ text: '🔒 Moderation Command • Owner/Immune Only' })
-            .setTimestamp();
-        return message.channel.send({ embeds: [deniedEmbed] });
-    }
-    
+
+    const hasPermission =
+        message.author.id === OWNER_ID ||
+        isImmune(message.author) ||
+        isServerAdmin(message.guild.id, message.author.id) ||
+        message.member.permissions.has(PermissionsBitField.Flags.ManageMessages);
+
+    if (!hasPermission) return message.reply('❌ No permission.');
+
     const sniped = lastDeletedMessages.get(message.channel.id);
-    
-    if (!sniped) {
-        const noSnipeEmbed = new EmbedBuilder()
-            .setColor(0xFFFF00)
-            .setTitle('🎯 SNIPE')
-            .setDescription(
-                '```ansi\n' +
-                '\u001b[33m╔═══════════════════════════════════════════╗\n' +
-                '║      ❌  NOTHING TO SNIPE  ❌             ║\n' +
-                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
-                '```\n' +
-                'No recently deleted messages in this channel.'
-            )
-            .setTimestamp();
-        return message.channel.send({ embeds: [noSnipeEmbed] });
-    }
-    
+
+    if (!sniped) return message.reply('❌ No recently deleted messages in this channel.');
+
     const snipeEmbed = new EmbedBuilder()
         .setColor(0xFF6600)
-        .setTitle('🎯 SNIPED MESSAGE')
-        .setDescription(
-            '```ansi\n' +
-            '\u001b[33m╔═══════════════════════════════════════════╗\n' +
-            '║       🔍  DELETED MESSAGE FOUND  🔍       ║\n' +
-            '╚═══════════════════════════════════════════╝\u001b[0m\n' +
-            '```'
-        )
+        .setTitle('🎯 Sniped Message')
         .addFields(
-            { name: '👤 Author', value: `<@${sniped.author.id}> (${sniped.author.tag})`, inline: true },
-            { name: '🕐 Deleted', value: `<t:${Math.floor(sniped.timestamp / 1000)}:R>`, inline: true },
-            { name: '💬 Content', value: `\`\`\`${sniped.content.slice(0, 1000) || 'No text content'}\`\`\``, inline: false }
+            { name: 'Author', value: `<@${sniped.author.id}> (${sniped.author.tag})`, inline: true },
+            { name: 'Deleted', value: `<t:${Math.floor(sniped.timestamp / 1000)}:R>`, inline: true },
+            { name: 'Content', value: `\`\`\`${sniped.content?.slice(0, 1000) || 'No text content'}\`\`\`` }
         )
         .setThumbnail(sniped.author.displayAvatarURL({ dynamic: true }))
-        .setFooter({ text: '🎯 Sniped by ' + message.author.tag })
+        .setFooter({ text: `Sniped by ${message.author.tag}` })
         .setTimestamp();
-    
-    if (sniped.attachments) {
-        snipeEmbed.setImage(sniped.attachments);
+
+    if (sniped.attachments && sniped.attachments.size > 0) {
+        const attachment = sniped.attachments.first();
+        if (attachment?.url) snipeEmbed.setImage(attachment.url);
     }
-    
+
     message.channel.send({ embeds: [snipeEmbed] });
 }
 
@@ -12574,61 +13029,32 @@ else if (command === 'snipe') {
 // COMMAND: EDITSNIPE
 // ==================================================
 else if (command === 'editsnipe' || command === 'esnipe') {
-    if (message.author.id !== OWNER_ID && !isImmune(message.author)) {
-        const deniedEmbed = new EmbedBuilder()
-            .setColor(0xFF0000)
-            .setTitle('🚫 ACCESS DENIED')
-            .setDescription(
-                '```ansi\n' +
-                '\u001b[31m╔═══════════════════════════════════════════╗\n' +
-                '║   ⛔ UNAUTHORIZED ACCESS ATTEMPT ⛔        ║\n' +
-                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
-                '```\n' +
-                'You do not have clearance for this command.'
-            )
-            .setFooter({ text: '🔒 Moderation Command • Owner/Immune Only' })
-            .setTimestamp();
-        return message.channel.send({ embeds: [deniedEmbed] });
-    }
-    
+
+    const hasPermission =
+        message.author.id === OWNER_ID ||
+        isImmune(message.author) ||
+        isServerAdmin(message.guild.id, message.author.id) ||
+        message.member.permissions.has(PermissionsBitField.Flags.ManageMessages);
+
+    if (!hasPermission) return message.reply('❌ No permission.');
+
     const sniped = lastEditedMessages.get(message.channel.id);
-    
-    if (!sniped) {
-        const noSnipeEmbed = new EmbedBuilder()
-            .setColor(0xFFFF00)
-            .setTitle('✏️ EDIT SNIPE')
-            .setDescription(
-                '```ansi\n' +
-                '\u001b[33m╔═══════════════════════════════════════════╗\n' +
-                '║      ❌  NOTHING TO SNIPE  ❌             ║\n' +
-                '╚═══════════════════════════════════════════╝\u001b[0m\n' +
-                '```\n' +
-                'No recently edited messages in this channel.'
-            )
-            .setTimestamp();
-        return message.channel.send({ embeds: [noSnipeEmbed] });
-    }
-    
+
+    if (!sniped) return message.reply('❌ No recently edited messages in this channel.');
+
     const snipeEmbed = new EmbedBuilder()
         .setColor(0x3498DB)
-        .setTitle('✏️ SNIPED EDIT')
-        .setDescription(
-            '```ansi\n' +
-            '\u001b[34m╔═══════════════════════════════════════════╗\n' +
-            '║       🔍  EDITED MESSAGE FOUND  🔍        ║\n' +
-            '╚═══════════════════════════════════════════╝\u001b[0m\n' +
-            '```'
-        )
+        .setTitle('✏️ Sniped Edit')
         .addFields(
-            { name: '👤 Author', value: `<@${sniped.author.id}> (${sniped.author.tag})`, inline: true },
-            { name: '🕐 Edited', value: `<t:${Math.floor(sniped.timestamp / 1000)}:R>`, inline: true },
-            { name: '📝 Before', value: `\`\`\`${sniped.oldContent.slice(0, 500) || 'No content'}\`\`\``, inline: false },
-            { name: '📝 After', value: `\`\`\`${sniped.newContent.slice(0, 500) || 'No content'}\`\`\``, inline: false }
+            { name: 'Author', value: `<@${sniped.author.id}> (${sniped.author.tag})`, inline: true },
+            { name: 'Edited', value: `<t:${Math.floor(sniped.timestamp / 1000)}:R>`, inline: true },
+            { name: 'Before', value: `\`\`\`${sniped.oldContent?.slice(0, 500) || 'No content'}\`\`\`` },
+            { name: 'After', value: `\`\`\`${sniped.newContent?.slice(0, 500) || 'No content'}\`\`\`` }
         )
         .setThumbnail(sniped.author.displayAvatarURL({ dynamic: true }))
-        .setFooter({ text: '✏️ Edit sniped by ' + message.author.tag })
+        .setFooter({ text: `Edit sniped by ${message.author.tag}` })
         .setTimestamp();
-    
+
     message.channel.send({ embeds: [snipeEmbed] });
 }
 
