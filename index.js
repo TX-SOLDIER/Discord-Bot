@@ -4953,28 +4953,35 @@ await message.channel.send({ embeds: [embed1, embed2, embed3, embed4, embed5] })
 await message.channel.send({ embeds: [embed6, embed7, embed8, embed9, embed10] });
 await message.channel.send({ embeds: [embed11, embed12, embed13] });
 }
+
 // ==================================================
 // COMMAND: NOTE (Add Staff Note)
 // ==================================================
 else if (command === 'note' || command === 'addnote') {
-    if (!isImmune(message.author) && message.author.id !== OWNER_ID) {
-        return message.reply('❌ Only immune users can add staff notes.');
+    if (message.author.id !== OWNER_ID && !isImmune(message.author) && !isServerAdmin(message.member)) {
+        const deniedEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('🚫 Access Denied')
+            .setDescription('You do not have clearance for this command.')
+            .setFooter({ text: '🔒 Moderation Command • Owner/Immune/Admin Only' })
+            .setTimestamp();
+        return message.channel.send({ embeds: [deniedEmbed] });
     }
-    
+
     const target = message.mentions.users.first();
     if (!target) {
         return message.reply('❌ Please mention a user.\n**Usage:** `$note @user <note text>`');
     }
-    
+
     const noteText = args.slice(1).join(' ');
     if (!noteText) {
         return message.reply('❌ Please provide a note.\n**Usage:** `$note @user <note text>`');
     }
-    
+
     if (noteText.length > 500) {
         return message.reply('❌ Note is too long. Maximum 500 characters.');
     }
-    
+
     const noteCount = addStaffNote(
         message.guild.id,
         target.id,
@@ -4982,17 +4989,10 @@ else if (command === 'note' || command === 'addnote') {
         message.author.tag,
         noteText
     );
-    
+
     const noteEmbed = new EmbedBuilder()
         .setColor(0x00FF00)
-        .setTitle('📝 STAFF NOTE ADDED')
-        .setDescription(
-            '```\n' +
-            '┌─────────────────────────────────────────┐\n' +
-            '│  ✅ NOTE SUCCESSFULLY RECORDED          │\n' +
-            '└─────────────────────────────────────────┘\n' +
-            '```'
-        )
+        .setTitle('📝 Staff Note Added')
         .addFields(
             { name: '👤 Target', value: `${target.tag} (\`${target.id}\`)`, inline: true },
             { name: '📝 Note #', value: `\`${noteCount}\``, inline: true },
@@ -5001,7 +5001,7 @@ else if (command === 'note' || command === 'addnote') {
         )
         .setFooter({ text: 'Use $notes @user to view all notes' })
         .setTimestamp();
-    
+
     message.channel.send({ embeds: [noteEmbed] });
 }
 
@@ -5009,50 +5009,72 @@ else if (command === 'note' || command === 'addnote') {
 // COMMAND: NOTES (View Staff Notes)
 // ==================================================
 else if (command === 'notes' || command === 'viewnotes' || command === 'staffnotes') {
-    if (!isImmune(message.author) && message.author.id !== OWNER_ID) {
-        return message.reply('❌ Only immune users can view staff notes.');
+    if (message.author.id !== OWNER_ID && !isImmune(message.author) && !isServerAdmin(message.member)) {
+        const deniedEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('🚫 Access Denied')
+            .setDescription('You do not have clearance for this command.')
+            .setFooter({ text: '🔒 Moderation Command • Owner/Immune/Admin Only' })
+            .setTimestamp();
+        return message.channel.send({ embeds: [deniedEmbed] });
     }
-    
+
     const target = message.mentions.users.first() || message.author;
-    const notes = getStaffNotes(message.guild.id, target.id);
-    
-    if (notes.length === 0) {
+    const isPrivileged = message.author.id === OWNER_ID || isImmune(message.author);
+
+    // Build notes list
+    const allNotes = [];
+
+    if (isPrivileged) {
+        // Owner/Immune — pull notes from ALL servers
+        for (const [guildId, users] of Object.entries(botData.staffNotes || {})) {
+            const userNotes = users[target.id] || [];
+            for (const note of userNotes) {
+                allNotes.push({ ...note, guildId });
+            }
+        }
+    } else {
+        // Server Admin — current server only
+        const userNotes = botData.staffNotes?.[message.guild.id]?.[target.id] || [];
+        for (const note of userNotes) {
+            allNotes.push({ ...note, guildId: message.guild.id });
+        }
+    }
+
+    allNotes.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+    if (allNotes.length === 0) {
         const emptyEmbed = new EmbedBuilder()
             .setColor(0x808080)
-            .setTitle('📝 STAFF NOTES')
+            .setTitle('📝 Staff Notes')
             .setDescription(`No staff notes found for **${target.tag}**.`)
             .setTimestamp();
         return message.channel.send({ embeds: [emptyEmbed] });
     }
-    
+
     let notesText = '';
-    notes.slice(-15).reverse().forEach((note, i) => {
+    allNotes.slice(-15).reverse().forEach((note, i) => {
         const date = new Date(note.timestamp).toLocaleDateString();
         const time = new Date(note.timestamp).toLocaleTimeString();
-        notesText += `**#${notes.length - i}** | \`${date} ${time}\`\n`;
+        const serverName = client.guilds.cache.get(note.guildId)?.name || note.guildId;
+        notesText += `**#${allNotes.length - i}** | \`${date} ${time}\`\n`;
+        notesText += `🏠 Server: **${serverName}**\n`;
         notesText += `📝 ${note.note}\n`;
         notesText += `👮 Added by: ${note.authorTag} | ID: \`${note.id}\`\n\n`;
     });
-    
+
     const notesEmbed = new EmbedBuilder()
         .setColor(0x3498DB)
-        .setTitle(`📝 STAFF NOTES - ${target.tag}`)
-        .setDescription(
-            '```\n' +
-            '┌─────────────────────────────────────────┐\n' +
-            '│  📋 STAFF NOTES ARCHIVE                 │\n' +
-            '└─────────────────────────────────────────┘\n' +
-            '```\n' +
-            notesText.slice(0, 3800)
-        )
+        .setTitle(`📝 Staff Notes — ${target.tag}`)
+        .setDescription(notesText.slice(0, 3800))
         .setThumbnail(target.displayAvatarURL({ dynamic: true }))
         .addFields(
-            { name: '📊 Total Notes', value: `\`${notes.length}\``, inline: true },
+            { name: '📊 Total Notes', value: `\`${allNotes.length}\``, inline: true },
             { name: '👤 Target ID', value: `\`${target.id}\``, inline: true }
         )
         .setFooter({ text: 'Use $delnote @user <id> to delete a note' })
         .setTimestamp();
-    
+
     message.channel.send({ embeds: [notesEmbed] });
 }
 
@@ -5060,27 +5082,33 @@ else if (command === 'notes' || command === 'viewnotes' || command === 'staffnot
 // COMMAND: DELNOTE (Delete Staff Note)
 // ==================================================
 else if (command === 'delnote' || command === 'deletenote' || command === 'remnote') {
-    if (!isImmune(message.author) && message.author.id !== OWNER_ID) {
-        return message.reply('❌ Only immune users can delete staff notes.');
+    if (message.author.id !== OWNER_ID && !isImmune(message.author) && !isServerAdmin(message.member)) {
+        const deniedEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('🚫 Access Denied')
+            .setDescription('You do not have clearance for this command.')
+            .setFooter({ text: '🔒 Moderation Command • Owner/Immune/Admin Only' })
+            .setTimestamp();
+        return message.channel.send({ embeds: [deniedEmbed] });
     }
-    
+
     const target = message.mentions.users.first();
     const noteId = parseInt(args[1]);
-    
+
     if (!target) {
         return message.reply('❌ Please mention a user.\n**Usage:** `$delnote @user <note_id>`');
     }
-    
+
     if (!noteId || isNaN(noteId)) {
         return message.reply('❌ Please provide a valid note ID.\n**Usage:** `$delnote @user <note_id>`\nUse `$notes @user` to see note IDs.');
     }
-    
+
     const deleted = deleteStaffNote(message.guild.id, target.id, noteId);
-    
+
     if (deleted) {
         const successEmbed = new EmbedBuilder()
             .setColor(0x00FF00)
-            .setTitle('🗑️ NOTE DELETED')
+            .setTitle('🗑️ Note Deleted')
             .setDescription(`Successfully deleted note \`${noteId}\` from **${target.tag}**.`)
             .setTimestamp();
         message.channel.send({ embeds: [successEmbed] });
