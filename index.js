@@ -8886,6 +8886,7 @@ else if (command === 'hl') {
       .setTimestamp();
 
     return message.channel.send({ embeds: [slotsEmbed] });
+  }
 
 // ==================================================
 // COMMAND: LOTTERY
