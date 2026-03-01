@@ -9267,28 +9267,7 @@ else if (command === 'pay') {
     message.reply(`✅ You paid **${amount}** Gold Coins to **${target.username}**.`);
 }
 
-// ==================================================
-// COMMAND: IMMUNE LIST
-// ==================================================
-else if (command === 'immunelist') {
-  if (message.author.id !== OWNER_ID) {
-    return message.reply('❌ Only the bot owner can view immune users.');
-  }
 
-  const immuneEntries = Object.entries(botData.immuneUsers || {});
-
-  if (immuneEntries.length === 0) {
-    return message.reply('ℹ️ There are currently **no immune users**.');
-  }
-
-  let list = immuneEntries
-    .map(([id, rank], i) => `${i + 1}. <@${id}> — **${rank}**`)
-    .join('\n');
-
-  message.channel.send({
-    content: `🛡️ **Immune Users List:**\n${list}`
-  });
-                      }
   // ==================================================
 // COMMAND: STORE
 // ==================================================
@@ -10064,12 +10043,11 @@ if (command === 'promote') {
 // COMMAND: DEMOTE
 // Bot Owner / Immune → can demote anyone in any server
 // CSM → can demote Server Admins (not another CSM) in their own server only
-// Usage: $demote @user [rank]   (no rank = full removal)
+// Usage: $demote @user [rank]                  (mention, no rank = full removal)
+//        $demote <userID> [rank]               (by ID, no rank = full removal)
+// Note: Deleted accounts are auto-removed from ranks
 // ==================================================
 if (command === 'demote') {
-    const target = message.mentions.users.first();
-    if (!target) return message.reply('❌ Please mention a user to demote. Usage: `$demote @user [rank]`');
-
     const guildId = message.guild.id;
     const actorId = message.author.id;
     const isOwnerOrImmune = actorId === OWNER_ID || isImmune(message.author);
@@ -10079,20 +10057,64 @@ if (command === 'demote') {
         return message.reply('❌ You do not have permission to demote users.');
     }
 
-    const currentRank = getServerAdminRank(guildId, target.id);
-    if (!currentRank) {
-        return message.reply(`❌ <@${target.id}> has no Server Admin rank in this server.`);
+    // ── Resolve target by mention OR user ID ──
+    const mentionedUser = message.mentions.users.first();
+    const rawId = !mentionedUser && args[0]?.match(/^\d{17,19}$/) ? args[0] : null;
+    let target = mentionedUser || null;
+
+    if (!target && rawId) {
+        target = await client.users.fetch(rawId).catch(() => null);
     }
 
-    // CSM cannot demote another CSM — only Owner/Immune can
+    if (!mentionedUser && !rawId) {
+        return message.reply('❌ Please mention a user or provide a valid user ID.\nUsage: `$demote @user [rank]` or `$demote <userID> [rank]`');
+    }
+
+    const targetId = target?.id || rawId;
+    const rankInput = args.slice(1).join(' ').trim();
+
+    // ── Auto-remove deleted/invalid accounts ──
+    if (!target) {
+        const deletedRank = getServerAdminRank(guildId, targetId);
+        if (!deletedRank) {
+            return message.reply(`❌ No Server Admin rank found for ID \`${targetId}\` in this server.`);
+        }
+
+        removeServerAdmin(guildId, targetId);
+
+        const deletedEmbed = new EmbedBuilder()
+            .setColor(0x808080)
+            .setTitle('🗑️ Deleted Account Auto-Removed')
+            .addFields(
+                { name: '🆔 User ID', value: `\`${targetId}\``, inline: true },
+                { name: '🎖️ Rank Removed', value: `**${deletedRank}**`, inline: true },
+                { name: '🔑 Action By', value: `<@${actorId}>`, inline: true },
+                { name: '📍 Server', value: message.guild.name, inline: false }
+            )
+            .setTimestamp()
+            .setFooter({ text: '⚔️ Server Admin System — SOLDIER¹' });
+
+        await message.channel.send({ embeds: [deletedEmbed] });
+
+        return await sendLog(
+            guildId,
+            `\`[AUTO-REMOVE]\` <@${actorId}> removed deleted account \`${targetId}\`'s Server Admin rank (**${deletedRank}**) in **${message.guild.name}**.`
+        );
+    }
+
+    // ── Validate rank exists ──
+    const currentRank = getServerAdminRank(guildId, targetId);
+    if (!currentRank) {
+        return message.reply(`❌ <@${targetId}> has no Server Admin rank in this server.`);
+    }
+
+    // ── CSM cannot demote another CSM ──
     if (!isOwnerOrImmune && currentRank === CSM_RANK) {
         return message.reply('❌ Only the **Bot Owner** or **Immunes** can demote a **Command Sergeant Major**.');
     }
 
-    const rankInput = args.slice(1).join(' ').trim();
-
     if (rankInput) {
-        // Demote to a specific rank
+        // ── Demote to a specific rank ──
         const newRank = SERVER_ADMIN_RANKS.find(r => r.toLowerCase() === rankInput.toLowerCase());
         if (!newRank) {
             return message.reply(`❌ Invalid rank. Valid ranks:\n\`${SERVER_ADMIN_RANKS.join('`, `')}\``);
@@ -10102,19 +10124,19 @@ if (command === 'demote') {
         const newIndex = SERVER_ADMIN_RANKS.indexOf(newRank);
 
         if (newIndex >= currentIndex) {
-            return message.reply('❌ New rank must be **lower** than their current rank to demote. Use `$promote` to upgrade.');
+            return message.reply('❌ New rank must be **lower** than their current rank. Use `$promote` to upgrade.');
         }
         if (!isOwnerOrImmune && newRank === CSM_RANK) {
             return message.reply('❌ You cannot assign the **Command Sergeant Major** rank.');
         }
 
-        setServerAdminRank(guildId, target.id, newRank, actorId);
+        setServerAdminRank(guildId, targetId, newRank, actorId);
 
         const embed = new EmbedBuilder()
             .setColor(0xFF4500)
             .setTitle('📉 Server Admin Demotion')
             .addFields(
-                { name: '👤 User', value: `<@${target.id}> (${target.tag})`, inline: true },
+                { name: '👤 User', value: `<@${targetId}> (${target.tag})`, inline: true },
                 { name: '📍 Server', value: message.guild.name, inline: true },
                 { name: '🎖️ New Rank', value: `**${newRank}**`, inline: false },
                 { name: '📉 Previous Rank', value: `**${currentRank}**`, inline: true },
@@ -10131,18 +10153,18 @@ if (command === 'demote') {
 
         await sendLog(
             guildId,
-            `\`[SERVER ADMIN DEMOTE]\` <@${actorId}> demoted <@${target.id}> from **${currentRank}** to **${newRank}** in **${message.guild.name}**.`
+            `\`[SERVER ADMIN DEMOTE]\` <@${actorId}> demoted <@${targetId}> from **${currentRank}** to **${newRank}** in **${message.guild.name}**.`
         );
 
     } else {
-        // Full removal — no rank argument given
-        removeServerAdmin(guildId, target.id);
+        // ── Full removal ──
+        removeServerAdmin(guildId, targetId);
 
         const embed = new EmbedBuilder()
             .setColor(0xFF0000)
             .setTitle('❌ Server Admin Removed')
             .addFields(
-                { name: '👤 User', value: `<@${target.id}> (${target.tag})`, inline: true },
+                { name: '👤 User', value: `<@${targetId}> (${target.tag})`, inline: true },
                 { name: '📍 Server', value: message.guild.name, inline: true },
                 { name: '🎖️ Rank Removed', value: `**${currentRank}**`, inline: false },
                 { name: '🔑 Action By', value: `<@${actorId}>`, inline: true }
@@ -10158,7 +10180,7 @@ if (command === 'demote') {
 
         await sendLog(
             guildId,
-            `\`[SERVER ADMIN REMOVE]\` <@${actorId}> removed <@${target.id}>'s Server Admin rank (**${currentRank}**) in **${message.guild.name}**.`
+            `\`[SERVER ADMIN REMOVE]\` <@${actorId}> removed <@${targetId}>'s Server Admin rank (**${currentRank}**) in **${message.guild.name}**.`
         );
     }
 }
@@ -10339,6 +10361,86 @@ if (command === 'globaladmins') {
     }
 }
 
+  // ==================================================
+// COMMAND: IMMUNE LIST
+// Shows all immune users with username, ID, and rank.
+// Deleted/unknown accounts are flagged with their ID.
+// Usable by: Bot Owner only
+// ==================================================
+else if (command === 'immunelist') {
+    if (message.author.id !== OWNER_ID) {
+        const deniedEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('🚫 Access Denied')
+            .setDescription('Only the **Bot Owner** can view the immune list.')
+            .setFooter({ text: '🔒 Owner Only Command' })
+            .setTimestamp();
+        return message.channel.send({ embeds: [deniedEmbed] });
+    }
+
+    const immuneEntries = Object.entries(botData.immuneUsers || {});
+
+    if (immuneEntries.length === 0) {
+        return message.reply('ℹ️ There are currently **no immune users**.');
+    }
+
+    // ── Resolve usernames for all immune users ──
+    const resolvedUsers = await Promise.all(
+        immuneEntries.map(async ([id, data]) => {
+            const user = await client.users.fetch(id).catch(() => null);
+            const rank = typeof data === 'object' ? data.rank : data;
+            return { id, rank, user };
+        })
+    );
+
+    const activeUsers = resolvedUsers.filter(({ user }) => user !== null);
+    const deletedUsers = resolvedUsers.filter(({ user }) => user === null);
+
+    // ── Build active users list ──
+    const activeLines = activeUsers.map(({ id, rank, user }, i) => {
+        return `**${i + 1}.** <@${id}>\n> 👤 \`${user.tag}\` • 🆔 \`${id}\` • 🎖️ **${rank}**`;
+    });
+
+    // ── Build deleted/unknown users list ──
+    const deletedLines = deletedUsers.map(({ id, rank }) => {
+        return `> ⚠️ \`${id}\` • 🎖️ **${rank}** — *(Deleted/Unknown Account)*\n> 💡 Use \`$demote ${id} immune\` to remove`;
+    });
+
+    // ── Optional GIF — set URL here or set to null to disable ──
+    const gifUrl = null; // e.g. 'https://media.giphy.com/media/xyz/giphy.gif'
+
+    const embed = new EmbedBuilder()
+        .setColor(0x00CED1)
+        .setTitle('🛡️ Immune Users List')
+        .setTimestamp()
+        .setFooter({ text: '🔒 Bot Owner Eyes Only — SOLDIER¹' });
+
+    if (activeLines.length > 0) {
+        embed.addFields({
+            name: `✅ Active Users (${activeUsers.length})`,
+            value: activeLines.join('\n\n'),
+            inline: false
+        });
+    }
+
+    if (deletedLines.length > 0) {
+        embed.addFields({
+            name: `🗑️ Deleted / Unknown Accounts (${deletedUsers.length})`,
+            value: deletedLines.join('\n\n'),
+            inline: false
+        });
+    }
+
+    embed.addFields({
+        name: '📊 Total',
+        value: `\`${immuneEntries.length}\` immune user(s) — \`${activeUsers.length}\` active, \`${deletedUsers.length}\` deleted`,
+        inline: false
+    });
+
+    if (gifUrl) embed.setImage(gifUrl);
+
+    await message.channel.send({ embeds: [embed] });
+}
 // ==================================================
 // COMMAND: MYRANK
 // Shows your Server Admin rank in the current server.
