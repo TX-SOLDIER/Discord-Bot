@@ -15397,7 +15397,28 @@ if (command === 'cleanup') {
     message.channel.send("🚨 Cleanup failed. Check console.");
   }
 }
+// ==================================================
+// COMMAND: CLEARAUTODELETE (OWNER ONLY)
+// ==================================================
+else if (command === 'clearautodelete') {
 
+  if (message.author.id !== OWNER_ID) {
+    return message.reply("❌ Only the bot owner can use this command.");
+  }
+
+  if (args[0] !== 'confirm') {
+    return message.reply(
+      "⚠️ This will **completely wipe** the auto-delete list for ALL users.\n\n" +
+      "Type `$clearautodelete confirm` to proceed."
+    );
+  }
+
+  botData.autoDeleteUsers = {};
+  markDirty();
+  await safeSave();
+
+  return message.reply("✅ Auto-delete list has been completely cleared and saved to JSONBin.");
+}
 // ==================================================
 // COMMAND: FORCESAVE (ECONOMY MONITORING ONLY)
 // ==================================================
